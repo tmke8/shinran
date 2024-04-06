@@ -3,7 +3,7 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
-pub fn get_address() -> io::Result<String> {
+pub fn get_ibus_address() -> io::Result<String> {
     if let Ok(address) = env::var("IBUS_ADDRESS") {
         if !address.is_empty() {
             return Ok(address);

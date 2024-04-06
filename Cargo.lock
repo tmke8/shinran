@@ -950,7 +950,6 @@ name = "shinran"
 version = "0.1.0"
 dependencies = [
  "async-std",
- "enumflags2",
  "event-listener 5.2.0",
  "zbus",
 ]
