@@ -1,0 +1,11 @@
+mod address;
+pub mod ibus_constants;
+mod text;
+
+pub use address::get_ibus_address;
+pub use text::{
+    ibus_text, Attribute, IBUS_ATTR_TYPE_BACKGROUND, IBUS_ATTR_TYPE_FOREGROUND,
+    IBUS_ATTR_TYPE_NONE, IBUS_ATTR_TYPE_UNDERLINE, IBUS_ATTR_UNDERLINE_DOUBLE,
+    IBUS_ATTR_UNDERLINE_ERROR, IBUS_ATTR_UNDERLINE_LOW, IBUS_ATTR_UNDERLINE_NONE,
+    IBUS_ATTR_UNDERLINE_SINGLE,
+};

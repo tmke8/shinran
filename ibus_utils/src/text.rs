@@ -45,7 +45,7 @@ fn attr_list(attributes: &[Attribute]) -> Value<'static> {
     )
 }
 
-pub fn text<'a>(text: &'a str, attributes: &[Attribute]) -> Value<'a> {
+pub fn ibus_text<'a>(text: &'a str, attributes: &[Attribute]) -> Value<'a> {
     let attachments: HashMap<String, Value<'static>> = HashMap::new();
     Value::Structure(
         StructureBuilder::new()

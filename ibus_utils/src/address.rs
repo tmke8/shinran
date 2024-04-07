@@ -3,10 +3,12 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
-pub fn get_ibus_address() -> io::Result<String> {
+use zbus::Address;
+
+pub fn get_ibus_address() -> zbus::Result<Address> {
     if let Ok(address) = env::var("IBUS_ADDRESS") {
         if !address.is_empty() {
-            return Ok(address);
+            return Ok(address.as_str().try_into()?);
         }
     }
 
@@ -20,7 +22,7 @@ pub fn get_ibus_address() -> io::Result<String> {
         }
     }
 
-    Ok(address.to_string())
+    Ok(address.try_into()?)
 }
 
 fn get_socket_path() -> io::Result<PathBuf> {

@@ -8,9 +8,9 @@ use zbus::zvariant::{ObjectPath, OwnedObjectPath};
 use zbus::{connection, fdo, Address, ObjectServer};
 use zbus::{interface, AuthMechanism};
 
-mod address;
-mod constants;
-mod text;
+use ibus_utils::{get_ibus_address, ibus_constants};
+
+mod text_engine;
 
 const REQUESTED_NAME: &str = "org.freedesktop.IBus.Shinran";
 const SERVE_AT: &str = "/org/freedesktop/IBus/Engine/Shinran";
@@ -62,16 +62,16 @@ impl ShinranEngine {
             "ProcessKeyEvent: keyval={}, keycode={}, state={}",
             keyval, keycode, state
         );
-        if state & constants::RELEASE_MASK != 0 {
+        if state & ibus_constants::RELEASE_MASK != 0 {
             println!("Key released");
             return Ok(true);
         }
         match keyval {
-            constants::KEY_BACK_SPACE => {
+            ibus_constants::KEY_BACK_SPACE => {
                 if self.cursor_pos > 0 {
                     self.text.remove(self.cursor_pos as usize - 1);
                     self.cursor_pos -= 1;
-                    update_text(self, ctxt).await?;
+                    self.update_text(ctxt).await?;
                 }
                 return Ok(true);
             }
@@ -80,8 +80,7 @@ impl ShinranEngine {
 
         let character = char::from_u32(keyval);
 
-        if let Some(character) = character {
-        }
+        if let Some(character) = character {}
         Ok(true)
     }
 
@@ -118,33 +117,6 @@ impl ShinranEngine {
     ) -> zbus::Result<()>;
 }
 
-async fn update_text(engine: &ShinranEngine, ctxt: SignalContext<'_>) -> zbus::Result<()> {
-    println!(
-        "UpdateText(text = '{}', cursorPos = {})",
-        engine.text, engine.cursor_pos,
-    );
-
-    let attr = text::Attribute {
-        type_: text::IBUS_ATTR_TYPE_UNDERLINE,
-        value: text::IBUS_ATTR_UNDERLINE_SINGLE,
-        start_index: 0,
-        end_index: engine.text.len() as u32,
-    };
-    let attr_list: [text::Attribute; 1] = [attr];
-    let ibus_text = text::text(&engine.text, &attr_list);
-
-    ShinranEngine::update_preedit_text(&ctxt, ibus_text, engine.cursor_pos, engine.text != "")
-        .await?;
-    Ok(())
-}
-
-async fn clear_text(engine: &mut ShinranEngine, ctxt: SignalContext<'_>) -> zbus::Result<()> {
-    engine.text.clear();
-    engine.cursor_pos = 0;
-    update_text(engine, ctxt).await?;
-    Ok(())
-}
-
 #[async_std::main]
 async fn main() -> zbus::Result<()> {
     println!("Program started!");
@@ -154,7 +126,7 @@ async fn main() -> zbus::Result<()> {
     };
     let done_listener = event.listen();
 
-    let address: Address = address::get_ibus_address()?.as_str().try_into()?;
+    let address: Address = get_ibus_address()?;
     println!("Address: {}", address);
     let _conn = connection::Builder::address(address)?
         .auth_mechanisms(&[AuthMechanism::External, AuthMechanism::Cookie])
