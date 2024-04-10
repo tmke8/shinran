@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 
 use async_std::task::sleep;
 use event_listener::Event;
-use ibus_utils::{ibus_constants, Attribute, IbusAttribute, IbusText, Underline};
+use ibus_utils::{ibus_constants, Attribute, IBusAttribute, IBusText, Underline};
 use zbus::{fdo, interface, object_server::SignalContext};
 
 pub(crate) struct ShinranEngine {
@@ -29,20 +29,17 @@ impl ShinranEngine {
             self.text, self.cursor_pos,
         );
 
-        let attr = IbusAttribute {
-            attr: Attribute::Underline(Underline::Single),
-            start_index: 0,
-            end_index: self.text.len() as u32,
-        };
-        let attr_list: [IbusAttribute; 1] = [attr];
-        let ibus_text = IbusText {
-            text: &self.text,
-            attributes: &attr_list,
-        };
+        let attr = IBusAttribute::new(
+            Attribute::Underline(Underline::Single),
+            0,
+            self.text.len() as u32,
+        );
+        let attr_list: [IBusAttribute; 1] = [attr];
+        let ibus_text = IBusText::new(&self.text, &attr_list);
 
         ShinranEngine::update_preedit_text(
             &ctxt,
-            ibus_text.to_value(),
+            ibus_text.into(),
             self.cursor_pos,
             !self.text.is_empty(),
         )

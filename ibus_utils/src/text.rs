@@ -1,6 +1,6 @@
-use zbus::zvariant::{Dict, Signature, StructureBuilder, Value};
+use zbus::zvariant::{Dict, Signature, Str, Type, Value};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 #[repr(u32)]
 pub enum Attribute {
     Underline(Underline) = 1,
@@ -35,70 +35,97 @@ pub enum Underline {
     Error = 4,
 }
 
-pub struct IbusAttribute {
-    pub attr: Attribute,
-    pub start_index: u32,
-    pub end_index: u32,
+#[derive(Clone, Value)]
+pub struct IBusAttribute {
+    name: Str<'static>,
+    attachments: EmptyDict,
+    type_: u32,
+    value: u32,
+    start_index: u32,
+    end_index: u32,
 }
 
-impl IbusAttribute {
-    pub fn to_value(&self) -> Value<'static> {
-        Value::Structure(
-            StructureBuilder::new()
-                .add_field("IBusAttribute") // Name
-                .add_field(empty_dict()) // Attachments
-                .add_field(self.attr.type_()) // Type
-                .add_field(self.attr.value()) // Value
-                .add_field(self.start_index) // StartIndex
-                .add_field(self.end_index) // EndIndex
-                .build(),
-        )
+impl IBusAttribute {
+    pub fn new(attr: Attribute, start_index: u32, end_index: u32) -> IBusAttribute {
+        IBusAttribute {
+            name: "IBusAttribute".into(),
+            attachments: EmptyDict {},
+            type_: attr.type_(),
+            value: attr.value(),
+            start_index,
+            end_index,
+        }
     }
 }
 
-#[repr(transparent)]
-pub struct IbusAttrList<'a>(&'a [IbusAttribute]);
+#[derive(Value)]
+pub struct IBusAttrList {
+    name: Str<'static>,
+    attachments: EmptyDict,
+    attributes: Vec<Value<'static>>,
+}
 
-impl IbusAttrList<'_> {
-    pub fn to_value(&self) -> Value<'static> {
-        Value::Structure(
-            StructureBuilder::new()
-                .add_field("IBusAttrList") // Name
-                .append_field(empty_dict()) // Attachments
-                .add_field(
-                    // Attributes
-                    self.0
-                        .iter()
-                        .map(IbusAttribute::to_value)
-                        .collect::<Vec<_>>(),
-                )
-                .build(),
-        )
+impl IBusAttrList {
+    pub fn new(attributes: &[IBusAttribute]) -> IBusAttrList {
+        IBusAttrList {
+            name: "IBusAttrList".into(),
+            attachments: EmptyDict {},
+            attributes: attributes
+                .iter()
+                .map(|a| Value::from(a.clone()))
+                .collect::<Vec<_>>(),
+        }
     }
 }
 
-pub struct IbusText<'a> {
-    pub text: &'a str,
-    pub attributes: &'a [IbusAttribute],
+#[derive(Value)]
+pub struct IBusText<'a> {
+    name: Str<'a>,
+    attachments: EmptyDict,
+    text: Str<'a>,
+    attr_list: Value<'a>,
 }
 
-impl IbusText<'_> {
-    pub fn to_value(&self) -> Value<'_> {
-        Value::Structure(
-            StructureBuilder::new()
-                .add_field("IBusText") // Name
-                .append_field(empty_dict()) // Attachments
-                .add_field(self.text) // Text
-                .append_field(IbusAttrList(self.attributes).to_value()) // AttrList
-                .build(),
-        )
+impl IBusText<'_> {
+    pub fn new<'a>(text: &'a str, attributes: &[IBusAttribute]) -> IBusText<'a> {
+        IBusText {
+            name: "IBusText".into(),
+            attachments: EmptyDict {},
+            text: text.into(),
+            attr_list: IBusAttrList::new(attributes).into(),
+        }
     }
 }
 
-fn empty_dict() -> Value<'static> {
-    let key_signature = Signature::try_from("s").unwrap();
-    let value_signature = Signature::try_from("v").unwrap();
-    Value::Dict(Dict::new(key_signature, value_signature))
+/// Manual implementation of an empty dict.
+///
+/// It's possible to just use `HashMap<String, Value>`, but this is hopefully more efficient.
+#[derive(Clone)]
+struct EmptyDict;
+
+impl<'a> Type for EmptyDict {
+    fn signature() -> Signature<'static> {
+        Signature::try_from("a{sv}").unwrap()
+    }
+}
+
+impl From<EmptyDict> for Value<'_> {
+    fn from(_: EmptyDict) -> Value<'static> {
+        // SAFETY: I'm very sure these are valid signatures.
+        let key_signature = Signature::from_static_str_unchecked("s");
+        let value_signature = Signature::from_static_str_unchecked("v");
+        Value::Dict(Dict::new(key_signature, value_signature))
+    }
+}
+
+impl TryFrom<Value<'_>> for EmptyDict {
+    type Error = zbus::zvariant::Error;
+    fn try_from(value: Value<'_>) -> Result<Self, Self::Error> {
+        match value {
+            Value::Dict(_) => Ok(EmptyDict {}),
+            _ => Err(zbus::zvariant::Error::IncorrectType),
+        }
+    }
 }
 
 pub const fn rgb_to_u32(r: u8, g: u8, b: u8) -> u32 {
@@ -107,6 +134,8 @@ pub const fn rgb_to_u32(r: u8, g: u8, b: u8) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
 
     #[test]
@@ -119,5 +148,25 @@ mod tests {
     #[test]
     fn test_rgb_to_num() {
         assert_eq!(rgb_to_u32(0xFF, 0, 0xFF), 0xFF00FF);
+    }
+
+    #[test]
+    fn test_derive() {
+        let s = IBusAttribute::new(Attribute::Underline(Underline::Single), 0, 4);
+        let value2: Value = s.into();
+        assert_eq!(value2.value_signature(), "(sa{sv}uuuu)");
+    }
+
+    #[test]
+    fn test_empty_dict() {
+        assert_eq!(EmptyDict::signature(), "a{sv}");
+        let empty_dict = EmptyDict {};
+        let value: Value = empty_dict.into();
+        assert_eq!(value.value_signature(), "a{sv}");
+
+        let value2: Value = HashMap::<String, Value>::new().into();
+        assert_eq!(value2.value_signature(), "a{sv}");
+
+        assert_eq!(value, value2);
     }
 }
