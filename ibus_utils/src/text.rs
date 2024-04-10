@@ -103,7 +103,7 @@ impl IBusText<'_> {
 #[derive(Clone)]
 struct EmptyDict;
 
-impl<'a> Type for EmptyDict {
+impl Type for EmptyDict {
     fn signature() -> Signature<'static> {
         Signature::try_from("a{sv}").unwrap()
     }

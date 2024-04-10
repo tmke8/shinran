@@ -8,7 +8,7 @@ use zbus::Address;
 pub fn get_ibus_address() -> zbus::Result<Address> {
     if let Ok(address) = env::var("IBUS_ADDRESS") {
         if !address.is_empty() {
-            return Ok(address.as_str().try_into()?);
+            return address.as_str().try_into();
         }
     }
 
@@ -17,12 +17,12 @@ pub fn get_ibus_address() -> zbus::Result<Address> {
 
     let mut address = "";
     for line in data.lines() {
-        if line.starts_with("IBUS_ADDRESS=") {
-            address = &line[13..];
+        if let Some(addr) = line.strip_prefix("IBUS_ADDRESS=") {
+            address = addr;
         }
     }
 
-    Ok(address.try_into()?)
+    address.try_into()
 }
 
 fn get_socket_path() -> io::Result<PathBuf> {
@@ -41,7 +41,7 @@ fn get_socket_path() -> io::Result<PathBuf> {
             match &display {
                 Some(display) if !display.is_empty() => {
                     let (hostname, display_number) =
-                        parse_display_string(&display).ok_or_else(|| {
+                        parse_display_string(display).ok_or_else(|| {
                             eprintln!("Failed to parse DISPLAY: {}", display);
                             io::Error::new(io::ErrorKind::InvalidData, "Failed to parse DISPLAY")
                         })?;
@@ -84,10 +84,7 @@ fn parse_display_string(s: &str) -> Option<(&str, &str)> {
 fn get_machine_id() -> io::Result<String> {
     let mut id = match fs::read_to_string("/var/lib/dbus/machine-id") {
         Ok(id) => id,
-        Err(_) => {
-            let id = fs::read_to_string("/etc/machine-id")?;
-            id
-        }
+        Err(_) => fs::read_to_string("/etc/machine-id")?,
     };
 
     // Trim leading and trailing whitespaces in-place.

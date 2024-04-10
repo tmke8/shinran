@@ -38,7 +38,7 @@ impl ShinranEngine {
         let ibus_text = IBusText::new(&self.text, &attr_list);
 
         ShinranEngine::update_preedit_text(
-            &ctxt,
+            ctxt,
             ibus_text.into(),
             self.cursor_pos,
             !self.text.is_empty(),
@@ -108,7 +108,7 @@ impl ShinranEngine {
             _ => {
                 if let Some(character) = char::from_u32(keyval) {
                     if character.is_ascii_graphic()
-                        || (character >= '\u{00A0}' && character <= '\u{00FF}')
+                        || ('\u{00A0}'..='\u{00FF}').contains(&character)
                     {
                         let pos = self.cursor_pos as usize;
                         if pos < self.text.len() {

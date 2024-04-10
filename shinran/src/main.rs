@@ -33,7 +33,7 @@ impl Factory {
         println!("Path: {}", path);
         let engine = ShinranEngine::new(self.done.clone());
         server.at(&path, engine).await?;
-        return Ok(path);
+        Ok(path)
     }
 }
 
