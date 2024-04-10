@@ -99,15 +99,11 @@ impl IBusText<'_> {
 
 /// Manual implementation of an empty dict.
 ///
-/// It's possible to just use `HashMap<String, Value>`, but this is hopefully more efficient.
-#[derive(Clone)]
-struct EmptyDict;
-
-impl Type for EmptyDict {
-    fn signature() -> Signature<'static> {
-        Signature::try_from("a{sv}").unwrap()
-    }
-}
+/// It's possible to just use `HashMap<String, Value>`, but it doesn't seem good
+/// to construct an empty `HashMap` just to represent an empty dict.
+#[derive(Clone, Type)]
+#[zvariant(signature = "dict")]
+pub struct EmptyDict;
 
 impl From<EmptyDict> for Value<'_> {
     fn from(_: EmptyDict) -> Value<'static> {

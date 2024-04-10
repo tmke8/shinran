@@ -95,7 +95,6 @@ impl ShinranEngine {
                     self.cursor_pos -= 1;
                     self.update_text(&ctxt).await?;
                 }
-                return Ok(true);
             }
             ibus_constants::KEY_DELETE | ibus_constants::KEY_KP_DELETE => {
                 let pos = self.cursor_pos as usize;
@@ -103,7 +102,14 @@ impl ShinranEngine {
                     self.text.remove(pos);
                     self.update_text(&ctxt).await?;
                 }
-                return Ok(true);
+            }
+            ibus_constants::KEY_LEFT | ibus_constants::KEY_KP_LEFT => {
+                self.move_cursor(-1);
+                self.update_text(&ctxt).await?;
+            }
+            ibus_constants::KEY_RIGHT | ibus_constants::KEY_KP_RIGHT => {
+                self.move_cursor(1);
+                self.update_text(&ctxt).await?;
             }
             _ => {
                 if let Some(character) = char::from_u32(keyval) {
