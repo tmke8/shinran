@@ -80,7 +80,7 @@ impl IBusAttrList {
 
 #[derive(Value)]
 pub struct IBusText<'a> {
-    name: Str<'a>,
+    name: Str<'a>, // due to limitations in the Value macro, we can't use 'static here
     attachments: EmptyDict,
     text: Str<'a>,
     attr_list: Value<'a>,
@@ -149,8 +149,8 @@ mod tests {
     #[test]
     fn test_derive() {
         let s = IBusAttribute::new(Attribute::Underline(Underline::Single), 0, 4);
-        let value2: Value = s.into();
-        assert_eq!(value2.value_signature(), "(sa{sv}uuuu)");
+        let value: Value = s.into();
+        assert_eq!(value.value_signature(), "(sa{sv}uuuu)");
     }
 
     #[test]

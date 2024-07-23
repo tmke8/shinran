@@ -1,9 +1,8 @@
 [workspace]
-members = ["shinran", "ibus_utils"]
+members = ["crates/shinran_ibus", "crates/ibus_utils", "crates/shinran_lib", "crates/shinran_wayland"]
 resolver = "2"
 
 [workspace.package]
 edition = "2021"
 
 [workspace.dependencies]
-zbus = "4.1.2"
