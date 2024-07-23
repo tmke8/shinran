@@ -1,0 +1,11 @@
+[package]
+name = "shinran_wayland"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+memmap2 = "0.9.4"
+tempfile = "3.10.1"
+wayland-client = "0.31.5"
+wayland-protocols-misc = { version = "0.3.3", features = ["client"] }
+xkbcommon = { version = "0.7.0", features = ["wayland"] }
