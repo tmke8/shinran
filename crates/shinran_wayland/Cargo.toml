@@ -4,6 +4,8 @@ version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
+shinran_lib = { path = "../shinran_lib" }
+
 memmap2 = "0.9.4"
 tempfile = "3.10.1"
 wayland-client = "0.31.5"

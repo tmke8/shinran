@@ -1042,6 +1042,7 @@ name = "shinran_wayland"
 version = "0.1.0"
 dependencies = [
  "memmap2 0.9.4",
+ "shinran_lib",
  "tempfile",
  "wayland-client",
  "wayland-protocols-misc",

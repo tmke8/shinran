@@ -1,3 +1,9 @@
+// Largely based on
+// https://github.com/tadeokondrak/anthywl/blob/21e290b0bb07c1dfe198d477c3f07b500ddc93ba/include/anthywl.h
+// https://github.com/tadeokondrak/anthywl/blob/21e290b0bb07c1dfe198d477c3f07b500ddc93ba/src/anthywl.c
+// https://github.com/emersion/wlhangul/blob/bd2758227779d7748dea185c38cab11665d55502/include/wlhangul.h
+// https://github.com/emersion/wlhangul/blob/bd2758227779d7748dea185c38cab11665d55502/main.c
+
 use std::{
     os::unix::io::AsFd,
     time::{Duration, Instant},
@@ -6,9 +12,11 @@ use std::{
 use wayland_client::{
     delegate_noop,
     protocol::{
+        wl_compositor::WlCompositor,
         wl_keyboard::{self, KeyState},
         wl_registry,
-        wl_seat::WlSeat,
+        wl_seat::{self, WlSeat},
+        wl_surface::{self, WlSurface},
     },
     Connection, Dispatch, QueueHandle, WEnum,
 };
@@ -26,6 +34,8 @@ use wayland_protocols_misc::{
 };
 use xkbcommon::xkb;
 
+use shinran_lib::check_command;
+
 fn main() {
     let conn = Connection::connect_to_env()
         .unwrap_or_else(|_| panic!("Unable to connect to a Wayland compositor."));
@@ -40,12 +50,14 @@ fn main() {
         running: true,
         seats: vec![],
         configured: false,
+        wl_compositor: None,
         input_method_manager: None,
         virtual_keyboard_manager: None,
     };
 
     // Block until the server has received our `display.get_registry` request.
     event_queue.roundtrip(&mut state).unwrap();
+    eprintln!("Round trip complete.");
 
     if state.input_method_manager.is_none() {
         panic!("Compositor does not support zwp_input_method_manager_v2");
@@ -55,8 +67,15 @@ fn main() {
         panic!("Compositor does not support zwp_virtual_keyboard_manager_v1");
     }
 
-    // let mut event_queue = conn.new_event_queue::<Seat>();
-    // let qh = event_queue.handle();
+    init_protocols(&mut state, &qh);
+    eprintln!("Protocols initialized.");
+
+    while state.running {
+        event_queue.blocking_dispatch(&mut state).unwrap();
+    }
+}
+
+fn init_protocols(state: &mut State, qh: &QueueHandle<State>) {
     for (seat_index, seat) in state.seats.iter_mut().enumerate() {
         seat.input_method = Some(
             state
@@ -73,18 +92,27 @@ fn main() {
                 .create_virtual_keyboard(&seat.wl_seat, &qh, ()),
         );
         seat.xkb_context = Some(xkb::Context::new(xkb::CONTEXT_NO_FLAGS));
-    }
-
-    while state.running {
-        event_queue.blocking_dispatch(&mut state).unwrap();
+        seat.wl_surface = Some(
+            state
+                .wl_compositor
+                .as_ref()
+                .unwrap()
+                .create_surface(&qh, SeatIndex(seat_index)),
+        );
+        seat.popup_surface = Some(seat.input_method.as_ref().unwrap().get_input_popup_surface(
+            &seat.wl_surface.as_ref().unwrap(),
+            &qh,
+            (),
+        ));
+        seat.are_protocols_initted = true;
     }
 }
 
 struct State {
+    running: bool,
+    wl_compositor: Option<WlCompositor>,
     input_method_manager: Option<ZwpInputMethodManagerV2>,
     virtual_keyboard_manager: Option<ZwpVirtualKeyboardManagerV1>,
-
-    running: bool,
 
     // TODO: Use a HashMap with identity hashing instead of a Vec.
     // https://docs.rs/identity-hash/latest/identity_hash/
@@ -105,20 +133,26 @@ impl State {
 
 struct Seat {
     wl_seat: WlSeat,
-    name: u32,
+
+    are_protocols_initted: bool,
     input_method: Option<ZwpInputMethodV2>,
     virtual_keyboard: Option<ZwpVirtualKeyboardV1>,
+    keyboard_grab: Option<ZwpInputMethodKeyboardGrabV2>,
+
     xkb_context: Option<xkb::Context>,
     xkb_keymap: Option<xkb::Keymap>,
     xkb_state: Option<xkb::State>,
+
+    // wl_seat
+    name: Option<String>,
+
+    // zwp_input_method_v2
     active: bool,
-    // enabled: bool,
-    serial: u32,
     pending_activate: bool,
     pending_deactivate: bool,
-    keyboard_grab: Option<ZwpInputMethodKeyboardGrabV2>,
-    preedit_str: Option<String>,
+    done_events_received: u32, // The "serial" number used for commits.
 
+    // zwp_input_method_keyboard_grab_v2
     // Handling repeating keys.
     repeat_rate: Option<Duration>,
     repeat_delay: Option<Duration>,
@@ -126,38 +160,47 @@ struct Seat {
     repeating_keycode: Option<xkb::Keycode>,
     repeating_timestamp: u32,
     repeat_timer: Option<Instant>,
+
+    buffer: Option<String>,
+
+    // popup
+    wl_surface: Option<WlSurface>,
+    popup_surface: Option<ZwpInputPopupSurfaceV2>,
 }
 
 impl Seat {
-    fn new(wl_seat: WlSeat, name: u32) -> Self {
+    fn new(wl_seat: WlSeat) -> Self {
         Self {
             wl_seat,
-            name,
-            input_method: None,     // Set in `main()`.
-            virtual_keyboard: None, // Set in `main()`.
-            xkb_context: None,      // Set in `main()`.
+            are_protocols_initted: false,
+            name: None,             // Set in `name` event in WlSeat.
+            input_method: None,     // Set in `init_protocols()`.
+            virtual_keyboard: None, // Set in `init_protocols()`.
+            xkb_context: None,      // Set in `init_protocols()`.
             xkb_keymap: None,       // Set in `keymap` event.
             xkb_state: None,        // Set in `keymap` event.
             active: false,
-            serial: 0,
+            done_events_received: 0,
             pending_activate: false,
             pending_deactivate: false,
             keyboard_grab: None, // Set in `done` event in InputMethod.
-            preedit_str: None,   // Set as needed.
             repeat_rate: None,   // Set in `repeat_info` event.
             repeat_delay: None,  // Set in `repeat_info` event.
             pressed: [xkb::Keycode::default(); 64],
             repeating_keycode: None, // Set as needed.
             repeating_timestamp: 0,
-            repeat_timer: None, // Set as needed.
+            repeat_timer: None,  // Set as needed.
+            wl_surface: None,    // Set in `init_protocols()`.
+            popup_surface: None, // Set in `init_protocols()`.
+            buffer: None,        // Set as needed.
         }
     }
 
     fn append(&mut self, ch: char) {
-        if let Some(ref mut preedit_str) = self.preedit_str {
+        if let Some(ref mut preedit_str) = self.buffer {
             preedit_str.push(ch);
         } else {
-            self.preedit_str = Some(ch.to_string());
+            self.buffer = Some(ch.to_string());
         }
     }
 
@@ -183,45 +226,70 @@ impl Seat {
         return false;
     }
 
-    fn handle_key_pressed(&mut self, xkb_key: xkb::Keycode) -> bool {
-        let handled: bool;
+    /// Returns None if the program should wind down.
+    fn handle_key(&mut self, xkb_key: xkb::Keycode) -> Option<bool> {
+        let handled: Option<bool>;
         let xkb_state = self.xkb_state.as_ref().unwrap();
         let sym = xkb_state.key_get_one_sym(xkb_key);
         match sym {
             xkb::Keysym::Escape => {
                 // Close the keyboard.
-                handled = true;
+                self.composing_update(String::default());
+                // return None; // shutdown
+                return Some(true);
             }
             xkb::Keysym::Return => {
                 // Send the text.
-                handled = true;
+                if let Some(buffer) = &mut self.buffer {
+                    let output = check_command(&buffer);
+                    if let Some(output) = output {
+                        // found match
+                        self.composing_commit(output);
+                    } else {
+                        self.composing_update(String::default());
+                    }
+                    self.buffer = None;
+                }
+                // return None; // shutdown
+                return Some(true);
+            }
+            xkb::Keysym::KP_Space | xkb::Keysym::space => {
+                return None; // shutdown
             }
             _ => {
                 // Send the key.
                 let ch = char::from_u32(xkb_state.key_get_utf32(xkb_key)).unwrap();
                 if ch.is_ascii() {
                     self.append(ch);
-                    handled = true;
+                    handled = Some(true);
                 } else {
-                    handled = false;
+                    handled = Some(false);
                 }
             }
         }
-        let input_method = self.input_method.as_ref().unwrap();
-        let text = self
-            .preedit_str
-            .as_ref()
-            .map_or("", |s| s.as_str())
-            .to_string();
-        let cursor_end = text.len() as i32;
-        input_method.set_preedit_string(text, 0, cursor_end);
-        input_method.commit(self.serial);
+        let text = self.buffer.as_ref().map_or("", |s| s.as_str()).to_string();
+        self.composing_update(text);
         handled
     }
+
+    fn composing_update(&mut self, text: String) {
+        let input_method = self.input_method.as_ref().unwrap();
+        let cursor_end = text.len() as i32;
+        input_method.set_preedit_string(text, 0, cursor_end);
+        input_method.commit(self.done_events_received);
+    }
+
+    fn composing_commit(&mut self, output: String) {
+        let input_method = self.input_method.as_ref().unwrap();
+        input_method.commit_string(output);
+        input_method.commit(self.done_events_received);
+    }
+
+    fn draw_popup(&mut self) {}
 }
 
-fn create_seat(state: &mut State, wl_seat: WlSeat, name: u32) {
-    let seat = Seat::new(wl_seat, name);
+fn create_seat(state: &mut State, wl_seat: WlSeat) {
+    let seat = Seat::new(wl_seat);
     state.seats.push(seat);
 }
 
@@ -242,7 +310,11 @@ impl Dispatch<wl_registry::WlRegistry, ()> for State {
             } => match &interface[..] {
                 "wl_seat" => {
                     let seat = registry.bind::<WlSeat, _, _>(name, 1, qh, ());
-                    create_seat(state, seat, name);
+                    create_seat(state, seat);
+                }
+                "wl_compositor" => {
+                    let compositor = registry.bind::<WlCompositor, _, _>(name, 4, qh, ());
+                    state.wl_compositor = Some(compositor);
                 }
                 "zwp_input_method_manager_v2" => {
                     let input_man = registry.bind::<ZwpInputMethodManagerV2, _, _>(name, 1, qh, ());
@@ -270,7 +342,6 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        let seat = state.get_seat(*seat_index);
         match event {
             zwp_input_method_keyboard_grab_v2::Event::Key {
                 time,
@@ -285,6 +356,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                 let WEnum::Value(key_state) = key_state else {
                     return;
                 };
+                let seat = state.get_seat(*seat_index);
                 if seat.xkb_state.is_none() {
                     return;
                 };
@@ -313,9 +385,19 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                 }
 
                 if matches!(key_state, KeyState::Pressed) {
-                    handled = seat.handle_key_pressed(keycode);
+                    match seat.handle_key(keycode) {
+                        Some(handled_key) => {
+                            handled = handled_key;
+                        }
+                        None => {
+                            eprintln!("Shutting down.");
+                            state.running = false;
+                            handled = true;
+                        }
+                    }
                 }
 
+                let seat = state.get_seat(*seat_index);
                 if matches!(key_state, KeyState::Pressed)
                     && seat.xkb_keymap.as_ref().unwrap().key_repeats(keycode)
                     && handled
@@ -327,9 +409,11 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                     seat.repeat_timer = Some(repeat_timer);
                 }
                 if matches!(key_state, KeyState::Pressed) && handled {
+                    // Add key to our pressed keys list if we did something with it.
                     seat.mark_as_pressed(keycode);
                 }
                 if matches!(key_state, KeyState::Released) {
+                    // Remove key from our pressed keys list.
                     let found = seat.release_if_pressed(keycode);
                     if found {
                         return;
@@ -337,6 +421,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                 }
 
                 if !handled {
+                    // If we didn't handle the key, send it to the virtual keyboard.
                     seat.virtual_keyboard
                         .as_ref()
                         .unwrap()
@@ -350,6 +435,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                 group,
                 ..
             } => {
+                let seat = state.get_seat(*seat_index);
                 if let Some(xkb_state) = &mut seat.xkb_state {
                     xkb_state.update_mask(mods_depressed, mods_latched, mods_locked, 0, 0, group);
                     seat.virtual_keyboard.as_ref().unwrap().modifiers(
@@ -364,6 +450,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                 let WEnum::Value(format) = format else {
                     return;
                 };
+                let seat = state.get_seat(*seat_index);
                 seat.virtual_keyboard
                     .as_ref()
                     .unwrap()
@@ -395,6 +482,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                 seat.xkb_state = Some(xkb_state);
             }
             zwp_input_method_keyboard_grab_v2::Event::RepeatInfo { rate, delay } => {
+                let seat = state.get_seat(*seat_index);
                 seat.repeat_rate = Some(Duration::from_millis(rate as u64));
                 seat.repeat_delay = Some(Duration::from_millis(delay as u64));
             }
@@ -430,7 +518,7 @@ impl Dispatch<ZwpInputMethodV2, SeatIndex> for State {
                 // Nothing.
             }
             zwp_input_method_v2::Event::Done => {
-                seat.serial += 1;
+                seat.done_events_received += 1;
                 if seat.pending_activate && !seat.active {
                     let keyboard_grab = input_method.grab_keyboard(qh, *seat_index);
                     seat.keyboard_grab = Some(keyboard_grab);
@@ -452,11 +540,50 @@ impl Dispatch<ZwpInputMethodV2, SeatIndex> for State {
     }
 }
 
+impl Dispatch<WlSurface, SeatIndex> for State {
+    fn event(
+        state: &mut Self,
+        wl_surface: &WlSurface,
+        event: wl_surface::Event,
+        seat_index: &SeatIndex,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+    ) {
+        let seat = state.get_seat(*seat_index);
+        match event {
+            wl_surface::Event::Enter { output } => {}
+            wl_surface::Event::Leave { output } => {}
+            _ => todo!(),
+        }
+    }
+}
+
+impl Dispatch<WlSeat, ()> for State {
+    fn event(
+        state: &mut Self,
+        wl_seat: &WlSeat,
+        event: wl_seat::Event,
+        _: &(),
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+    ) {
+        match event {
+            wl_seat::Event::Name { name } => {
+                eprintln!("Seat name: {}.", name);
+            }
+            wl_seat::Event::Capabilities { capabilities } => {}
+            _ => todo!(),
+        }
+    }
+}
+
 // Input method manager has no events.
 delegate_noop!(State: ignore ZwpInputMethodManagerV2);
 // Virtual keyboard has no events.
 delegate_noop!(State: ignore ZwpVirtualKeyboardV1);
 // Virtual keyboard manager has no events.
 delegate_noop!(State: ignore ZwpVirtualKeyboardManagerV1);
-// We'll ignore events from WlSeat for now. (Events are "name" and "capabilities".)
-delegate_noop!(State: ignore WlSeat);
+// We'll ignore the event from ZwpInputPopupSurfaceV2 for now. (Event is "text_input_rectangle".)
+delegate_noop!(State: ignore ZwpInputPopupSurfaceV2);
+// WlCompositor has no events.
+delegate_noop!(State: ignore WlCompositor);
