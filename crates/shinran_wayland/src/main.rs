@@ -213,6 +213,12 @@ impl Seat {
                 break;
             }
         }
+        eprintln!("Added key!");
+        let mut pressed_num = [0u32; 64];
+        for i in 0..self.pressed.len() {
+            pressed_num[i] = self.pressed[i].into();
+        }
+        eprintln!("{:?}", pressed_num);
     }
 
     fn release_if_pressed(&mut self, keycode: xkb::Keycode) -> bool {
@@ -220,6 +226,12 @@ impl Seat {
             if *code == keycode {
                 // Clear the slot.
                 *code = xkb::Keycode::default();
+                eprintln!("Removed key!");
+                let mut pressed_num = [0u32; 64];
+                for i in 0..self.pressed.len() {
+                    pressed_num[i] = self.pressed[i].into();
+                }
+                eprintln!("{:?}", pressed_num);
                 return true;
             }
         }
@@ -356,6 +368,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                 let WEnum::Value(key_state) = key_state else {
                     return;
                 };
+                eprintln!("Key {} was {:?}.", key + 8, key_state);
                 let seat = state.get_seat(*seat_index);
                 if seat.xkb_state.is_none() {
                     return;
@@ -365,6 +378,15 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                 if matches!(key_state, KeyState::Pressed)
                     && seat.repeating_keycode.map_or(false, |k| k != keycode)
                 {
+                    if !seat.handle_key(keycode).unwrap_or(true) {
+                        seat.repeating_keycode = None;
+                        seat.repeat_timer = None;
+                        seat.virtual_keyboard
+                            .as_ref()
+                            .unwrap()
+                            .key(time, key, key_state.into());
+                        return;
+                    }
                     if seat.xkb_keymap.as_ref().unwrap().key_repeats(keycode) {
                         seat.repeating_keycode = Some(keycode);
                         seat.repeating_timestamp =
@@ -407,6 +429,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                     let mut repeat_timer = Instant::now();
                     repeat_timer += seat.repeat_delay.unwrap();
                     seat.repeat_timer = Some(repeat_timer);
+                    eprintln!("Repeat timer set for {}", key + 8);
                 }
                 if matches!(key_state, KeyState::Pressed) && handled {
                     // Add key to our pressed keys list if we did something with it.
