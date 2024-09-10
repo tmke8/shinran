@@ -1059,13 +1059,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "shinran"
+name = "shinran_ibus"
 version = "0.1.0"
 dependencies = [
  "async-std",
  "event-listener 5.3.0",
  "ibus_utils",
  "shinran_lib",
+ "xkeysym",
  "zbus",
 ]
 

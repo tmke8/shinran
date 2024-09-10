@@ -32,7 +32,7 @@ use wayland_protocols_misc::{
         zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
     },
 };
-use xkbcommon::xkb;
+use xkbcommon::xkb::{self, Keysym};
 
 use shinran_lib::check_command;
 
@@ -244,13 +244,13 @@ impl Seat {
         let xkb_state = self.xkb_state.as_ref().unwrap();
         let sym = xkb_state.key_get_one_sym(xkb_key);
         match sym {
-            xkb::Keysym::Escape => {
+            Keysym::Escape => {
                 // Close the keyboard.
                 self.composing_update(String::default());
                 // return None; // shutdown
                 return Some(true);
             }
-            xkb::Keysym::Return => {
+            Keysym::Return => {
                 // Send the text.
                 if let Some(buffer) = &mut self.buffer {
                     let output = check_command(&buffer);
@@ -265,7 +265,7 @@ impl Seat {
                 // return None; // shutdown
                 return Some(true);
             }
-            xkb::Keysym::KP_Space | xkb::Keysym::space => {
+            Keysym::KP_Space | Keysym::space => {
                 return None; // shutdown
             }
             _ => {

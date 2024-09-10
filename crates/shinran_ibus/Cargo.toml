@@ -1,5 +1,5 @@
 [package]
-name = "shinran"
+name = "shinran_ibus"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,3 +12,4 @@ shinran_lib = { path = "../shinran_lib" }
 async-std = { version = "1.12.0", features = ["attributes"] }
 event-listener = "5.2.0"
 zbus = "4.1.2"
+xkeysym = "0.2.1"
