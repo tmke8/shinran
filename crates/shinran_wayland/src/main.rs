@@ -11,7 +11,7 @@ use std::{
 
 use calloop::{
     timer::{TimeoutAction, Timer},
-    EventLoop,
+    EventLoop, LoopHandle, RegistrationToken,
 };
 use calloop_wayland_source::WaylandSource;
 use wayland_client::{
@@ -72,31 +72,17 @@ fn main() {
         panic!("Compositor does not support zwp_virtual_keyboard_manager_v1");
     }
 
-    init_protocols(&mut state, &qh);
-    eprintln!("Protocols initialized.");
-
     // Create the calloop event loop to drive everything.
     let mut event_loop: EventLoop<State> = EventLoop::try_new().unwrap();
     let loop_handle = event_loop.handle();
 
+    init_protocols(&mut state, &qh, &loop_handle);
+    eprintln!("Protocols initialized.");
+
     // Insert the wayland source into the calloop's event loop.
-    let wayland_source = WaylandSource::new(conn, event_queue);
-    loop_handle
-        .insert_source(wayland_source, |_, event_queue, state| {
-            event_queue.dispatch_pending(state)
-        })
-        .unwrap();
-
-    // Create a timer that fires every 1000 milliseconds.
-    loop_handle
-        .insert_source(Timer::immediate(), |_instant, _, _state| {
-            eprintln!("Timer callback fired!");
-            // Add your timer callback logic here
-
-            // Return the timeout action to reschedule the timer
-            TimeoutAction::ToDuration(Duration::from_millis(1000))
-        })
-        .unwrap();
+    WaylandSource::new(conn, event_queue)
+        .insert(loop_handle.clone())
+        .expect("Insert Wayland source into calloop.");
 
     // This will start dispatching the event loop and processing pending wayland requests.
     while state.running {
@@ -104,7 +90,7 @@ fn main() {
     }
 }
 
-fn init_protocols(state: &mut State, qh: &QueueHandle<State>) {
+fn init_protocols(state: &mut State, qh: &QueueHandle<State>, loop_handle: &LoopHandle<State>) {
     for (seat_index, seat) in state.seats.iter_mut().enumerate() {
         seat.input_method = Some(
             state
@@ -120,7 +106,6 @@ fn init_protocols(state: &mut State, qh: &QueueHandle<State>) {
                 .unwrap()
                 .create_virtual_keyboard(&seat.wl_seat, qh, ()),
         );
-        seat.xkb_context = Some(xkb::Context::new(xkb::CONTEXT_NO_FLAGS));
         seat.wl_surface = Some(
             state
                 .wl_compositor
@@ -134,6 +119,21 @@ fn init_protocols(state: &mut State, qh: &QueueHandle<State>) {
             (),
         ));
         seat.are_protocols_initted = true;
+
+        // Create a timer that fires every 2000 milliseconds.
+        let reg_token = loop_handle
+            .insert_source(
+                Timer::from_duration(Duration::from_millis(200)),
+                move |_instant, _, _state| {
+                    eprintln!("Timer callback fired for seat {}!", seat_index);
+                    // Add your timer callback logic here
+
+                    // Return the timeout action to reschedule the timer
+                    TimeoutAction::ToDuration(Duration::from_millis(2000))
+                },
+            )
+            .expect("Insert timer into calloop.");
+        seat.repeat_timer_token = Some(reg_token);
     }
 }
 
@@ -168,7 +168,7 @@ struct Seat {
     virtual_keyboard: Option<ZwpVirtualKeyboardV1>,
     keyboard_grab: Option<ZwpInputMethodKeyboardGrabV2>,
 
-    xkb_context: Option<xkb::Context>,
+    xkb_context: xkb::Context,
     xkb_keymap: Option<xkb::Keymap>,
     xkb_state: Option<xkb::State>,
 
@@ -189,6 +189,7 @@ struct Seat {
     repeating_keycode: Option<xkb::Keycode>,
     repeating_timestamp: u32,
     repeat_timer: Option<Instant>,
+    repeat_timer_token: Option<RegistrationToken>,
 
     buffer: Option<String>,
 
@@ -205,9 +206,9 @@ impl Seat {
             name: None,             // Set in `name` event in WlSeat.
             input_method: None,     // Set in `init_protocols()`.
             virtual_keyboard: None, // Set in `init_protocols()`.
-            xkb_context: None,      // Set in `init_protocols()`.
-            xkb_keymap: None,       // Set in `keymap` event.
-            xkb_state: None,        // Set in `keymap` event.
+            xkb_context: xkb::Context::new(xkb::CONTEXT_NO_FLAGS),
+            xkb_keymap: None, // Set in `keymap` event.
+            xkb_state: None,  // Set in `keymap` event.
             active: false,
             done_events_received: 0,
             pending_activate: false,
@@ -219,6 +220,7 @@ impl Seat {
             repeating_keycode: None, // Set as needed.
             repeating_timestamp: 0,
             repeat_timer: None,  // Set as needed.
+            repeat_timer_token: None,
             wl_surface: None,    // Set in `init_protocols()`.
             popup_surface: None, // Set in `init_protocols()`.
             buffer: None,        // Set as needed.
@@ -407,21 +409,35 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                 if seat.xkb_state.is_none() {
                     return;
                 };
-                let mut handled = false;
 
+                // First check:
+                // A key was pressed and we are currently repeating a key, but not this one.
                 if matches!(key_state, KeyState::Pressed)
                     && seat.repeating_keycode.map_or(false, |k| k != keycode)
                 {
-                    if !seat.handle_key(keycode).unwrap_or(true) {
-                        seat.repeating_keycode = None;
-                        seat.repeat_timer = None;
-                        seat.virtual_keyboard
-                            .as_ref()
-                            .unwrap()
-                            .key(time, key, key_state.into());
-                        return;
+                    match seat.handle_key(keycode) {
+                        Some(true) => {
+                            seat.mark_as_pressed(keycode);
+                        }
+                        Some(false) => {
+                            seat.repeating_keycode = None;
+                            seat.repeat_timer = None;
+                            seat.virtual_keyboard.as_ref().unwrap().key(
+                                time,
+                                key,
+                                key_state.into(),
+                            );
+                            return;
+                        }
+                        None => {
+                            eprintln!("Shutting down.");
+                            state.running = false;
+                            return;
+                        }
                     }
                     if seat.xkb_keymap.as_ref().unwrap().key_repeats(keycode) {
+                        // Update the timer to repeat the new key.
+                        eprintln!("Update repeat timer for {}", key + 8);
                         seat.repeating_keycode = Some(keycode);
                         seat.repeating_timestamp =
                             time + seat.repeat_delay.unwrap().as_millis() as u32;
@@ -433,13 +449,22 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                     }
                     return;
                 }
+
+                // Second check:
+                // A key was released and we are currently repeating precisely this key.
                 if matches!(key_state, KeyState::Released)
                     && seat.repeating_keycode.map_or(false, |k| k == keycode)
                 {
+                    eprintln!("Delete repeat timer for {}", key + 8);
+                    seat.release_if_pressed(keycode);
                     seat.repeating_keycode = None;
                     seat.repeat_timer = None;
+                    return;
                 }
 
+                // Third check:
+                // A key was pressed and we haven't dealt with it yet.
+                let mut handled = false;
                 if matches!(key_state, KeyState::Pressed) {
                     match seat.handle_key(keycode) {
                         Some(handled_key) => {
@@ -453,6 +478,8 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                     }
                 }
 
+                // Fourth check:
+                // A key was pressed and we have handled it, and it *could* be repeated.
                 let seat = state.get_seat(*seat_index);
                 if matches!(key_state, KeyState::Pressed)
                     && seat.xkb_keymap.as_ref().unwrap().key_repeats(keycode)
@@ -464,21 +491,30 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                     repeat_timer += seat.repeat_delay.unwrap();
                     seat.repeat_timer = Some(repeat_timer);
                     eprintln!("Repeat timer set for {}", key + 8);
+                    seat.mark_as_pressed(keycode);
+                    return;
                 }
+
+                // Fifth check:
+                // A key was pressed and we have handled it, but it cannot be repeated.
                 if matches!(key_state, KeyState::Pressed) && handled {
                     // Add key to our pressed keys list if we did something with it.
                     seat.mark_as_pressed(keycode);
                 }
+
+                // Sixth check:
+                // A key was released but we were not repeating it.
                 if matches!(key_state, KeyState::Released) {
                     // Remove key from our pressed keys list.
                     let found = seat.release_if_pressed(keycode);
                     if found {
-                        return;
+                        return; // We handled the corresponding pressed event, so we're done.
                     }
                 }
 
                 if !handled {
                     // If we didn't handle the key, send it to the virtual keyboard.
+                    eprintln!("Forwarded key {}", key + 8);
                     seat.virtual_keyboard
                         .as_ref()
                         .unwrap()
@@ -518,7 +554,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                 }
                 seat.xkb_keymap = unsafe {
                     xkb::Keymap::new_from_fd(
-                        seat.xkb_context.as_ref().unwrap(),
+                        &seat.xkb_context,
                         fd,
                         size as usize,
                         xkb::KEYMAP_FORMAT_TEXT_V1,
@@ -542,6 +578,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                 let seat = state.get_seat(*seat_index);
                 seat.repeat_rate = Some(Duration::from_millis(rate as u64));
                 seat.repeat_delay = Some(Duration::from_millis(delay as u64));
+                eprintln!("Repeat rate: {} ms, delay: {} ms.", rate, delay);
             }
             _ => todo!(),
         }
