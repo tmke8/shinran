@@ -9,6 +9,11 @@ use std::{
     time::{Duration, Instant},
 };
 
+use calloop::{
+    timer::{TimeoutAction, Timer},
+    EventLoop,
+};
+use calloop_wayland_source::WaylandSource;
 use wayland_client::{
     delegate_noop,
     protocol::{
@@ -70,8 +75,32 @@ fn main() {
     init_protocols(&mut state, &qh);
     eprintln!("Protocols initialized.");
 
+    // Create the calloop event loop to drive everything.
+    let mut event_loop: EventLoop<State> = EventLoop::try_new().unwrap();
+    let loop_handle = event_loop.handle();
+
+    // Insert the wayland source into the calloop's event loop.
+    let wayland_source = WaylandSource::new(conn, event_queue);
+    loop_handle
+        .insert_source(wayland_source, |_, event_queue, state| {
+            event_queue.dispatch_pending(state)
+        })
+        .unwrap();
+
+    // Create a timer that fires every 1000 milliseconds.
+    loop_handle
+        .insert_source(Timer::immediate(), |_instant, _, _state| {
+            eprintln!("Timer callback fired!");
+            // Add your timer callback logic here
+
+            // Return the timeout action to reschedule the timer
+            TimeoutAction::ToDuration(Duration::from_millis(1000))
+        })
+        .unwrap();
+
+    // This will start dispatching the event loop and processing pending wayland requests.
     while state.running {
-        event_queue.blocking_dispatch(&mut state).unwrap();
+        event_loop.dispatch(None, &mut state).unwrap();
     }
 }
 
@@ -82,14 +111,14 @@ fn init_protocols(state: &mut State, qh: &QueueHandle<State>) {
                 .input_method_manager
                 .as_ref()
                 .unwrap()
-                .get_input_method(&seat.wl_seat, &qh, SeatIndex(seat_index)),
+                .get_input_method(&seat.wl_seat, qh, SeatIndex(seat_index)),
         );
         seat.virtual_keyboard = Some(
             state
                 .virtual_keyboard_manager
                 .as_ref()
                 .unwrap()
-                .create_virtual_keyboard(&seat.wl_seat, &qh, ()),
+                .create_virtual_keyboard(&seat.wl_seat, qh, ()),
         );
         seat.xkb_context = Some(xkb::Context::new(xkb::CONTEXT_NO_FLAGS));
         seat.wl_surface = Some(
@@ -97,11 +126,11 @@ fn init_protocols(state: &mut State, qh: &QueueHandle<State>) {
                 .wl_compositor
                 .as_ref()
                 .unwrap()
-                .create_surface(&qh, SeatIndex(seat_index)),
+                .create_surface(qh, SeatIndex(seat_index)),
         );
         seat.popup_surface = Some(seat.input_method.as_ref().unwrap().get_input_popup_surface(
-            &seat.wl_surface.as_ref().unwrap(),
-            &qh,
+            seat.wl_surface.as_ref().unwrap(),
+            qh,
             (),
         ));
         seat.are_protocols_initted = true;
@@ -235,7 +264,7 @@ impl Seat {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     /// Returns None if the program should wind down.
@@ -253,7 +282,7 @@ impl Seat {
             Keysym::Return => {
                 // Send the text.
                 if let Some(buffer) = &mut self.buffer {
-                    let output = check_command(&buffer);
+                    let output = check_command(buffer);
                     if let Some(output) = output {
                         // found match
                         self.composing_commit(output);
@@ -269,25 +298,30 @@ impl Seat {
                 return None; // shutdown
             }
             _ => {
-                // Send the key.
-                let ch = char::from_u32(xkb_state.key_get_utf32(xkb_key)).unwrap();
-                if ch.is_ascii() {
-                    self.append(ch);
-                    handled = Some(true);
+                // If the key corresponds to an ASCII character, add it to the buffer.
+                // Otherwise, mark it as unhandled.
+                if let Some(ch) = char::from_u32(xkb_state.key_get_utf32(xkb_key)) {
+                    if ch.is_ascii() {
+                        self.append(ch);
+                        handled = Some(true);
+                    } else {
+                        handled = Some(false);
+                    }
                 } else {
                     handled = Some(false);
                 }
             }
         }
-        let text = self.buffer.as_ref().map_or("", |s| s.as_str()).to_string();
-        self.composing_update(text);
+        if let Some(text) = &self.buffer {
+            self.composing_update(text.clone());
+        }
         handled
     }
 
     fn composing_update(&mut self, text: String) {
         let input_method = self.input_method.as_ref().unwrap();
-        let cursor_end = text.len() as i32;
-        input_method.set_preedit_string(text, 0, cursor_end);
+        let cursor_end = text.chars().count() as i32;
+        input_method.set_preedit_string(text, cursor_end, cursor_end);
         input_method.commit(self.done_events_received);
     }
 
