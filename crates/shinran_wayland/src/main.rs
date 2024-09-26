@@ -4,14 +4,11 @@
 // https://github.com/emersion/wlhangul/blob/bd2758227779d7748dea185c38cab11665d55502/include/wlhangul.h
 // https://github.com/emersion/wlhangul/blob/bd2758227779d7748dea185c38cab11665d55502/main.c
 
-use std::{
-    os::unix::io::AsFd,
-    time::{Duration, Instant},
-};
+use std::{os::unix::io::AsFd, time::Duration};
 
 use calloop::{
     timer::{TimeoutAction, Timer},
-    EventLoop, LoopHandle, RegistrationToken,
+    Dispatcher, EventLoop, LoopHandle, RegistrationToken,
 };
 use calloop_wayland_source::WaylandSource;
 use wayland_client::{
@@ -51,13 +48,17 @@ fn main() {
 
     display.get_registry(&qh, ());
 
+    // Create the calloop event loop to drive everything.
+    let mut event_loop: EventLoop<State> = EventLoop::try_new().unwrap();
+    let loop_handle = event_loop.handle();
+
     let mut state = State {
         running: true,
         seats: vec![],
-        configured: false,
         wl_compositor: None,
         input_method_manager: None,
         virtual_keyboard_manager: None,
+        loop_handle: loop_handle.clone(),
     };
 
     // Block until the server has received our `display.get_registry` request.
@@ -72,10 +73,6 @@ fn main() {
         panic!("Compositor does not support zwp_virtual_keyboard_manager_v1");
     }
 
-    // Create the calloop event loop to drive everything.
-    let mut event_loop: EventLoop<State> = EventLoop::try_new().unwrap();
-    let loop_handle = event_loop.handle();
-
     init_protocols(&mut state, &qh, &loop_handle);
     eprintln!("Protocols initialized.");
 
@@ -88,9 +85,16 @@ fn main() {
     while state.running {
         event_loop.dispatch(None, &mut state).unwrap();
     }
+    // Process any remaining messages.
+    eprintln!("Shutting down...");
+    event_loop.dispatch(None, &mut state).unwrap();
 }
 
-fn init_protocols(state: &mut State, qh: &QueueHandle<State>, loop_handle: &LoopHandle<State>) {
+fn init_protocols(
+    state: &mut State,
+    qh: &QueueHandle<State>,
+    loop_handle: &LoopHandle<'static, State>,
+) {
     for (seat_index, seat) in state.seats.iter_mut().enumerate() {
         seat.input_method = Some(
             state
@@ -120,20 +124,26 @@ fn init_protocols(state: &mut State, qh: &QueueHandle<State>, loop_handle: &Loop
         ));
         seat.are_protocols_initted = true;
 
-        // Create a timer that fires every 2000 milliseconds.
-        let reg_token = loop_handle
-            .insert_source(
-                Timer::from_duration(Duration::from_millis(200)),
-                move |_instant, _, _state| {
-                    eprintln!("Timer callback fired for seat {}!", seat_index);
-                    // Add your timer callback logic here
+        /*
+        let timer = Dispatcher::<'static, Timer, State>::new(
+            Timer::from_duration(Duration::from_millis(500)),
+            move |_instant, _, state| {
+                // Add your timer callback logic here
+                let seat = state.get_seat(SeatIndex(seat_index));
+                let Some(repeat_rate) = seat.repeat_rate else {
+                    return TimeoutAction::ToDuration(Duration::from_millis(2000));
+                };
+                seat.repeat_key();
 
-                    // Return the timeout action to reschedule the timer
-                    TimeoutAction::ToDuration(Duration::from_millis(2000))
-                },
-            )
+                // Return the timeout action to reschedule the timer
+                TimeoutAction::ToDuration(repeat_rate)
+            },
+        );
+        loop_handle
+            .register_dispatcher(timer.clone())
             .expect("Insert timer into calloop.");
-        seat.repeat_timer_token = Some(reg_token);
+        seat.repeat_timer = Some(timer);
+        */
     }
 }
 
@@ -146,8 +156,8 @@ struct State {
     // TODO: Use a HashMap with identity hashing instead of a Vec.
     // https://docs.rs/identity-hash/latest/identity_hash/
     seats: Vec<Seat>,
-
-    configured: bool,
+    // configured: bool,
+    loop_handle: LoopHandle<'static, State>,
 }
 
 #[repr(transparent)]
@@ -188,8 +198,8 @@ struct Seat {
     pressed: [xkb::Keycode; 64],
     repeating_keycode: Option<xkb::Keycode>,
     repeating_timestamp: u32,
-    repeat_timer: Option<Instant>,
-    repeat_timer_token: Option<RegistrationToken>,
+    repeat_timer: Option<Dispatcher<'static, Timer, State>>,
+    repeat_timer_reg: Option<RegistrationToken>,
 
     buffer: Option<String>,
 
@@ -218,12 +228,12 @@ impl Seat {
             repeat_delay: None,  // Set in `repeat_info` event.
             pressed: [xkb::Keycode::default(); 64],
             repeating_keycode: None, // Set as needed.
-            repeating_timestamp: 0,
-            repeat_timer: None,  // Set as needed.
-            repeat_timer_token: None,
-            wl_surface: None,    // Set in `init_protocols()`.
-            popup_surface: None, // Set in `init_protocols()`.
-            buffer: None,        // Set as needed.
+            repeating_timestamp: 0,  // Set as needed.
+            repeat_timer: None,      // Set as needed.
+            repeat_timer_reg: None,  // Set as needed.
+            wl_surface: None,        // Set in `init_protocols()`.
+            popup_surface: None,     // Set in `init_protocols()`.
+            buffer: None,            // Set as needed.
         }
     }
 
@@ -276,10 +286,10 @@ impl Seat {
         let sym = xkb_state.key_get_one_sym(xkb_key);
         match sym {
             Keysym::Escape => {
-                // Close the keyboard.
+                // Commit an empty string.
                 self.composing_update(String::default());
-                // return None; // shutdown
-                return Some(true);
+                // return Some(true);
+                return None; // shutdown
             }
             Keysym::Return => {
                 // Send the text.
@@ -293,19 +303,25 @@ impl Seat {
                     }
                     self.buffer = None;
                 }
-                // return None; // shutdown
-                return Some(true);
+                // return Some(true);
+                return None; // shutdown
             }
             Keysym::KP_Space | Keysym::space => {
-                return None; // shutdown
+                return Some(false);
             }
             _ => {
                 // If the key corresponds to an ASCII character, add it to the buffer.
                 // Otherwise, mark it as unhandled.
                 if let Some(ch) = char::from_u32(xkb_state.key_get_utf32(xkb_key)) {
                     if ch.is_ascii() {
-                        self.append(ch);
-                        handled = Some(true);
+                        if ch == '\0' {
+                            // If the key does not represent a character,
+                            // `key_get_utf32` returns 0.
+                            handled = Some(false);
+                        } else {
+                            self.append(ch);
+                            handled = Some(true);
+                        }
                     } else {
                         handled = Some(false);
                     }
@@ -315,9 +331,29 @@ impl Seat {
             }
         }
         if let Some(text) = &self.buffer {
+            // TODO: Only update if the text has changed.
             self.composing_update(text.clone());
         }
         handled
+    }
+
+    fn repeat_key(&mut self) -> Duration {
+        let repeat_rate = self.repeat_rate.expect("Repeat rate should have been set.");
+        let key_code = self
+            .repeating_keycode
+            .expect("Repeating keycode should have been set.");
+        let key = u32::from(key_code) - 8;
+        eprintln!("Timer repeats {}", key);
+        if self.handle_key(key_code).is_some_and(|x| !x) {
+            self.virtual_keyboard.as_ref().unwrap().key(
+                self.repeating_timestamp,
+                key,
+                KeyState::Pressed.into(),
+            );
+            self.repeating_keycode = None;
+        }
+        self.repeating_timestamp += 1000 / (repeat_rate.as_millis() as u32);
+        repeat_rate
     }
 
     fn composing_update(&mut self, text: String) {
@@ -402,7 +438,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                 let keycode = xkb::Keycode::new(key + 8);
 
                 let WEnum::Value(key_state) = key_state else {
-                    return;
+                    panic!("Invalid key state.");
                 };
                 eprintln!("Key {} was {:?}.", key + 8, key_state);
                 let seat = state.get_seat(*seat_index);
@@ -421,7 +457,6 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                         }
                         Some(false) => {
                             seat.repeating_keycode = None;
-                            seat.repeat_timer = None;
                             seat.virtual_keyboard.as_ref().unwrap().key(
                                 time,
                                 key,
@@ -439,11 +474,20 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                         // Update the timer to repeat the new key.
                         eprintln!("Update repeat timer for {}", key + 8);
                         seat.repeating_keycode = Some(keycode);
-                        seat.repeating_timestamp =
-                            time + seat.repeat_delay.unwrap().as_millis() as u32;
-                        let mut repeat_timer = Instant::now();
-                        repeat_timer += seat.repeat_delay.unwrap();
-                        seat.repeat_timer = Some(repeat_timer);
+                        let repeat_delay = seat.repeat_delay.unwrap();
+                        seat.repeating_timestamp = time + repeat_delay.as_millis() as u32;
+                        // Set timer to start repeating starting from `repeat_delay` milliseconds.
+                        seat.repeat_timer
+                            .as_mut()
+                            .unwrap()
+                            .as_source_mut()
+                            .set_duration(repeat_delay);
+                        let timer_registration = seat.repeat_timer_reg.unwrap();
+                        // Update registration of the timer after we have update the deadline.
+                        state
+                            .loop_handle
+                            .update(&timer_registration)
+                            .expect("Failed to update timer.");
                     } else {
                         seat.repeating_keycode = None;
                     }
@@ -458,7 +502,11 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                     eprintln!("Delete repeat timer for {}", key + 8);
                     seat.release_if_pressed(keycode);
                     seat.repeating_keycode = None;
+                    // Turn off the repeat timer.
+                    let timer_registration = seat.repeat_timer_reg.unwrap();
+                    seat.repeat_timer_reg = None;
                     seat.repeat_timer = None;
+                    state.loop_handle.remove(timer_registration);
                     return;
                 }
 
@@ -480,18 +528,32 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
 
                 // Fourth check:
                 // A key was pressed and we have handled it, and it *could* be repeated.
-                let seat = state.get_seat(*seat_index);
+                let seat_index = *seat_index;
+                let seat = state.get_seat(seat_index);
                 if matches!(key_state, KeyState::Pressed)
                     && seat.xkb_keymap.as_ref().unwrap().key_repeats(keycode)
                     && handled
                 {
                     seat.repeating_keycode = Some(keycode);
-                    seat.repeating_timestamp = time + seat.repeat_delay.unwrap().as_millis() as u32;
-                    let mut repeat_timer = Instant::now();
-                    repeat_timer += seat.repeat_delay.unwrap();
-                    seat.repeat_timer = Some(repeat_timer);
-                    eprintln!("Repeat timer set for {}", key + 8);
+                    let repeat_delay = seat.repeat_delay.unwrap();
+                    seat.repeating_timestamp = time + repeat_delay.as_millis() as u32;
+                    // Set timer to start repeating starting from `repeat_delay` milliseconds.
+                    let timer = Dispatcher::<'static, Timer, State>::new(
+                        Timer::from_duration(repeat_delay),
+                        move |_instant, _, state| {
+                            TimeoutAction::ToDuration(state.get_seat(seat_index).repeat_key())
+                        },
+                    );
+                    seat.repeat_timer = Some(timer.clone());
                     seat.mark_as_pressed(keycode);
+                    // Register the timer with the event loop.
+                    let reg_token = state
+                        .loop_handle
+                        .register_dispatcher(timer)
+                        .expect("Insert timer into calloop.");
+                    let seat = state.get_seat(seat_index);
+                    seat.repeat_timer_reg = Some(reg_token);
+                    eprintln!("Repeat timer set for {}", key + 8);
                     return;
                 }
 
