@@ -38,6 +38,8 @@ use xkbcommon::xkb::{self, Keysym};
 
 use shinran_lib::check_command;
 
+mod font;
+
 fn main() {
     let conn = Connection::connect_to_env()
         .unwrap_or_else(|_| panic!("Unable to connect to a Wayland compositor."));
