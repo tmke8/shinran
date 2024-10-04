@@ -1,8 +1,7 @@
-use time::{
-    format_description::well_known::Rfc3339,
-    OffsetDateTime
-};
 use std::time::SystemTime;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+
+mod config;
 
 pub fn check_command(command: &str) -> Option<String> {
     match command {
