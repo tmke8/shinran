@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
 use serde::Deserialize;
+use serde_yaml_ng::Value;
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Default)]
 struct Match {
-    trigger: Trigger,
+    trigger: Value,
     replace: String,
     #[serde(default)]
     word: bool,
@@ -14,24 +15,12 @@ struct Match {
     vars: Vec<Var>,
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq)]
-enum Trigger {
-    Single(String),
-    Multi(Vec<String>),
-}
-
-impl Default for Trigger {
-    fn default() -> Self {
-        Trigger::Single(String::default())
-    }
-}
-
 #[derive(Debug, Clone, Deserialize, PartialEq, Default)]
 struct Var {
     name: String,
     r#type: String,
     #[serde(default)]
-    params: HashMap<String, String>,
+    params: HashMap<String, Value>,
 }
 
 #[cfg(test)]
@@ -39,14 +28,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_simpl() {
+    fn test_simple() {
         let config = r#"
   - trigger: hello
     replace: world"#;
         assert_eq!(
             serde_yaml_ng::from_str::<Vec<Match>>(config).unwrap(),
             vec![Match {
-                trigger: Trigger::Single("hello".to_string()),
+                trigger: "hello".into(),
                 replace: "world".to_string(),
                 ..Default::default()
             }]
@@ -70,13 +59,13 @@ mod tests {
             serde_yaml_ng::from_str::<Vec<Match>>(config).unwrap(),
             vec![
                 Match {
-                    trigger: Trigger::Single("include newlines".to_string()),
+                    trigger: "include newlines".into(),
                     replace: "exactly as you see\nwill appear these three\nlines of poetry\n"
                         .to_string(),
                     ..Default::default()
                 },
                 Match {
-                    trigger: Trigger::Single("fold newlines".to_string()),
+                    trigger: "fold newlines".into(),
                     replace: "this is really a single line of text despite appearances".to_string(),
                     ..Default::default()
                 }
@@ -110,40 +99,82 @@ mod tests {
             serde_yaml_ng::from_str::<Vec<Match>>(config).unwrap(),
             vec![
                 Match {
-                    trigger: Trigger::Single(":tomorrow".to_string()),
+                    trigger: ":tomorrow".into(),
                     replace: "{{mytime}}".to_string(),
                     label: Some("Insert tomorrow's date, such as 5-Jan-2022".to_string()),
                     vars: vec![Var {
                         name: "mytime".to_string(),
                         r#type: "date".to_string(),
                         params: [
-                            ("format".to_string(), "%v".to_string()),
-                            ("offset".to_string(), "86400".to_string())
+                            ("format".to_string(), "%v".into()),
+                            ("offset".to_string(), 86400.into())
                         ]
                         .iter()
                         .cloned()
-                        .collect()
+                        .collect::<HashMap<String, Value>>()
+                        .into()
                     }],
                     ..Default::default()
                 },
                 Match {
-                    trigger: Trigger::Single(":yesterday".to_string()),
+                    trigger: ":yesterday".into(),
                     replace: "{{mytime}}".to_string(),
                     label: Some("Insert yesterday's date, such as 5-Jan-2022".to_string()),
                     vars: vec![Var {
                         name: "mytime".to_string(),
                         r#type: "date".to_string(),
                         params: [
-                            ("format".to_string(), "%v".to_string()),
-                            ("offset".to_string(), "-86400".to_string())
+                            ("format".to_string(), "%v".into()),
+                            ("offset".to_string(), (-86400).into())
                         ]
                         .iter()
                         .cloned()
-                        .collect()
+                        .collect::<HashMap<String, Value>>()
+                        .into()
                     }],
                     ..Default::default()
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn test_missing_params() {
+        let config = r#"
+  - trigger: ":a"
+    replace: "<a href='{{clipb}}' />$|$</a>"
+    vars:
+      - name: "clipb"
+        type: "clipboard""#;
+        assert_eq!(
+            serde_yaml_ng::from_str::<Vec<Match>>(config).unwrap(),
+            vec![
+                Match {
+                    trigger: ":a".into(),
+                    replace: "<a href='{{clipb}}' />$|$</a>".to_string(),
+                    vars: vec![Var {
+                        name: "clipb".to_string(),
+                        r#type: "clipboard".to_string(),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_multi_trigger() {
+        let config = r#"
+  - trigger: [hello, hi]
+    replace: world"#;
+        assert_eq!(
+            serde_yaml_ng::from_str::<Vec<Match>>(config).unwrap(),
+            vec![Match {
+                trigger: Value::Sequence(vec!["hello".into(), "hi".into()]),
+                replace: "world".to_string(),
+                ..Default::default()
+            }]
         );
     }
 }
