@@ -1,8 +1,17 @@
 [workspace]
-members = ["crates/shinran_ibus", "crates/ibus_utils", "crates/shinran_lib", "crates/shinran_wayland"]
+members = ["crates/*"]
 resolver = "2"
+
+[workspace.lints.clippy]
 
 [workspace.package]
 edition = "2021"
 
 [workspace.dependencies]
+log = "0.4.14"
+anyhow = "1.0.38"
+thiserror = "1.0.23"
+regex = "1.5.5"
+lazy_static = "1.4.0"
+enum-as-inner = "0.6.0"
+tempdir = "0.3.7"
