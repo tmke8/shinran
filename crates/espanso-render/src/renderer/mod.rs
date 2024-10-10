@@ -39,12 +39,12 @@ lazy_static! {
     static ref WORD_REGEX: Regex = Regex::new(r"(\w+)").unwrap();
 }
 
-pub(crate) struct DefaultRenderer<'a> {
-    extensions: HashMap<String, &'a dyn Extension>,
+pub struct DefaultRenderer {
+    extensions: HashMap<String, Box<dyn Extension>>,
 }
 
-impl<'a> DefaultRenderer<'a> {
-    pub fn new(extensions: Vec<&'a dyn Extension>) -> Self {
+impl DefaultRenderer {
+    pub fn new(extensions: Vec<Box<dyn Extension>>) -> Self {
         let extensions = extensions
             .into_iter()
             .map(|ext| (ext.name().to_string(), ext))
@@ -53,7 +53,7 @@ impl<'a> DefaultRenderer<'a> {
     }
 }
 
-impl<'a> Renderer for DefaultRenderer<'a> {
+impl Renderer for DefaultRenderer {
     fn render(
         &self,
         template: &Template,
@@ -304,7 +304,7 @@ mod tests {
     }
 
     pub fn get_renderer() -> impl Renderer {
-        DefaultRenderer::new(vec![&MockExtension {}])
+        DefaultRenderer::new(vec![Box::new(MockExtension {})])
     }
 
     pub fn template_for_str(str: &str) -> Template {

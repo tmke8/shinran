@@ -28,6 +28,9 @@ mod resolve;
 pub(crate) mod store;
 mod util;
 
+pub use resolve::ResolvedConfig;
+pub use store::DefaultConfigStore;
+
 // #[cfg(test)]
 // use mockall::{automock, predicate::*};
 
