@@ -148,18 +148,16 @@ mod tests {
         type: "clipboard""#;
         assert_eq!(
             serde_yaml_ng::from_str::<Vec<Match>>(config).unwrap(),
-            vec![
-                Match {
-                    trigger: ":a".into(),
-                    replace: "<a href='{{clipb}}' />$|$</a>".to_string(),
-                    vars: vec![Var {
-                        name: "clipb".to_string(),
-                        r#type: "clipboard".to_string(),
-                        ..Default::default()
-                    }],
+            vec![Match {
+                trigger: ":a".into(),
+                replace: "<a href='{{clipb}}' />$|$</a>".to_string(),
+                vars: vec![Var {
+                    name: "clipb".to_string(),
+                    r#type: "clipboard".to_string(),
                     ..Default::default()
-                },
-            ]
+                }],
+                ..Default::default()
+            },]
         );
     }
 
