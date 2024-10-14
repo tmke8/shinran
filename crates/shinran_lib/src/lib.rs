@@ -7,6 +7,7 @@ mod engine;
 mod match_cache;
 mod match_select;
 mod multiplex;
+mod path;
 mod render;
 
 pub fn check_command(command: &str) -> Option<String> {
@@ -22,7 +23,7 @@ fn time_now() -> String {
     now.format(&Rfc3339).expect("valid date time")
 }
 
-fn get_extensions() -> Vec<Box<dyn espanso_render::Extension>> {
+fn get_extensions(paths: crate::path::Paths) -> Vec<Box<dyn espanso_render::Extension>> {
     let date_extension = espanso_render::extension::date::DateExtension::new(&locale_provider);
     let echo_extension = espanso_render::extension::echo::EchoExtension::new();
     // For backwards compatiblity purposes, the echo extension can also be called with "dummy" type
@@ -53,7 +54,8 @@ pub fn setup(trigger: &str) -> (render::RendererAdapter, match_cache::CombinedMa
     let (config, matches, errors) = espanso_config::load(current_directory).unwrap();
     let cache = match_cache::MatchCache::load(&config, &matches);
     let manager = config::ConfigManager::new(&config, &matches);
-    let extensions = get_extensions();
+    let paths = crate::path::resolve_paths(None, None, None);
+    let extensions = get_extensions(paths);
     let renderer = espanso_render::DefaultRenderer::new(extensions);
     let adapter = render::RendererAdapter::new(&cache, &manager, &renderer);
     let builtin_matches = builtin::get_builtin_matches(&*manager.default());
