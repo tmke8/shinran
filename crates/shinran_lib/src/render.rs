@@ -26,7 +26,11 @@ use std::{cell::RefCell, collections::HashMap};
 use espanso_config::matches::{store::MatchSet, Match, MatchCause, MatchEffect, UpperCasingStyle};
 use espanso_render::{CasingStyle, Context, RenderOptions, Template, Value, Variable};
 
-use crate::{config::ConfigManager, engine::RendererError, match_cache::MatchCache};
+use crate::{
+    config::ConfigManager,
+    engine::RendererError,
+    match_cache::{self, MatchCache},
+};
 // use espanso_engine::process::{Renderer, RendererError};
 
 // pub trait MatchProvider<'a> {
@@ -39,30 +43,31 @@ use crate::{config::ConfigManager, engine::RendererError, match_cache::MatchCach
 //     fn active(&self) -> (Arc<ResolvedConfig>, MatchSet);
 // }
 
-pub struct RendererAdapter<'a> {
+pub struct RendererAdapter {
     renderer: espanso_render::Renderer,
-    match_cache: &'a MatchCache<'a>,
-    config_manager: ConfigManager<'a>,
+    pub combined_cache: match_cache::CombinedMatchCache,
+    config_manager: ConfigManager,
 
     template_map: HashMap<i32, Option<Template>>,
     global_vars_map: HashMap<i32, Variable>,
 
-    context_cache: RefCell<HashMap<i32, Context<'a>>>,
+    context_cache: RefCell<HashMap<i32, Context>>,
 }
 
-impl<'a> RendererAdapter<'a> {
+impl<'a> RendererAdapter {
     pub fn new(
-        match_cache: &'a MatchCache<'a>,
-        config_manager: ConfigManager<'a>,
+        combined_cache: crate::match_cache::CombinedMatchCache,
+        config_manager: ConfigManager,
         renderer: espanso_render::Renderer,
     ) -> Self {
+        let match_cache = &combined_cache.user_match_cache;
         let template_map = generate_template_map(match_cache);
         let global_vars_map = generate_global_vars_map(&config_manager);
 
         Self {
             renderer,
             config_manager,
-            match_cache,
+            combined_cache,
             template_map,
             global_vars_map,
             context_cache: RefCell::new(HashMap::new()),
@@ -96,23 +101,25 @@ fn generate_global_vars_map(config_provider: &ConfigManager) -> HashMap<i32, Var
 }
 
 // TODO: test
-fn generate_context<'a>(
+fn generate_context(
     match_set: &MatchSet,
-    template_map: &'a HashMap<i32, Option<Template>>,
-    global_vars_map: &'a HashMap<i32, Variable>,
-) -> Context<'a> {
+    template_map: &HashMap<i32, Option<Template>>,
+    global_vars_map: &HashMap<i32, Variable>,
+) -> Context {
     let mut templates = Vec::new();
     let mut global_vars = Vec::new();
 
     for m in &match_set.matches {
         if let Some(Some(template)) = template_map.get(&m.id) {
-            templates.push(template);
+            // TODO: Investigate how to avoid this clone.
+            templates.push(template.clone());
         }
     }
 
     for var in &match_set.global_vars {
         if let Some(var) = global_vars_map.get(&var.id) {
-            global_vars.push(var);
+            // TODO: Investigate how to avoid this clone.
+            global_vars.push(var.clone());
         }
     }
 
@@ -186,9 +193,9 @@ fn convert_value(value: espanso_config::matches::Value) -> espanso_render::Value
     }
 }
 
-impl<'a> RendererAdapter<'a> {
+impl RendererAdapter {
     pub fn render(
-        &'a self,
+        &self,
         match_id: i32,
         trigger: Option<&str>,
         trigger_vars: HashMap<String, String>,
@@ -201,7 +208,7 @@ impl<'a> RendererAdapter<'a> {
                 generate_context(&match_set, &self.template_map, &self.global_vars_map)
             });
 
-            let raw_match = self.match_cache.get(match_id);
+            let raw_match = self.combined_cache.user_match_cache.get(match_id);
             let propagate_case = raw_match.is_some_and(is_propagate_case);
             let preferred_uppercasing_style = raw_match.and_then(extract_uppercasing_style);
 

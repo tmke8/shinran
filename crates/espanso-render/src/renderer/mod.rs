@@ -67,14 +67,14 @@ impl Renderer {
                     let global_vars: HashMap<&str, &Variable> = context
                         .global_vars
                         .iter()
-                        .map(|var| (&*var.name, *var))
+                        .map(|var| (&*var.name, var))
                         .collect();
                     template
                         .vars
                         .iter()
                         .filter_map(|var| {
                             if var.var_type == "global" {
-                                global_vars.get(&*var.name).copied()
+                                global_vars.get(&*var.name).map(|v| *v)
                             } else {
                                 Some(var)
                             }
@@ -86,10 +86,11 @@ impl Renderer {
 
             // Here we execute a graph dependency resolution algorithm to determine a valid
             // evaluation order for variables.
+            let global_vars: Vec<&Variable> = context.global_vars.iter().collect();
             let variables = match resolve::resolve_evaluation_order(
                 &template.body,
                 &local_variables,
-                &context.global_vars,
+                &global_vars,
             ) {
                 Ok(variables) => variables,
                 Err(err) => return RenderResult::Error(err),
@@ -212,15 +213,12 @@ impl Renderer {
 
 fn get_matching_template<'a>(
     variable: &Variable,
-    templates: &'a [&Template],
+    templates: &'a [Template],
 ) -> Option<&'a Template> {
     // Find matching template
     let id = variable.params.get("trigger")?;
     if let Value::String(id) = id {
-        templates
-            .iter()
-            .find(|template| template.ids.contains(id))
-            .copied()
+        templates.iter().find(|template| template.ids.contains(id))
     } else {
         None
     }
@@ -431,7 +429,7 @@ mod tests {
         let res = renderer.render(
             &template,
             &Context {
-                global_vars: vec![&Variable {
+                global_vars: vec![Variable {
                     name: "var".to_string(),
                     var_type: "mock".to_string(),
                     params: Params::from_iter(vec![(
@@ -454,7 +452,7 @@ mod tests {
         let res = renderer.render(
             &template,
             &Context {
-                global_vars: vec![&Variable {
+                global_vars: vec![Variable {
                     name: "var".to_string(),
                     var_type: "mock".to_string(),
                     params: vec![
@@ -497,7 +495,7 @@ mod tests {
         let res = renderer.render(
             &template,
             &Context {
-                global_vars: vec![&Variable {
+                global_vars: vec![Variable {
                     name: "var".to_string(),
                     var_type: "mock".to_string(),
                     params: Params::from_iter(vec![(
@@ -521,7 +519,7 @@ mod tests {
             &template,
             &Context {
                 global_vars: vec![
-                    &Variable {
+                    Variable {
                         name: "var".to_string(),
                         var_type: "mock".to_string(),
                         params: Params::from_iter(vec![(
@@ -530,7 +528,7 @@ mod tests {
                         )]),
                         ..Default::default()
                     },
-                    &Variable {
+                    Variable {
                         name: "var2".to_string(),
                         var_type: "mock".to_string(),
                         params: Params::from_iter(vec![(
@@ -555,7 +553,7 @@ mod tests {
             &template,
             &Context {
                 global_vars: vec![
-                    &Variable {
+                    Variable {
                         name: "var".to_string(),
                         var_type: "mock".to_string(),
                         params: Params::from_iter(vec![(
@@ -564,7 +562,7 @@ mod tests {
                         )]),
                         ..Default::default()
                     },
-                    &Variable {
+                    Variable {
                         name: "var2".to_string(),
                         var_type: "mock".to_string(),
                         params: Params::from_iter(vec![(
@@ -573,7 +571,7 @@ mod tests {
                         )]),
                         ..Default::default()
                     },
-                    &Variable {
+                    Variable {
                         name: "var3".to_string(),
                         var_type: "mock".to_string(),
                         params: Params::from_iter(vec![(
@@ -598,7 +596,7 @@ mod tests {
             &template,
             &Context {
                 global_vars: vec![
-                    &Variable {
+                    Variable {
                         name: "var".to_string(),
                         var_type: "mock".to_string(),
                         params: Params::from_iter(vec![(
@@ -608,7 +606,7 @@ mod tests {
                         depends_on: vec!["var2".to_string()],
                         ..Default::default()
                     },
-                    &Variable {
+                    Variable {
                         name: "var2".to_string(),
                         var_type: "mock".to_string(),
                         params: Params::from_iter(vec![("abort".to_string(), Value::Null)]),
@@ -641,7 +639,7 @@ mod tests {
         let res = renderer.render(
             &template,
             &Context {
-                global_vars: vec![&Variable {
+                global_vars: vec![Variable {
                     name: "global".to_string(),
                     var_type: "mock".to_string(),
                     params: Params::from_iter(vec![("abort".to_string(), Value::Null)]),
@@ -677,7 +675,7 @@ mod tests {
         let res = renderer.render(
             &template,
             &Context {
-                templates: vec![&nested_template],
+                templates: vec![nested_template],
                 ..Default::default()
             },
             &RenderOptions::default(),
@@ -888,7 +886,7 @@ mod tests {
         let res = renderer.render(
             &template,
             &Context {
-                global_vars: vec![&Variable {
+                global_vars: vec![Variable {
                     name: "var".to_string(),
                     var_type: "mock".to_string(),
                     params: Params::from_iter(vec![(
@@ -932,7 +930,7 @@ mod tests {
         let res = renderer.render(
             &template,
             &Context {
-                global_vars: vec![&Variable {
+                global_vars: vec![Variable {
                     name: "var".to_string(),
                     var_type: "mock".to_string(),
                     params: Params::from_iter(vec![(

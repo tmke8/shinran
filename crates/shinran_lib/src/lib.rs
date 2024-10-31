@@ -82,15 +82,15 @@ pub fn load_config_and_renderer() -> (espanso_render::Renderer, ConfigStore, Mat
     (renderer, config_store, match_store)
 }
 
-pub fn make_cache<'store>(
+pub fn make_cache(
     config_store: ConfigStore,
-    match_store: &'store MatchStore,
+    match_store: MatchStore,
 ) -> (
-    match_cache::MatchCache<'store>,
-    config::ConfigManager<'store>,
+    match_cache::MatchCache,
+    config::ConfigManager,
     Vec<builtin::BuiltInMatch>,
 ) {
-    let match_cache = match_cache::MatchCache::load(&config_store, match_store);
+    let match_cache = match_cache::MatchCache::load(&config_store, &match_store);
 
     // `config_manager` could own `match_store`
     let config_manager = config::ConfigManager::new(config_store, match_store);
@@ -100,32 +100,35 @@ pub fn make_cache<'store>(
     (match_cache, config_manager, builtin_matches)
 }
 
-pub struct Backend<'a> {
-    adapter: render::RendererAdapter<'a>,
-    cache: match_cache::CombinedMatchCache<'a>,
+pub struct Backend {
+    adapter: render::RendererAdapter,
 }
 
-impl<'a> Backend<'a> {
+impl Backend {
     pub fn new(
         renderer: espanso_render::Renderer,
-        match_cache: &'a match_cache::MatchCache,
-        config_manager: config::ConfigManager<'a>,
-        builtin_matches: &'a Vec<builtin::BuiltInMatch>,
-    ) -> anyhow::Result<Backend<'a>> {
+        match_cache: match_cache::MatchCache,
+        config_manager: config::ConfigManager,
+        builtin_matches: Vec<builtin::BuiltInMatch>,
+    ) -> anyhow::Result<Backend> {
         // `combined_cache` stores references to `cache` and `builtin_matches`
         let combined_cache = match_cache::CombinedMatchCache::load(match_cache, builtin_matches);
         // `adapter` could own `cache`
-        let adapter = render::RendererAdapter::new(&match_cache, config_manager, renderer);
-        Ok(Backend {
-            adapter,
-            cache: combined_cache,
-        })
+        let adapter = render::RendererAdapter::new(combined_cache, config_manager, renderer);
+        Ok(Backend { adapter })
     }
 
-    pub fn check_trigger(&'a self, trigger: &str) -> anyhow::Result<String> {
-        let matches = self.cache.find_matches_from_trigger(trigger);
-        let match_ = matches.into_iter().next().unwrap();
-        self.adapter.render(match_.id, Some(trigger), match_.args)
+    pub fn check_trigger(&self, trigger: &str) -> anyhow::Result<Option<String>> {
+        let matches = self
+            .adapter
+            .combined_cache
+            .find_matches_from_trigger(trigger);
+        let Some(match_) = matches.into_iter().next() else {
+            return Ok(None);
+        };
+        self.adapter
+            .render(match_.id, Some(trigger), match_.args)
+            .map(Some)
     }
 }
 
@@ -174,11 +177,10 @@ mod tests {
     #[test]
     fn all() {
         let (renderer, config_store, match_store) = load_config_and_renderer();
-        let (match_cache, config_manager, builtin_matches) = make_cache(config_store, &match_store);
-        let backend =
-            Backend::new(renderer, &match_cache, config_manager, &builtin_matches).unwrap();
+        let (match_cache, config_manager, builtin_matches) = make_cache(config_store, match_store);
+        let backend = Backend::new(renderer, match_cache, config_manager, builtin_matches).unwrap();
         let trigger = ":date";
-        let result = backend.check_trigger(trigger).unwrap();
+        let result = backend.check_trigger(trigger).unwrap().unwrap();
         println!("{result}");
     }
 }

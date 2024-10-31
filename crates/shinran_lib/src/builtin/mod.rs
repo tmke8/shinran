@@ -31,6 +31,7 @@ mod process;
 
 const MIN_BUILTIN_MATCH_ID: i32 = 1_000_000_000;
 
+#[derive(Debug)]
 pub struct BuiltInMatch {
     pub id: i32,
     pub label: &'static str,

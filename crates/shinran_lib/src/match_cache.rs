@@ -30,19 +30,21 @@ use crate::multiplex::MatchResult;
 
 use super::builtin::BuiltInMatch;
 
-pub struct MatchCache<'a> {
-    cache: HashMap<i32, &'a Match>,
+pub struct MatchCache {
+    cache: HashMap<i32, Match>,
 }
 
-impl<'a> MatchCache<'a> {
-    pub fn load(config_store: &ConfigStore, match_store: &'a MatchStore) -> Self {
+impl MatchCache {
+    pub fn load(config_store: &ConfigStore, match_store: &MatchStore) -> Self {
         let mut cache = HashMap::new();
 
         let paths = config_store.get_all_match_paths();
         let global_set = match_store.query(&paths.into_iter().collect::<Vec<_>>());
 
         for m in global_set.matches {
-            cache.insert(m.id, m);
+            // We clone the match because we need to own it.
+            // TODO: Investigate if we can avoid cloning the match
+            cache.insert(m.id, m.clone());
         }
 
         Self { cache }
@@ -51,15 +53,13 @@ impl<'a> MatchCache<'a> {
     fn ids(&self) -> Vec<i32> {
         self.cache.keys().copied().collect()
     }
-}
 
-impl<'a> MatchCache<'a> {
-    pub fn matches(&self) -> Vec<&'a Match> {
-        self.cache.values().copied().collect()
+    pub fn matches(&self) -> Vec<&Match> {
+        self.cache.values().map(|m| m).collect()
     }
 
-    pub fn get(&self, id: i32) -> Option<&'a Match> {
-        self.cache.get(&id).copied()
+    pub fn get(&self, id: i32) -> Option<&Match> {
+        self.cache.get(&id)
     }
 }
 
@@ -86,9 +86,9 @@ impl<'a> MatchCache<'a> {
 //     }
 // }
 
-pub struct CombinedMatchCache<'a> {
-    user_match_cache: &'a MatchCache<'a>,
-    builtin_match_cache: HashMap<i32, &'a BuiltInMatch>,
+pub struct CombinedMatchCache {
+    pub user_match_cache: MatchCache,
+    builtin_match_cache: HashMap<i32, BuiltInMatch>,
 }
 
 pub enum MatchVariant<'a> {
@@ -96,8 +96,8 @@ pub enum MatchVariant<'a> {
     Builtin(&'a BuiltInMatch),
 }
 
-impl<'a> CombinedMatchCache<'a> {
-    pub fn load(match_cache: &'a MatchCache<'a>, builtin_matches: &'a [BuiltInMatch]) -> Self {
+impl CombinedMatchCache {
+    pub fn load(match_cache: MatchCache, builtin_matches: Vec<BuiltInMatch>) -> Self {
         let mut builtin_match_cache = HashMap::new();
 
         for m in builtin_matches {
@@ -110,21 +110,19 @@ impl<'a> CombinedMatchCache<'a> {
         }
     }
 
-    pub fn get(&self, match_id: i32) -> Option<MatchVariant<'a>> {
-        if let Some(user_match) = self.user_match_cache.cache.get(&match_id).copied() {
+    pub fn get<'a>(&'a self, match_id: i32) -> Option<MatchVariant<'a>> {
+        if let Some(user_match) = self.user_match_cache.cache.get(&match_id) {
             return Some(MatchVariant::User(user_match));
         }
 
-        if let Some(builtin_match) = self.builtin_match_cache.get(&match_id).copied() {
+        if let Some(builtin_match) = self.builtin_match_cache.get(&match_id) {
             return Some(MatchVariant::Builtin(builtin_match));
         }
 
         None
     }
-}
 
-impl<'a> CombinedMatchCache<'a> {
-    fn get_matches(&self, ids: &[i32]) -> Vec<MatchSummary<'a>> {
+    fn get_matches<'a>(&'a self, ids: &[i32]) -> Vec<MatchSummary<'a>> {
         ids.iter()
             .filter_map(|id| self.get(*id))
             .map(|m| match m {
@@ -145,26 +143,20 @@ impl<'a> CombinedMatchCache<'a> {
             })
             .collect()
     }
-}
 
-impl<'a> CombinedMatchCache<'a> {
-    fn get_result(&self, match_id: i32) -> Option<MatchResult<'a>> {
+    fn get_result<'a>(&'a self, match_id: i32) -> Option<MatchResult<'a>> {
         Some(match self.get(match_id)? {
             MatchVariant::User(m) => MatchResult::User(m),
             MatchVariant::Builtin(m) => MatchResult::Builtin(m),
         })
     }
-}
 
-impl<'a> CombinedMatchCache<'a> {
     fn get_all_matches_ids(&self) -> Vec<i32> {
         let mut ids: Vec<i32> = self.builtin_match_cache.keys().copied().collect();
         ids.extend(self.user_match_cache.ids());
         ids
     }
-}
 
-impl<'a> CombinedMatchCache<'a> {
     pub fn find_matches_from_trigger(&self, trigger: &str) -> Vec<DetectedMatch> {
         let user_matches: Vec<DetectedMatch> = self
             .user_match_cache

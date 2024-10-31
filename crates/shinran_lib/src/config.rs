@@ -30,16 +30,16 @@ use super::{
     // engine::process::middleware::render::extension::clipboard::ClipboardOperationOptionsProvider,
 };
 
-pub struct ConfigManager<'a> {
+pub struct ConfigManager {
     config_store: ConfigStore,
-    match_store: &'a MatchStore,
+    match_store: MatchStore,
     // app_info_provider: &'a dyn AppInfoProvider,
 }
 
-impl<'a> ConfigManager<'a> {
+impl ConfigManager {
     pub fn new(
         config_store: ConfigStore,
-        match_store: &'a MatchStore,
+        match_store: MatchStore,
         // app_info_provider: &'a dyn AppInfoProvider,
     ) -> Self {
         Self {
@@ -74,7 +74,7 @@ impl<'a> ConfigManager<'a> {
 //     }
 // }
 
-impl<'a> ConfigManager<'a> {
+impl ConfigManager {
     pub fn filter_active(&self, matches_ids: &[i32]) -> Vec<i32> {
         let ids_set: HashSet<i32> = matches_ids.iter().copied().collect::<HashSet<_>>();
         let (_, match_set) = self.active_context();
@@ -96,9 +96,7 @@ impl<'a> ConfigManager<'a> {
         output.extend(builtin_matches);
         output
     }
-}
 
-impl<'a> ConfigManager<'a> {
     pub fn configs(&self) -> Vec<(Arc<Config>, MatchSet)> {
         self.config_store
             .configs()

@@ -46,9 +46,9 @@ pub enum RenderResult {
 }
 
 #[derive(Default)]
-pub struct Context<'a> {
-    pub global_vars: Vec<&'a Variable>,
-    pub templates: Vec<&'a Template>,
+pub struct Context {
+    pub global_vars: Vec<Variable>,
+    pub templates: Vec<Template>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
