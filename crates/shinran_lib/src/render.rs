@@ -17,14 +17,14 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{cell::RefCell, collections::HashMap};
+use std::{collections::HashMap, sync::RwLock};
 
 // use thiserror::Error;
 
 // pub mod extension;
 
 use espanso_config::matches::{store::MatchSet, Match, MatchCause, MatchEffect, UpperCasingStyle};
-use espanso_render::{CasingStyle, Context, RenderOptions, Template, Value, Variable};
+use espanso_render::{CasingStyle, Context, RenderOptions, Template, Value, VarType, Variable};
 
 use crate::{
     config::ConfigManager,
@@ -51,7 +51,7 @@ pub struct RendererAdapter {
     template_map: HashMap<i32, Option<Template>>,
     global_vars_map: HashMap<i32, Variable>,
 
-    context_cache: RefCell<HashMap<i32, Context>>,
+    context_cache: RwLock<HashMap<i32, Context>>,
 }
 
 impl<'a> RendererAdapter {
@@ -70,7 +70,7 @@ impl<'a> RendererAdapter {
             combined_cache,
             template_map,
             global_vars_map,
-            context_cache: RefCell::new(HashMap::new()),
+            context_cache: RwLock::new(HashMap::new()),
         }
     }
 }
@@ -154,9 +154,23 @@ fn convert_vars(vars: Vec<espanso_config::matches::Variable>) -> Vec<espanso_ren
 }
 
 fn convert_var(var: espanso_config::matches::Variable) -> espanso_render::Variable {
+    let var_type = match &var.var_type[..] {
+        "echo" => VarType::Echo,
+        "date" => VarType::Date,
+        "shell" => VarType::Shell,
+        "script" => VarType::Script,
+        // "global" => VarType::Global,
+        // "match" => VarType::Match,
+        "dummy" => VarType::Echo,
+        "random" => VarType::Random,
+        // "" => VarType::Match,
+        _ => {
+            unreachable!()
+        }
+    };
     Variable {
         name: var.name,
-        var_type: var.var_type,
+        var_type,
         params: convert_params(var.params),
         inject_vars: var.inject_vars,
         depends_on: var.depends_on,
@@ -203,7 +217,7 @@ impl RendererAdapter {
         if let Some(Some(template)) = self.template_map.get(&match_id) {
             let (config, match_set) = self.config_manager.active_context();
 
-            let mut context_cache = self.context_cache.borrow_mut();
+            let mut context_cache = self.context_cache.write().unwrap();
             let context = context_cache.entry(config.id()).or_insert_with(|| {
                 generate_context(&match_set, &self.template_map, &self.global_vars_map)
             });
@@ -234,7 +248,7 @@ impl RendererAdapter {
                         0,
                         Variable {
                             name,
-                            var_type: "echo".to_string(),
+                            var_type: VarType::Echo,
                             params,
                             inject_vars: false,
                             ..Default::default()

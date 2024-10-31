@@ -76,8 +76,10 @@ fn load_config_and_renderer(
     let config_store = config_result.config_store;
     let match_store = config_result.match_store;
 
-    let extensions = get_extensions(paths);
-    let renderer = espanso_render::Renderer::new(extensions);
+    let home_path = dirs::home_dir().expect("unable to obtain home dir path");
+    let config_path = &paths.config;
+    let packages_path = &paths.packages;
+    let renderer = espanso_render::Renderer::new(config_path, &home_path, packages_path);
 
     (renderer, config_store, match_store)
 }
@@ -159,7 +161,7 @@ mod tests {
     fn test_date() {
         let cli_overrides = HashMap::new();
         let backend = Backend::new(&cli_overrides).unwrap();
-        let trigger = ":date";
+        let trigger = "date";
         let result = backend.check_trigger(trigger).unwrap().unwrap();
         println!("{result}");
     }

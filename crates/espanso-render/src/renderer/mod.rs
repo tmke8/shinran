@@ -17,11 +17,15 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, path::Path};
 
 use crate::{
-    CasingStyle, Context, Extension, ExtensionOutput, ExtensionResult, RenderOptions, RenderResult,
-    Scope, Template, Value, Variable,
+    extension::{
+        date::DateExtension, echo::EchoExtension, random::RandomExtension, script::ScriptExtension,
+        shell::ShellExtension,
+    },
+    CasingStyle, Context, Extension, ExtensionOutput, ExtensionResult, Params, RenderOptions,
+    RenderResult, Scope, Template, Value, VarType, Variable,
 };
 use lazy_static::lazy_static;
 use log::{error, warn};
@@ -39,21 +43,41 @@ lazy_static! {
     static ref WORD_REGEX: Regex = Regex::new(r"(\w+)").unwrap();
 }
 
-pub struct Renderer {
-    extensions: HashMap<String, Box<dyn Extension>>,
+pub struct Renderer<M: Extension = NoOpExtension> {
+    date_extension: DateExtension,
+    echo_extension: EchoExtension,
+    shell_extension: ShellExtension,
+    script_extension: ScriptExtension,
+    random_extension: RandomExtension,
+    mock_extension: M,
 }
 
-impl Renderer {
-    pub fn new(extensions: Vec<Box<dyn Extension>>) -> Self {
-        let extensions = extensions
-            .into_iter()
-            .map(|ext| (ext.name().to_string(), ext))
-            .collect();
-        Self { extensions }
+pub struct NoOpExtension;
+
+impl Extension for NoOpExtension {
+    fn name(&self) -> &'static str {
+        "NoOp"
+    }
+
+    fn calculate(&self, _context: &Context, _scope: &Scope, _params: &Params) -> ExtensionResult {
+        ExtensionResult::Aborted
     }
 }
 
-impl Renderer {
+impl Renderer<NoOpExtension> {
+    pub fn new(config_path: &Path, home_path: &Path, packages_path: &Path) -> Self {
+        Self {
+            date_extension: DateExtension::new(),
+            echo_extension: EchoExtension::new(),
+            shell_extension: ShellExtension::new(config_path),
+            script_extension: ScriptExtension::new(config_path, home_path, packages_path),
+            random_extension: RandomExtension::new(),
+            mock_extension: NoOpExtension,
+        }
+    }
+}
+
+impl<M: Extension> Renderer<M> {
     pub fn render(
         &self,
         template: &Template,
@@ -62,27 +86,30 @@ impl Renderer {
     ) -> RenderResult {
         let body = if VAR_REGEX.is_match(&template.body) {
             // Convert "global" variable type aliases when needed
-            let local_variables: Vec<&Variable> =
-                if template.vars.iter().any(|var| var.var_type == "global") {
-                    let global_vars: HashMap<&str, &Variable> = context
-                        .global_vars
-                        .iter()
-                        .map(|var| (&*var.name, var))
-                        .collect();
-                    template
-                        .vars
-                        .iter()
-                        .filter_map(|var| {
-                            if var.var_type == "global" {
-                                global_vars.get(&*var.name).map(|v| *v)
-                            } else {
-                                Some(var)
-                            }
-                        })
-                        .collect()
-                } else {
-                    template.vars.iter().collect()
-                };
+            let local_variables: Vec<&Variable> = if template
+                .vars
+                .iter()
+                .any(|var| matches!(var.var_type, VarType::Global))
+            {
+                let global_vars: HashMap<&str, &Variable> = context
+                    .global_vars
+                    .iter()
+                    .map(|var| (&*var.name, var))
+                    .collect();
+                template
+                    .vars
+                    .iter()
+                    .filter_map(|var| {
+                        if matches!(var.var_type, VarType::Global) {
+                            global_vars.get(&*var.name).map(|v| *v)
+                        } else {
+                            Some(var)
+                        }
+                    })
+                    .collect()
+            } else {
+                template.vars.iter().collect()
+            };
 
             // Here we execute a graph dependency resolution algorithm to determine a valid
             // evaluation order for variables.
@@ -99,7 +126,7 @@ impl Renderer {
             // Compute the variable outputs
             let mut scope = Scope::new();
             for variable in variables {
-                if variable.var_type == "match" {
+                if matches!(variable.var_type, VarType::Match) {
                     // Recursive call
                     // Call render recursively
                     if let Some(sub_template) =
@@ -115,7 +142,7 @@ impl Renderer {
                         error!("unable to find sub-match: {}", variable.name);
                         return RenderResult::Error(RendererError::MissingSubMatch.into());
                     }
-                } else if let Some(extension) = self.extensions.get(&variable.var_type) {
+                } else {
                     let variable_params = if variable.inject_vars {
                         match inject_variables_into_params(&variable.params, &scope) {
                             Ok(augmented_params) => Cow::Owned(augmented_params),
@@ -125,13 +152,13 @@ impl Renderer {
                                     variable.name, err
                                 );
 
-                                if variable.var_type == "form" {
-                                    if let Some(RendererError::MissingVariable(_)) =
-                                        err.downcast_ref::<RendererError>()
-                                    {
-                                        log_new_form_syntax_tip();
-                                    }
-                                }
+                                // if variable.var_type == "form" {
+                                //     if let Some(RendererError::MissingVariable(_)) =
+                                //         err.downcast_ref::<RendererError>()
+                                //     {
+                                //         log_new_form_syntax_tip();
+                                //     }
+                                // }
 
                                 return RenderResult::Error(err);
                             }
@@ -140,30 +167,55 @@ impl Renderer {
                         Cow::Borrowed(&variable.params)
                     };
 
-                    match extension.calculate(context, &scope, &variable_params) {
+                    let extension_result = match &variable.var_type {
+                        VarType::Date => {
+                            self.date_extension
+                                .calculate(context, &scope, &variable_params)
+                        }
+                        VarType::Echo => {
+                            self.echo_extension
+                                .calculate(context, &scope, &variable_params)
+                        }
+                        VarType::Shell => {
+                            self.shell_extension
+                                .calculate(context, &scope, &variable_params)
+                        }
+                        VarType::Script => {
+                            self.script_extension
+                                .calculate(context, &scope, &variable_params)
+                        }
+                        VarType::Random => {
+                            self.random_extension
+                                .calculate(context, &scope, &variable_params)
+                        }
+                        VarType::Mock => {
+                            self.mock_extension
+                                .calculate(context, &scope, &variable_params)
+                        }
+                        VarType::Global | VarType::Match => {
+                            unreachable!()
+                        }
+                    };
+
+                    match extension_result {
                         ExtensionResult::Success(output) => {
                             scope.insert(&variable.name, output);
                         }
                         ExtensionResult::Aborted => {
                             warn!(
-                                "rendering was aborted by extension: {}, on var: {}",
+                                "rendering was aborted by extension: {:?}, on var: {}",
                                 variable.var_type, variable.name
                             );
                             return RenderResult::Aborted;
                         }
                         ExtensionResult::Error(err) => {
                             warn!(
-                                "extension '{}' on var: '{}' reported an error: {}",
+                                "extension '{:?}' on var: '{}' reported an error: {}",
                                 variable.var_type, variable.name, err
                             );
                             return RenderResult::Error(err);
                         }
                     }
-                } else {
-                    error!(
-                        "no extension found for variable type: {}",
-                        variable.var_type
-                    );
                 }
             }
 
@@ -257,7 +309,7 @@ pub enum RendererError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Params;
+    use crate::{Params, VarType};
     use std::iter::FromIterator;
 
     struct MockExtension {}
@@ -301,8 +353,15 @@ mod tests {
         }
     }
 
-    pub fn get_renderer() -> Renderer {
-        Renderer::new(vec![Box::new(MockExtension {})])
+    fn get_renderer() -> Renderer<MockExtension> {
+        Renderer::<MockExtension> {
+            date_extension: DateExtension::new(),
+            echo_extension: EchoExtension::new(),
+            shell_extension: ShellExtension::new(Path::new(".")),
+            script_extension: ScriptExtension::new(Path::new("."), Path::new("."), Path::new(".")),
+            random_extension: RandomExtension::new(),
+            mock_extension: MockExtension {},
+        }
     }
 
     pub fn template_for_str(str: &str) -> Template {
@@ -318,7 +377,7 @@ mod tests {
             .iter()
             .map(|(name, value)| Variable {
                 name: (*name).to_string(),
-                var_type: "mock".to_string(),
+                var_type: VarType::Mock,
                 params: vec![("echo".to_string(), Value::String((*value).to_string()))]
                     .into_iter()
                     .collect::<Params>(),
@@ -399,7 +458,7 @@ mod tests {
             body: "hello {{var.nested}}".to_string(),
             vars: vec![Variable {
                 name: "var".to_string(),
-                var_type: "mock".to_string(),
+                var_type: VarType::Mock,
                 params: vec![
                     ("name".to_string(), Value::String("nested".to_string())),
                     ("value".to_string(), Value::String("dict".to_string())),
@@ -431,7 +490,7 @@ mod tests {
             &Context {
                 global_vars: vec![Variable {
                     name: "var".to_string(),
-                    var_type: "mock".to_string(),
+                    var_type: VarType::Mock,
                     params: Params::from_iter(vec![(
                         "echo".to_string(),
                         Value::String("world".to_string()),
@@ -454,7 +513,7 @@ mod tests {
             &Context {
                 global_vars: vec![Variable {
                     name: "var".to_string(),
-                    var_type: "mock".to_string(),
+                    var_type: VarType::Mock,
                     params: vec![
                         ("name".to_string(), Value::String("nested".to_string())),
                         ("value".to_string(), Value::String("dict".to_string())),
@@ -478,7 +537,7 @@ mod tests {
             vars: vec![
                 Variable {
                     name: "local".to_string(),
-                    var_type: "mock".to_string(),
+                    var_type: VarType::Mock,
                     params: vec![("echo".to_string(), Value::String("Bob".to_string()))]
                         .into_iter()
                         .collect::<Params>(),
@@ -486,7 +545,7 @@ mod tests {
                 },
                 Variable {
                     name: "var".to_string(),
-                    var_type: "global".to_string(),
+                    var_type: VarType::Global,
                     ..Default::default()
                 },
             ],
@@ -497,7 +556,7 @@ mod tests {
             &Context {
                 global_vars: vec![Variable {
                     name: "var".to_string(),
-                    var_type: "mock".to_string(),
+                    var_type: VarType::Mock,
                     params: Params::from_iter(vec![(
                         "read".to_string(),
                         Value::String("local".to_string()),
@@ -521,7 +580,7 @@ mod tests {
                 global_vars: vec![
                     Variable {
                         name: "var".to_string(),
-                        var_type: "mock".to_string(),
+                        var_type: VarType::Mock,
                         params: Params::from_iter(vec![(
                             "echo".to_string(),
                             Value::String("world".to_string()),
@@ -530,7 +589,7 @@ mod tests {
                     },
                     Variable {
                         name: "var2".to_string(),
-                        var_type: "mock".to_string(),
+                        var_type: VarType::Mock,
                         params: Params::from_iter(vec![(
                             "echo".to_string(),
                             Value::String("{{var}}".to_string()),
@@ -555,7 +614,7 @@ mod tests {
                 global_vars: vec![
                     Variable {
                         name: "var".to_string(),
-                        var_type: "mock".to_string(),
+                        var_type: VarType::Mock,
                         params: Params::from_iter(vec![(
                             "echo".to_string(),
                             Value::String("{{var2}}".to_string()),
@@ -564,7 +623,7 @@ mod tests {
                     },
                     Variable {
                         name: "var2".to_string(),
-                        var_type: "mock".to_string(),
+                        var_type: VarType::Mock,
                         params: Params::from_iter(vec![(
                             "echo".to_string(),
                             Value::String("{{var3}}".to_string()),
@@ -573,7 +632,7 @@ mod tests {
                     },
                     Variable {
                         name: "var3".to_string(),
-                        var_type: "mock".to_string(),
+                        var_type: VarType::Mock,
                         params: Params::from_iter(vec![(
                             "echo".to_string(),
                             Value::String("{{var}}".to_string()),
@@ -598,7 +657,7 @@ mod tests {
                 global_vars: vec![
                     Variable {
                         name: "var".to_string(),
-                        var_type: "mock".to_string(),
+                        var_type: VarType::Mock,
                         params: Params::from_iter(vec![(
                             "echo".to_string(),
                             Value::String("world".to_string()),
@@ -608,7 +667,7 @@ mod tests {
                     },
                     Variable {
                         name: "var2".to_string(),
-                        var_type: "mock".to_string(),
+                        var_type: VarType::Mock,
                         params: Params::from_iter(vec![("abort".to_string(), Value::Null)]),
                         ..Default::default()
                     },
@@ -627,7 +686,7 @@ mod tests {
             body: "hello {{var}}".to_string(),
             vars: vec![Variable {
                 name: "var".to_string(),
-                var_type: "mock".to_string(),
+                var_type: VarType::Mock,
                 params: vec![("echo".to_string(), Value::String("something".to_string()))]
                     .into_iter()
                     .collect::<Params>(),
@@ -641,7 +700,7 @@ mod tests {
             &Context {
                 global_vars: vec![Variable {
                     name: "global".to_string(),
-                    var_type: "mock".to_string(),
+                    var_type: VarType::Mock,
                     params: Params::from_iter(vec![("abort".to_string(), Value::Null)]),
                     ..Default::default()
                 }],
@@ -659,7 +718,7 @@ mod tests {
             body: "hello {{var}}".to_string(),
             vars: vec![Variable {
                 name: "var".to_string(),
-                var_type: "match".to_string(),
+                var_type: VarType::Match,
                 params: vec![("trigger".to_string(), Value::String("nested".to_string()))]
                     .into_iter()
                     .collect::<Params>(),
@@ -690,7 +749,7 @@ mod tests {
             body: "hello {{var}}".to_string(),
             vars: vec![Variable {
                 name: "var".to_string(),
-                var_type: "match".to_string(),
+                var_type: VarType::Match,
                 params: vec![("trigger".to_string(), Value::String("nested".to_string()))]
                     .into_iter()
                     .collect::<Params>(),
@@ -715,7 +774,7 @@ mod tests {
             body: "hello {{var}}".to_string(),
             vars: vec![Variable {
                 name: "var".to_string(),
-                var_type: "mock".to_string(),
+                var_type: VarType::Mock,
                 params: vec![("abort".to_string(), Value::Null)]
                     .into_iter()
                     .collect::<Params>(),
@@ -734,7 +793,7 @@ mod tests {
             body: "hello {{var}}".to_string(),
             vars: vec![Variable {
                 name: "var".to_string(),
-                var_type: "mock".to_string(),
+                var_type: VarType::Mock,
                 params: vec![("error".to_string(), Value::Null)]
                     .into_iter()
                     .collect::<Params>(),
@@ -753,7 +812,7 @@ mod tests {
         template.vars = vec![
             Variable {
                 name: "firstname".to_string(),
-                var_type: "mock".to_string(),
+                var_type: VarType::Mock,
                 params: Params::from_iter(vec![(
                     "echo".to_string(),
                     Value::String("John".to_string()),
@@ -762,7 +821,7 @@ mod tests {
             },
             Variable {
                 name: "lastname".to_string(),
-                var_type: "mock".to_string(),
+                var_type: VarType::Mock,
                 params: Params::from_iter(vec![(
                     "echo".to_string(),
                     Value::String("Snow".to_string()),
@@ -771,7 +830,7 @@ mod tests {
             },
             Variable {
                 name: "fullname".to_string(),
-                var_type: "mock".to_string(),
+                var_type: VarType::Mock,
                 params: Params::from_iter(vec![(
                     "echo".to_string(),
                     Value::String("{{firstname}} {{lastname}}".to_string()),
@@ -792,7 +851,7 @@ mod tests {
         template.vars = vec![
             Variable {
                 name: "first".to_string(),
-                var_type: "mock".to_string(),
+                var_type: VarType::Mock,
                 params: Params::from_iter(vec![(
                     "echo".to_string(),
                     Value::String("one".to_string()),
@@ -801,7 +860,7 @@ mod tests {
             },
             Variable {
                 name: "second".to_string(),
-                var_type: "mock".to_string(),
+                var_type: VarType::Mock,
                 params: Params::from_iter(vec![(
                     "echo".to_string(),
                     Value::String("{{first}} two".to_string()),
@@ -822,7 +881,7 @@ mod tests {
         template.vars = vec![
             Variable {
                 name: "first".to_string(),
-                var_type: "mock".to_string(),
+                var_type: VarType::Mock,
                 params: Params::from_iter(vec![(
                     "echo".to_string(),
                     Value::String("one".to_string()),
@@ -831,7 +890,7 @@ mod tests {
             },
             Variable {
                 name: "second".to_string(),
-                var_type: "mock".to_string(),
+                var_type: VarType::Mock,
                 params: Params::from_iter(vec![(
                     "echo".to_string(),
                     Value::String("\\{\\{first\\}\\} two".to_string()),
@@ -850,7 +909,7 @@ mod tests {
         let mut template = template_for_str("hello {{second}}");
         template.vars = vec![Variable {
             name: "second".to_string(),
-            var_type: "mock".to_string(),
+            var_type: VarType::Mock,
             params: Params::from_iter(vec![(
                 "echo".to_string(),
                 Value::String("the next is {{missing}}".to_string()),
@@ -869,12 +928,12 @@ mod tests {
         template.vars = vec![
             Variable {
                 name: "var".to_string(),
-                var_type: "global".to_string(),
+                var_type: VarType::Global,
                 ..Default::default()
             },
             Variable {
                 name: "output".to_string(),
-                var_type: "mock".to_string(),
+                var_type: VarType::Mock,
                 params: Params::from_iter(vec![(
                     "echo".to_string(),
                     Value::String("{{var}}".to_string()),
@@ -888,7 +947,7 @@ mod tests {
             &Context {
                 global_vars: vec![Variable {
                     name: "var".to_string(),
-                    var_type: "mock".to_string(),
+                    var_type: VarType::Mock,
                     params: Params::from_iter(vec![(
                         "echo".to_string(),
                         Value::String("global".to_string()),
@@ -909,7 +968,7 @@ mod tests {
         template.vars = vec![
             Variable {
                 name: "var".to_string(),
-                var_type: "mock".to_string(),
+                var_type: VarType::Mock,
                 params: Params::from_iter(vec![(
                     "echo".to_string(),
                     Value::String("local".to_string()),
@@ -918,7 +977,7 @@ mod tests {
             },
             Variable {
                 name: "output".to_string(),
-                var_type: "mock".to_string(),
+                var_type: VarType::Mock,
                 params: Params::from_iter(vec![(
                     "echo".to_string(),
                     Value::String("{{var}}".to_string()),
@@ -932,7 +991,7 @@ mod tests {
             &Context {
                 global_vars: vec![Variable {
                     name: "var".to_string(),
-                    var_type: "mock".to_string(),
+                    var_type: VarType::Mock,
                     params: Params::from_iter(vec![(
                         "echo".to_string(),
                         Value::String("global".to_string()),

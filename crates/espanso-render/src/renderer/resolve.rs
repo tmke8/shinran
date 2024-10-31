@@ -182,9 +182,9 @@ fn resolve_dependencies<'a>(
                 } else {
                     error!("could not resolve variable {:?}", dependency);
                     if let Some(variable) = &node.variable {
-                        if variable.var_type == "form" {
-                            super::log_new_form_syntax_tip();
-                        }
+                        // if variable.var_type == "form" {
+                        //     super::log_new_form_syntax_tip();
+                        // }
                     }
                     return Err(RendererError::MissingVariable((*dependency).to_string()).into());
                 }

@@ -2,6 +2,7 @@
 ///
 /// This module contains the implementation of text manipulation for the Shinran engine.
 use std::{
+    collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -12,7 +13,7 @@ use ibus_utils::{ibus_constants, Attribute, IBusAttribute, IBusText, Underline};
 use xkeysym::Keysym;
 use zbus::{fdo, interface, object_server::SignalContext};
 
-use shinran_lib::check_command;
+use shinran_lib::Backend;
 
 pub(crate) struct ShinranEngine {
     done: Arc<Event>,
@@ -20,16 +21,19 @@ pub(crate) struct ShinranEngine {
     cursor_pos: u32,
     start_time: Instant,
     new_key_pressed: bool,
+    backend: Backend,
 }
 
 impl ShinranEngine {
     pub fn new(done: Arc<Event>) -> Self {
+        let cli_overrides = HashMap::new();
         Self {
             done,
             text: String::new(),
             cursor_pos: 0,
             start_time: Instant::now(),
             new_key_pressed: false,
+            backend: Backend::new(&cli_overrides).unwrap(),
         }
     }
 
@@ -108,7 +112,7 @@ impl ShinranEngine {
         match keysym {
             Keysym::Return | Keysym::KP_Enter => {
                 if !self.text.is_empty() {
-                    let output = check_command(&self.text);
+                    let output = self.backend.check_trigger(&self.text).unwrap();
                     self.clear_text(&ctxt).await?;
                     if let Some(text) = output {
                         let ibus_text = IBusText::new(&text, &[]);

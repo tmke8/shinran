@@ -34,10 +34,6 @@ pub use renderer::Renderer;
 //     ) -> RenderResult;
 // }
 
-pub fn create(extensions: Vec<Box<dyn Extension>>) -> Renderer {
-    renderer::Renderer::new(extensions)
-}
-
 #[derive(Debug)]
 pub enum RenderResult {
     Success(String),
@@ -80,9 +76,22 @@ pub struct Template {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum VarType {
+    Date,
+    Mock,
+    Shell,
+    Script,
+    Random,
+    Echo,
+    // TODO: Investigate whether these two are actually used.
+    Match,
+    Global,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Variable {
     pub name: String,
-    pub var_type: String,
+    pub var_type: VarType,
     pub inject_vars: bool,
     pub params: Params,
     // Name of the variables this variable depends on
@@ -93,7 +102,7 @@ impl Default for Variable {
     fn default() -> Self {
         Self {
             name: String::new(),
-            var_type: String::new(),
+            var_type: VarType::Global,
             inject_vars: true,
             params: Params::new(),
             depends_on: Vec::new(),
