@@ -1,8 +1,7 @@
-use std::{collections::HashMap, path::PathBuf, time::SystemTime};
+use std::{collections::HashMap, path::PathBuf};
 
 use espanso_config::{config::ConfigStore, matches::store::MatchStore};
 use log::info;
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 mod builtin;
 mod config;
@@ -15,18 +14,18 @@ mod multiplex;
 mod path;
 mod render;
 
-pub fn check_command(command: &str) -> Option<String> {
-    match command {
-        "times" => Some("×".to_string()),
-        "time" => Some(time_now()),
-        _ => None,
-    }
-}
+// pub fn check_command(command: &str) -> Option<String> {
+//     match command {
+//         "times" => Some("×".to_string()),
+//         "time" => Some(time_now()),
+//         _ => None,
+//     }
+// }
 
-fn time_now() -> String {
-    let now: OffsetDateTime = SystemTime::now().into();
-    now.format(&Rfc3339).expect("valid date time")
-}
+// fn time_now() -> String {
+//     let now: OffsetDateTime = SystemTime::now().into();
+//     now.format(&Rfc3339).expect("valid date time")
+// }
 
 fn get_extensions(paths: path::Paths) -> Vec<Box<dyn espanso_render::Extension>> {
     let date_extension = espanso_render::extension::date::DateExtension::new();
@@ -51,11 +50,12 @@ fn get_extensions(paths: path::Paths) -> Vec<Box<dyn espanso_render::Extension>>
     ]
 }
 
-pub fn load_config_and_renderer() -> (espanso_render::Renderer, ConfigStore, MatchStore) {
+fn load_config_and_renderer(
+    cli_overrides: &HashMap<String, String>,
+) -> (espanso_render::Renderer, ConfigStore, MatchStore) {
     // See also
     // `initialize_and_spawn()`
     // in `espanso/src/cli/worker/engine/mod.rs`.
-    let cli_overrides = HashMap::new();
     let force_config_path = get_path_override(&cli_overrides, "config_dir", "ESPANSO_CONFIG_DIR");
     let force_package_path =
         get_path_override(&cli_overrides, "package_dir", "ESPANSO_PACKAGE_DIR");
@@ -82,35 +82,21 @@ pub fn load_config_and_renderer() -> (espanso_render::Renderer, ConfigStore, Mat
     (renderer, config_store, match_store)
 }
 
-pub fn make_cache(
-    config_store: ConfigStore,
-    match_store: MatchStore,
-) -> (
-    match_cache::MatchCache,
-    config::ConfigManager,
-    Vec<builtin::BuiltInMatch>,
-) {
-    let match_cache = match_cache::MatchCache::load(&config_store, &match_store);
-
-    // `config_manager` could own `match_store`
-    let config_manager = config::ConfigManager::new(config_store, match_store);
-
-    let config = &*config_manager.default();
-    let builtin_matches = builtin::get_builtin_matches(config);
-    (match_cache, config_manager, builtin_matches)
-}
-
 pub struct Backend {
     adapter: render::RendererAdapter,
 }
 
 impl Backend {
-    pub fn new(
-        renderer: espanso_render::Renderer,
-        match_cache: match_cache::MatchCache,
-        config_manager: config::ConfigManager,
-        builtin_matches: Vec<builtin::BuiltInMatch>,
-    ) -> anyhow::Result<Backend> {
+    pub fn new(cli_overrides: &HashMap<String, String>) -> anyhow::Result<Backend> {
+        let (renderer, config_store, match_store) = load_config_and_renderer(cli_overrides);
+
+        let match_cache = match_cache::MatchCache::load(&config_store, &match_store);
+
+        // `config_manager` could own `match_store`
+        let config_manager = config::ConfigManager::new(config_store, match_store);
+
+        let config = &*config_manager.default();
+        let builtin_matches = builtin::get_builtin_matches(config);
         // `combined_cache` stores references to `cache` and `builtin_matches`
         let combined_cache = match_cache::CombinedMatchCache::load(match_cache, builtin_matches);
         // `adapter` could own `cache`
@@ -170,15 +156,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn unknown_command() {
-        assert!(check_command("hello").is_none());
-    }
-
-    #[test]
-    fn all() {
-        let (renderer, config_store, match_store) = load_config_and_renderer();
-        let (match_cache, config_manager, builtin_matches) = make_cache(config_store, match_store);
-        let backend = Backend::new(renderer, match_cache, config_manager, builtin_matches).unwrap();
+    fn test_date() {
+        let cli_overrides = HashMap::new();
+        let backend = Backend::new(&cli_overrides).unwrap();
         let trigger = ":date";
         let result = backend.check_trigger(trigger).unwrap().unwrap();
         println!("{result}");

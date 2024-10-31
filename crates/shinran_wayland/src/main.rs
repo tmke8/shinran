@@ -4,7 +4,7 @@
 // https://github.com/emersion/wlhangul/blob/bd2758227779d7748dea185c38cab11665d55502/include/wlhangul.h
 // https://github.com/emersion/wlhangul/blob/bd2758227779d7748dea185c38cab11665d55502/main.c
 
-use std::{os::unix::io::AsFd, time::Duration};
+use std::{collections::HashMap, os::unix::io::AsFd, rc::Rc, time::Duration};
 
 use calloop::{
     timer::{TimeoutAction, Timer},
@@ -36,9 +36,14 @@ use wayland_protocols_misc::{
 };
 use xkbcommon::xkb::{self, Keysym};
 
-use shinran_lib::check_command;
+use shinran_lib::Backend;
 
 fn main() {
+    // Set up the backend.
+    let cli_overrides = HashMap::new();
+    let backend = Backend::new(&cli_overrides).unwrap();
+
+    // Set up the Wayland connection.
     let conn = Connection::connect_to_env()
         .unwrap_or_else(|_| panic!("Unable to connect to a Wayland compositor."));
     let display = conn.display();
@@ -73,7 +78,7 @@ fn main() {
         panic!("Compositor does not support zwp_virtual_keyboard_manager_v1");
     }
 
-    init_protocols(&mut state, &qh, &loop_handle);
+    init_protocols(&mut state, &qh, Rc::new(backend));
     eprintln!("Protocols initialized.");
 
     // Insert the wayland source into the calloop's event loop.
@@ -90,11 +95,7 @@ fn main() {
     event_loop.dispatch(None, &mut state).unwrap();
 }
 
-fn init_protocols(
-    state: &mut State,
-    qh: &QueueHandle<State>,
-    loop_handle: &LoopHandle<'static, State>,
-) {
+fn init_protocols(state: &mut State, qh: &QueueHandle<State>, backend: Rc<Backend>) {
     for (seat_index, seat) in state.seats.iter_mut().enumerate() {
         seat.input_method = Some(
             state
@@ -123,6 +124,7 @@ fn init_protocols(
             (),
         ));
         seat.are_protocols_initted = true;
+        seat.backend = Some(backend.clone());
     }
 }
 
@@ -182,6 +184,9 @@ struct Seat {
     // popup
     wl_surface: Option<WlSurface>,
     popup_surface: Option<ZwpInputPopupSurfaceV2>,
+
+    // backend
+    backend: Option<Rc<Backend>>,
 }
 
 impl Seat {
@@ -207,6 +212,7 @@ impl Seat {
             wl_surface: None,    // Set in `init_protocols()`.
             popup_surface: None, // Set in `init_protocols()`.
             buffer: None,        // Set as needed.
+            backend: None,       // Set in `init_protocols()`.
         }
     }
 
@@ -267,7 +273,12 @@ impl Seat {
             Keysym::Return => {
                 // Send the text.
                 if let Some(buffer) = &mut self.buffer {
-                    let output = check_command(buffer);
+                    let output = self
+                        .backend
+                        .as_ref()
+                        .unwrap()
+                        .check_trigger(buffer)
+                        .unwrap();
                     if let Some(output) = output {
                         // found match
                         self.composing_commit(output);
