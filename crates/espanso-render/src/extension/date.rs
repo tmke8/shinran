@@ -21,26 +21,22 @@ use chrono::{DateTime, Duration, Local, Locale};
 
 use crate::{Extension, ExtensionOutput, ExtensionResult, Number, Params, Value};
 
-pub trait LocaleProvider {
-    fn get_system_locale(&self) -> String;
-}
+// pub trait LocaleProvider {
+//     fn get_system_locale(&self) -> String;
+// }
 
-pub struct DateExtension<'a> {
+pub struct DateExtension {
     fixed_date: Option<DateTime<Local>>,
-    locale_provider: &'a dyn LocaleProvider,
 }
 
 #[allow(clippy::new_without_default)]
-impl<'a> DateExtension<'a> {
-    pub fn new(locale_provider: &'a dyn LocaleProvider) -> Self {
-        Self {
-            fixed_date: None,
-            locale_provider,
-        }
+impl DateExtension {
+    pub fn new() -> Self {
+        Self { fixed_date: None }
     }
 }
 
-impl<'a> Extension for DateExtension<'a> {
+impl Extension for DateExtension {
     fn name(&self) -> &str {
         "date"
     }
@@ -64,7 +60,7 @@ impl<'a> Extension for DateExtension<'a> {
         let locale = params
             .get("locale")
             .and_then(|val| val.as_string())
-            .map_or_else(|| self.locale_provider.get_system_locale(), String::from);
+            .map_or_else(|| get_system_locale(), String::from);
 
         let date = if let Some(Value::String(format)) = format {
             DateExtension::format_date_with_locale_string(now, format, &locale)
@@ -76,7 +72,7 @@ impl<'a> Extension for DateExtension<'a> {
     }
 }
 
-impl<'a> DateExtension<'a> {
+impl DateExtension {
     fn get_date(&self) -> DateTime<Local> {
         if let Some(fixed_date) = self.fixed_date {
             fixed_date
@@ -407,17 +403,8 @@ fn convert_locale_string_to_locale(locale_str: &str) -> Option<Locale> {
     }
 }
 
-pub struct DefaultLocaleProvider {}
-impl LocaleProvider for DefaultLocaleProvider {
-    fn get_system_locale(&self) -> String {
-        sys_locale::get_locale().unwrap_or_else(|| String::from("en-US"))
-    }
-}
-#[allow(clippy::new_without_default)]
-impl DefaultLocaleProvider {
-    pub fn new() -> Self {
-        Self {}
-    }
+pub fn get_system_locale() -> String {
+    sys_locale::get_locale().unwrap_or_else(|| String::from("en-US"))
 }
 
 #[cfg(test)]
@@ -427,30 +414,9 @@ mod tests {
     use super::*;
     use chrono::offset::TimeZone;
 
-    struct MockLocaleProvider {
-        locale: String,
-    }
-    impl LocaleProvider for MockLocaleProvider {
-        fn get_system_locale(&self) -> String {
-            self.locale.clone()
-        }
-    }
-    impl MockLocaleProvider {
-        pub fn new() -> Self {
-            Self {
-                locale: "en-US".to_string(),
-            }
-        }
-
-        pub fn new_with_locale(locale: String) -> Self {
-            Self { locale }
-        }
-    }
-
     #[test]
     fn date_formatted_correctly() {
-        let locale_provider = MockLocaleProvider::new();
-        let mut extension = DateExtension::new(&locale_provider);
+        let mut extension = DateExtension::new();
         // extension.fixed_date = Some(Local.ymd(2014, 7, 8).and_hms(9, 10, 11));
         extension.fixed_date = Some(Local.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap());
 
@@ -468,14 +434,14 @@ mod tests {
 
     #[test]
     fn offset_works_correctly() {
-        let locale_provider = MockLocaleProvider::new();
-        let mut extension = DateExtension::new(&locale_provider);
+        let mut extension = DateExtension::new();
         // extension.fixed_date = Some(Local.ymd(2014, 7, 8).and_hms(9, 10, 11));
         extension.fixed_date = Some(Local.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap());
 
         let param = vec![
             ("format".to_string(), Value::String("%H:%M:%S".to_string())),
             ("offset".to_string(), Value::Number(Number::Integer(3600))),
+            ("locale".to_string(), Value::String("en-US".to_string())),
         ]
         .into_iter()
         .collect::<Params>();
@@ -490,14 +456,16 @@ mod tests {
 
     #[test]
     fn default_locale_works_correctly() {
-        let locale_provider = MockLocaleProvider::new_with_locale("it-IT".to_string());
-        let mut extension = DateExtension::new(&locale_provider);
+        let mut extension = DateExtension::new();
         // extension.fixed_date = Some(Local.ymd(2014, 7, 8).and_hms(9, 10, 11));
         extension.fixed_date = Some(Local.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap());
 
-        let param = vec![("format".to_string(), Value::String("%A".to_string()))]
-            .into_iter()
-            .collect::<Params>();
+        let param = vec![
+            ("format".to_string(), Value::String("%A".to_string())),
+            ("locale".to_string(), Value::String("it-IT".to_string())),
+        ]
+        .into_iter()
+        .collect::<Params>();
         assert_eq!(
             extension
                 .calculate(&crate::Context::default(), &HashMap::default(), &param)
@@ -509,14 +477,16 @@ mod tests {
 
     #[test]
     fn invalid_locale_should_default_to_en_us() {
-        let locale_provider = MockLocaleProvider::new_with_locale("invalid".to_string());
-        let mut extension = DateExtension::new(&locale_provider);
+        let mut extension = DateExtension::new();
         // extension.fixed_date = Some(Local.ymd(2014, 7, 8).and_hms(9, 10, 11));
         extension.fixed_date = Some(Local.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap());
 
-        let param = vec![("format".to_string(), Value::String("%A".to_string()))]
-            .into_iter()
-            .collect::<Params>();
+        let param = vec![
+            ("format".to_string(), Value::String("%A".to_string())),
+            ("locale".to_string(), Value::String("invalid".to_string())),
+        ]
+        .into_iter()
+        .collect::<Params>();
         assert_eq!(
             extension
                 .calculate(&crate::Context::default(), &HashMap::default(), &param)
@@ -528,8 +498,7 @@ mod tests {
 
     #[test]
     fn override_locale() {
-        let locale_provider = MockLocaleProvider::new();
-        let mut extension = DateExtension::new(&locale_provider);
+        let mut extension = DateExtension::new();
         // extension.fixed_date = Some(Local.ymd(2014, 7, 8).and_hms(9, 10, 11));
         extension.fixed_date = Some(Local.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap());
 

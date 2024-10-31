@@ -289,11 +289,11 @@ use crate::error::NonFatalErrorSet;
 //   fn get_all_match_paths(&self) -> HashSet<String>;
 // }
 
-pub struct AppProperties<'a> {
-    pub title: Option<&'a str>,
-    pub class: Option<&'a str>,
-    pub exec: Option<&'a str>,
-}
+// pub struct AppProperties<'a> {
+//     pub title: Option<&'a str>,
+//     pub class: Option<&'a str>,
+//     pub exec: Option<&'a str>,
+// }
 
 #[derive(Debug, Copy, Clone)]
 pub enum Backend {

@@ -17,35 +17,32 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{cell::RefCell, collections::HashMap, sync::Arc};
+use std::{cell::RefCell, collections::HashMap};
 
-use thiserror::Error;
+// use thiserror::Error;
 
 // pub mod extension;
 
-use espanso_config::{
-    config::ResolvedConfig,
-    matches::{store::MatchSet, Match, MatchCause, MatchEffect, UpperCasingStyle},
-};
+use espanso_config::matches::{store::MatchSet, Match, MatchCause, MatchEffect, UpperCasingStyle};
 use espanso_render::{CasingStyle, Context, RenderOptions, Template, Value, Variable};
 
 use crate::{config::ConfigManager, engine::RendererError, match_cache::MatchCache};
 // use espanso_engine::process::{Renderer, RendererError};
 
-pub trait MatchProvider<'a> {
-    fn matches(&self) -> Vec<&'a Match>;
-    fn get(&self, id: i32) -> Option<&'a Match>;
-}
+// pub trait MatchProvider<'a> {
+//     fn matches(&self) -> Vec<&'a Match>;
+//     fn get(&self, id: i32) -> Option<&'a Match>;
+// }
 
-pub trait ConfigProvider<'a> {
-    fn configs(&self) -> Vec<(Arc<ResolvedConfig>, MatchSet)>;
-    fn active(&self) -> (Arc<ResolvedConfig>, MatchSet);
-}
+// pub trait ConfigProvider<'a> {
+//     fn configs(&self) -> Vec<(Arc<ResolvedConfig>, MatchSet)>;
+//     fn active(&self) -> (Arc<ResolvedConfig>, MatchSet);
+// }
 
 pub struct RendererAdapter<'a> {
-    renderer: &'a dyn espanso_render::Renderer,
+    renderer: &'a espanso_render::DefaultRenderer,
     match_provider: &'a MatchCache<'a>,
-    config_provider: &'a dyn ConfigProvider<'a>,
+    config_provider: &'a ConfigManager<'a>,
 
     template_map: HashMap<i32, Option<Template>>,
     global_vars_map: HashMap<i32, Variable>,
@@ -57,7 +54,7 @@ impl<'a> RendererAdapter<'a> {
     pub fn new(
         match_provider: &'a MatchCache<'a>,
         config_provider: &'a ConfigManager<'a>,
-        renderer: &'a dyn espanso_render::Renderer,
+        renderer: &'a espanso_render::DefaultRenderer,
     ) -> Self {
         let template_map = generate_template_map(match_provider);
         let global_vars_map = generate_global_vars_map(config_provider);
@@ -84,7 +81,7 @@ fn generate_template_map(match_provider: &MatchCache) -> HashMap<i32, Option<Tem
 }
 
 // TODO: test
-fn generate_global_vars_map(config_provider: &dyn ConfigProvider) -> HashMap<i32, Variable> {
+fn generate_global_vars_map(config_provider: &ConfigManager) -> HashMap<i32, Variable> {
     let mut global_vars_map = HashMap::new();
 
     for (_, match_set) in config_provider.configs() {
@@ -197,7 +194,7 @@ impl<'a> RendererAdapter<'a> {
         trigger_vars: HashMap<String, String>,
     ) -> anyhow::Result<String> {
         if let Some(Some(template)) = self.template_map.get(&match_id) {
-            let (config, match_set) = self.config_provider.active();
+            let (config, match_set) = self.config_provider.active_context();
 
             let mut context_cache = self.context_cache.borrow_mut();
             let context = context_cache.entry(config.id()).or_insert_with(|| {

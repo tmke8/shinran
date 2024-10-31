@@ -25,7 +25,7 @@ use super::{
     parse::ParsedConfig,
     path::calculate_paths,
     util::os_matches,
-    AppProperties, Backend, RMLVOConfig, ToggleKey,
+    Backend, RMLVOConfig, ToggleKey,
 };
 use crate::{counter::next_id, merge};
 use anyhow::Result;
@@ -47,10 +47,9 @@ pub struct ResolvedConfig {
     // Generated properties
     pub(crate) id: i32,
     pub(crate) match_paths: Vec<String>,
-
-    pub(crate) filter_title: Option<Regex>,
-    pub(crate) filter_class: Option<Regex>,
-    pub(crate) filter_exec: Option<Regex>,
+    // pub(crate) filter_title: Option<Regex>,
+    // pub(crate) filter_class: Option<Regex>,
+    // pub(crate) filter_exec: Option<Regex>,
 }
 
 impl ResolvedConfig {
@@ -76,54 +75,54 @@ impl ResolvedConfig {
         &self.match_paths
     }
 
-    pub fn is_match(&self, app: &AppProperties) -> bool {
-        if self.parsed.filter_os.is_none()
-            && self.parsed.filter_title.is_none()
-            && self.parsed.filter_exec.is_none()
-            && self.parsed.filter_class.is_none()
-        {
-            return false;
-        }
+    // pub fn is_match(&self, app: &AppProperties) -> bool {
+    //     if self.parsed.filter_os.is_none()
+    //         && self.parsed.filter_title.is_none()
+    //         && self.parsed.filter_exec.is_none()
+    //         && self.parsed.filter_class.is_none()
+    //     {
+    //         return false;
+    //     }
 
-        let is_os_match = if let Some(filter_os) = self.parsed.filter_os.as_deref() {
-            os_matches(filter_os)
-        } else {
-            true
-        };
+    //     let is_os_match = if let Some(filter_os) = self.parsed.filter_os.as_deref() {
+    //         os_matches(filter_os)
+    //     } else {
+    //         true
+    //     };
 
-        let is_title_match = if let Some(title_regex) = self.filter_title.as_ref() {
-            if let Some(title) = app.title {
-                title_regex.is_match(title)
-            } else {
-                false
-            }
-        } else {
-            true
-        };
+    //     let is_title_match = if let Some(title_regex) = self.filter_title.as_ref() {
+    //         if let Some(title) = app.title {
+    //             title_regex.is_match(title)
+    //         } else {
+    //             false
+    //         }
+    //     } else {
+    //         true
+    //     };
 
-        let is_exec_match = if let Some(exec_regex) = self.filter_exec.as_ref() {
-            if let Some(exec) = app.exec {
-                exec_regex.is_match(exec)
-            } else {
-                false
-            }
-        } else {
-            true
-        };
+    //     let is_exec_match = if let Some(exec_regex) = self.filter_exec.as_ref() {
+    //         if let Some(exec) = app.exec {
+    //             exec_regex.is_match(exec)
+    //         } else {
+    //             false
+    //         }
+    //     } else {
+    //         true
+    //     };
 
-        let is_class_match = if let Some(class_regex) = self.filter_class.as_ref() {
-            if let Some(class) = app.class {
-                class_regex.is_match(class)
-            } else {
-                false
-            }
-        } else {
-            true
-        };
+    //     let is_class_match = if let Some(class_regex) = self.filter_class.as_ref() {
+    //         if let Some(class) = app.class {
+    //             class_regex.is_match(class)
+    //         } else {
+    //             false
+    //         }
+    //     } else {
+    //         true
+    //     };
 
-        // All the filters that have been specified must be true to define a match
-        is_os_match && is_exec_match && is_title_match && is_class_match
-    }
+    //     // All the filters that have been specified must be true to define a match
+    //     is_os_match && is_exec_match && is_title_match && is_class_match
+    // }
 
     // The mechanism used to perform the injection. Espanso can either
     // inject text by simulating keypresses (Inject backend) or
@@ -542,32 +541,32 @@ impl ResolvedConfig {
             .into_iter()
             .collect();
 
-        let filter_title = if let Some(filter_title) = config.filter_title.as_deref() {
-            Some(Regex::new(filter_title)?)
-        } else {
-            None
-        };
+        // let filter_title = if let Some(filter_title) = config.filter_title.as_deref() {
+        //     Some(Regex::new(filter_title)?)
+        // } else {
+        //     None
+        // };
 
-        let filter_class = if let Some(filter_class) = config.filter_class.as_deref() {
-            Some(Regex::new(filter_class)?)
-        } else {
-            None
-        };
+        // let filter_class = if let Some(filter_class) = config.filter_class.as_deref() {
+        //     Some(Regex::new(filter_class)?)
+        // } else {
+        //     None
+        // };
 
-        let filter_exec = if let Some(filter_exec) = config.filter_exec.as_deref() {
-            Some(Regex::new(filter_exec)?)
-        } else {
-            None
-        };
+        // let filter_exec = if let Some(filter_exec) = config.filter_exec.as_deref() {
+        //     Some(Regex::new(filter_exec)?)
+        // } else {
+        //     None
+        // };
 
         Ok(Self {
             parsed: config,
             source_path: Some(path.to_owned()),
             id: next_id(),
             match_paths,
-            filter_title,
-            filter_class,
-            filter_exec,
+            // filter_title,
+            // filter_class,
+            // filter_exec,
         })
     }
 
@@ -993,177 +992,177 @@ mod tests {
         });
     }
 
-    fn test_filter_is_match(config: &str, app: &AppProperties) -> bool {
-        let mut result = false;
-        let result_ref = &mut result;
-        use_test_directory(move |_, _, config_dir| {
-            let config_file = config_dir.join("default.yml");
-            std::fs::write(&config_file, config).unwrap();
+    // fn test_filter_is_match(config: &str, app: &AppProperties) -> bool {
+    //     let mut result = false;
+    //     let result_ref = &mut result;
+    //     use_test_directory(move |_, _, config_dir| {
+    //         let config_file = config_dir.join("default.yml");
+    //         std::fs::write(&config_file, config).unwrap();
 
-            let config = ResolvedConfig::load(&config_file, None).unwrap();
+    //         let config = ResolvedConfig::load(&config_file, None).unwrap();
 
-            *result_ref = config.is_match(app);
-        });
-        result
-    }
+    //         *result_ref = config.is_match(app);
+    //     });
+    //     result
+    // }
 
-    #[test]
-    fn is_match_no_filters() {
-        assert!(!test_filter_is_match(
-            "",
-            &AppProperties {
-                title: Some("Google"),
-                class: Some("Chrome"),
-                exec: Some("chrome.exe"),
-            },
-        ));
-    }
+    // #[test]
+    // fn is_match_no_filters() {
+    //     assert!(!test_filter_is_match(
+    //         "",
+    //         &AppProperties {
+    //             title: Some("Google"),
+    //             class: Some("Chrome"),
+    //             exec: Some("chrome.exe"),
+    //         },
+    //     ));
+    // }
 
-    #[test]
-    fn is_match_filter_title() {
-        assert!(test_filter_is_match(
-            "filter_title: Google",
-            &AppProperties {
-                title: Some("Google Mail"),
-                class: Some("Chrome"),
-                exec: Some("chrome.exe"),
-            },
-        ));
+    // #[test]
+    // fn is_match_filter_title() {
+    //     assert!(test_filter_is_match(
+    //         "filter_title: Google",
+    //         &AppProperties {
+    //             title: Some("Google Mail"),
+    //             class: Some("Chrome"),
+    //             exec: Some("chrome.exe"),
+    //         },
+    //     ));
 
-        assert!(!test_filter_is_match(
-            "filter_title: Google",
-            &AppProperties {
-                title: Some("Yahoo"),
-                class: Some("Chrome"),
-                exec: Some("chrome.exe"),
-            },
-        ));
+    //     assert!(!test_filter_is_match(
+    //         "filter_title: Google",
+    //         &AppProperties {
+    //             title: Some("Yahoo"),
+    //             class: Some("Chrome"),
+    //             exec: Some("chrome.exe"),
+    //         },
+    //     ));
 
-        assert!(!test_filter_is_match(
-            "filter_title: Google",
-            &AppProperties {
-                title: None,
-                class: Some("Chrome"),
-                exec: Some("chrome.exe"),
-            },
-        ));
-    }
+    //     assert!(!test_filter_is_match(
+    //         "filter_title: Google",
+    //         &AppProperties {
+    //             title: None,
+    //             class: Some("Chrome"),
+    //             exec: Some("chrome.exe"),
+    //         },
+    //     ));
+    // }
 
-    #[test]
-    fn is_match_filter_class() {
-        assert!(test_filter_is_match(
-            "filter_class: Chrome",
-            &AppProperties {
-                title: Some("Google Mail"),
-                class: Some("Chrome"),
-                exec: Some("chrome.exe"),
-            },
-        ));
+    // #[test]
+    // fn is_match_filter_class() {
+    //     assert!(test_filter_is_match(
+    //         "filter_class: Chrome",
+    //         &AppProperties {
+    //             title: Some("Google Mail"),
+    //             class: Some("Chrome"),
+    //             exec: Some("chrome.exe"),
+    //         },
+    //     ));
 
-        assert!(!test_filter_is_match(
-            "filter_class: Chrome",
-            &AppProperties {
-                title: Some("Yahoo"),
-                class: Some("Another"),
-                exec: Some("chrome.exe"),
-            },
-        ));
+    //     assert!(!test_filter_is_match(
+    //         "filter_class: Chrome",
+    //         &AppProperties {
+    //             title: Some("Yahoo"),
+    //             class: Some("Another"),
+    //             exec: Some("chrome.exe"),
+    //         },
+    //     ));
 
-        assert!(!test_filter_is_match(
-            "filter_class: Chrome",
-            &AppProperties {
-                title: Some("google"),
-                class: None,
-                exec: Some("chrome.exe"),
-            },
-        ));
-    }
+    //     assert!(!test_filter_is_match(
+    //         "filter_class: Chrome",
+    //         &AppProperties {
+    //             title: Some("google"),
+    //             class: None,
+    //             exec: Some("chrome.exe"),
+    //         },
+    //     ));
+    // }
 
-    #[test]
-    fn is_match_filter_exec() {
-        assert!(test_filter_is_match(
-            "filter_exec: chrome.exe",
-            &AppProperties {
-                title: Some("Google Mail"),
-                class: Some("Chrome"),
-                exec: Some("chrome.exe"),
-            },
-        ));
+    // #[test]
+    // fn is_match_filter_exec() {
+    //     assert!(test_filter_is_match(
+    //         "filter_exec: chrome.exe",
+    //         &AppProperties {
+    //             title: Some("Google Mail"),
+    //             class: Some("Chrome"),
+    //             exec: Some("chrome.exe"),
+    //         },
+    //     ));
 
-        assert!(!test_filter_is_match(
-            "filter_exec: chrome.exe",
-            &AppProperties {
-                title: Some("Yahoo"),
-                class: Some("Another"),
-                exec: Some("zoom.exe"),
-            },
-        ));
+    //     assert!(!test_filter_is_match(
+    //         "filter_exec: chrome.exe",
+    //         &AppProperties {
+    //             title: Some("Yahoo"),
+    //             class: Some("Another"),
+    //             exec: Some("zoom.exe"),
+    //         },
+    //     ));
 
-        assert!(!test_filter_is_match(
-            "filter_exec: chrome.exe",
-            &AppProperties {
-                title: Some("google"),
-                class: Some("Chrome"),
-                exec: None,
-            },
-        ));
-    }
+    //     assert!(!test_filter_is_match(
+    //         "filter_exec: chrome.exe",
+    //         &AppProperties {
+    //             title: Some("google"),
+    //             class: Some("Chrome"),
+    //             exec: None,
+    //         },
+    //     ));
+    // }
 
-    #[test]
-    fn is_match_filter_os() {
-        let (current, another) = if cfg!(target_os = "windows") {
-            ("windows", "macos")
-        } else if cfg!(target_os = "macos") {
-            ("macos", "windows")
-        } else if cfg!(target_os = "linux") {
-            ("linux", "macos")
-        } else {
-            ("invalid", "invalid")
-        };
+    // #[test]
+    // fn is_match_filter_os() {
+    //     let (current, another) = if cfg!(target_os = "windows") {
+    //         ("windows", "macos")
+    //     } else if cfg!(target_os = "macos") {
+    //         ("macos", "windows")
+    //     } else if cfg!(target_os = "linux") {
+    //         ("linux", "macos")
+    //     } else {
+    //         ("invalid", "invalid")
+    //     };
 
-        assert!(test_filter_is_match(
-            &format!("filter_os: {current}"),
-            &AppProperties {
-                title: Some("Google Mail"),
-                class: Some("Chrome"),
-                exec: Some("chrome.exe"),
-            },
-        ));
+    //     assert!(test_filter_is_match(
+    //         &format!("filter_os: {current}"),
+    //         &AppProperties {
+    //             title: Some("Google Mail"),
+    //             class: Some("Chrome"),
+    //             exec: Some("chrome.exe"),
+    //         },
+    //     ));
 
-        assert!(!test_filter_is_match(
-            &format!("filter_os: {another}"),
-            &AppProperties {
-                title: Some("Google Mail"),
-                class: Some("Chrome"),
-                exec: Some("chrome.exe"),
-            },
-        ));
-    }
+    //     assert!(!test_filter_is_match(
+    //         &format!("filter_os: {another}"),
+    //         &AppProperties {
+    //             title: Some("Google Mail"),
+    //             class: Some("Chrome"),
+    //             exec: Some("chrome.exe"),
+    //         },
+    //     ));
+    // }
 
-    #[test]
-    fn is_match_multiple_filters() {
-        assert!(test_filter_is_match(
-            r#"
-      filter_exec: chrome.exe
-      filter_title: "Youtube"
-      "#,
-            &AppProperties {
-                title: Some("Youtube - Broadcast Yourself"),
-                class: Some("Chrome"),
-                exec: Some("chrome.exe"),
-            },
-        ));
+    // #[test]
+    // fn is_match_multiple_filters() {
+    //     assert!(test_filter_is_match(
+    //         r#"
+    //   filter_exec: chrome.exe
+    //   filter_title: "Youtube"
+    //   "#,
+    //         &AppProperties {
+    //             title: Some("Youtube - Broadcast Yourself"),
+    //             class: Some("Chrome"),
+    //             exec: Some("chrome.exe"),
+    //         },
+    //     ));
 
-        assert!(!test_filter_is_match(
-            r#"
-      filter_exec: chrome.exe
-      filter_title: "Youtube"
-      "#,
-            &AppProperties {
-                title: Some("Gmail"),
-                class: Some("Chrome"),
-                exec: Some("chrome.exe"),
-            },
-        ));
-    }
+    //     assert!(!test_filter_is_match(
+    //         r#"
+    //   filter_exec: chrome.exe
+    //   filter_title: "Youtube"
+    //   "#,
+    //         &AppProperties {
+    //             title: Some("Gmail"),
+    //             class: Some("Chrome"),
+    //             exec: Some("chrome.exe"),
+    //         },
+    //     ));
+    // }
 }

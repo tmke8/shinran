@@ -25,14 +25,14 @@ mod renderer;
 
 pub use renderer::DefaultRenderer;
 
-pub trait Renderer {
-    fn render(
-        &self,
-        template: &Template,
-        context: &Context,
-        options: &RenderOptions,
-    ) -> RenderResult;
-}
+// pub trait Renderer {
+//     fn render(
+//         &self,
+//         template: &Template,
+//         context: &Context,
+//         options: &RenderOptions,
+//     ) -> RenderResult;
+// }
 
 pub fn create(extensions: Vec<Box<dyn Extension>>) -> DefaultRenderer {
     renderer::DefaultRenderer::new(extensions)

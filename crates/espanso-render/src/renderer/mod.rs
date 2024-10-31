@@ -21,7 +21,7 @@ use std::{borrow::Cow, collections::HashMap};
 
 use crate::{
     CasingStyle, Context, Extension, ExtensionOutput, ExtensionResult, RenderOptions, RenderResult,
-    Renderer, Scope, Template, Value, Variable,
+    Scope, Template, Value, Variable,
 };
 use lazy_static::lazy_static;
 use log::{error, warn};
@@ -53,8 +53,8 @@ impl DefaultRenderer {
     }
 }
 
-impl Renderer for DefaultRenderer {
-    fn render(
+impl DefaultRenderer {
+    pub fn render(
         &self,
         template: &Template,
         context: &Context,
@@ -303,7 +303,7 @@ mod tests {
         }
     }
 
-    pub fn get_renderer() -> impl Renderer {
+    pub fn get_renderer() -> DefaultRenderer {
         DefaultRenderer::new(vec![Box::new(MockExtension {})])
     }
 

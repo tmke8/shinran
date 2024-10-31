@@ -4,6 +4,7 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 mod builtin;
 mod config;
 mod engine;
+mod event;
 mod match_cache;
 mod match_select;
 mod multiplex;
@@ -24,7 +25,7 @@ fn time_now() -> String {
 }
 
 fn get_extensions(paths: crate::path::Paths) -> Vec<Box<dyn espanso_render::Extension>> {
-    let date_extension = espanso_render::extension::date::DateExtension::new(&locale_provider);
+    let date_extension = espanso_render::extension::date::DateExtension::new();
     let echo_extension = espanso_render::extension::echo::EchoExtension::new();
     // For backwards compatiblity purposes, the echo extension can also be called with "dummy" type
     let dummy_extension = espanso_render::extension::echo::EchoExtension::new_with_alias("dummy");
@@ -46,7 +47,7 @@ fn get_extensions(paths: crate::path::Paths) -> Vec<Box<dyn espanso_render::Exte
     ]
 }
 
-pub fn setup(trigger: &str) -> (render::RendererAdapter, match_cache::CombinedMatchCache) {
+pub fn setup() -> anyhow::Result<()> {
     // See also
     // `initialize_and_spawn()`
     // in `espanso/src/cli/worker/engine/mod.rs`.
@@ -60,16 +61,20 @@ pub fn setup(trigger: &str) -> (render::RendererAdapter, match_cache::CombinedMa
     let adapter = render::RendererAdapter::new(&cache, &manager, &renderer);
     let builtin_matches = builtin::get_builtin_matches(&*manager.default());
     let combined_cache = match_cache::CombinedMatchCache::load(&cache, &builtin_matches);
-    (adapter, combined_cache)
+
+    let trigger = "time";
+    let result = check_trigger(&adapter, &combined_cache, trigger)?;
+    println!("{result}");
+    Ok(())
 }
 
-pub fn check_trigger(
-    adapter: render::RendererAdapter,
-    cache: match_cache::CombinedMatchCache,
+pub fn check_trigger<'a>(
+    adapter: &'a render::RendererAdapter<'a>,
+    cache: &match_cache::CombinedMatchCache,
     trigger: &str,
 ) -> anyhow::Result<String> {
     let matches = cache.find_matches_from_trigger(trigger);
-    let match_ = matches[0];
+    let match_ = matches.into_iter().next().unwrap();
     adapter.render(match_.id, Some(trigger), match_.args)
 }
 
@@ -80,5 +85,10 @@ mod tests {
     #[test]
     fn unknown_command() {
         assert!(check_command("hello").is_none());
+    }
+
+    #[test]
+    fn all() {
+        setup().unwrap();
     }
 }
