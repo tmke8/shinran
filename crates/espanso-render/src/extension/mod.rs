@@ -17,12 +17,12 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub mod choice;
-pub mod clipboard;
+// pub mod choice;
+// pub mod clipboard;
 pub mod date;
 pub mod echo;
 mod exec_util;
-pub mod form;
+// pub mod form;
 pub mod random;
 pub mod script;
 pub mod shell;

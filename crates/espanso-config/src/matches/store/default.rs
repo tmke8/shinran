@@ -29,11 +29,11 @@ use std::{
     path::PathBuf,
 };
 
-pub struct DefaultMatchStore {
+pub struct MatchStore {
     pub groups: HashMap<String, MatchGroup>,
 }
 
-impl DefaultMatchStore {
+impl MatchStore {
     pub fn load(paths: &[String]) -> (Self, Vec<NonFatalErrorSet>) {
         let mut groups = HashMap::new();
         let mut non_fatal_error_sets = Vec::new();
@@ -235,7 +235,7 @@ mod tests {
             .unwrap();
 
             let (match_store, non_fatal_error_sets) =
-                DefaultMatchStore::load(&[base_file.to_string_lossy().to_string()]);
+                MatchStore::load(&[base_file.to_string_lossy().to_string()]);
             assert_eq!(non_fatal_error_sets.len(), 0);
             assert_eq!(match_store.groups.len(), 3);
 
@@ -341,7 +341,7 @@ mod tests {
             .unwrap();
 
             let (match_store, non_fatal_error_sets) =
-                DefaultMatchStore::load(&[base_file.to_string_lossy().to_string()]);
+                MatchStore::load(&[base_file.to_string_lossy().to_string()]);
 
             assert_eq!(match_store.groups.len(), 3);
             assert_eq!(non_fatal_error_sets.len(), 0);
@@ -404,7 +404,7 @@ mod tests {
             .unwrap();
 
             let (match_store, non_fatal_error_sets) =
-                DefaultMatchStore::load(&[base_file.to_string_lossy().to_string()]);
+                MatchStore::load(&[base_file.to_string_lossy().to_string()]);
             assert_eq!(non_fatal_error_sets.len(), 0);
 
             let match_set = match_store.query(&[base_file.to_string_lossy().to_string()]);
@@ -501,7 +501,7 @@ mod tests {
             .unwrap();
 
             let (match_store, non_fatal_error_sets) =
-                DefaultMatchStore::load(&[base_file.to_string_lossy().to_string()]);
+                MatchStore::load(&[base_file.to_string_lossy().to_string()]);
             assert_eq!(non_fatal_error_sets.len(), 0);
 
             let match_set = match_store.query(&[base_file.to_string_lossy().to_string()]);
@@ -591,7 +591,7 @@ mod tests {
             )
             .unwrap();
 
-            let (match_store, non_fatal_error_sets) = DefaultMatchStore::load(&[
+            let (match_store, non_fatal_error_sets) = MatchStore::load(&[
                 base_file.to_string_lossy().to_string(),
                 sub_file.to_string_lossy().to_string(),
             ]);
@@ -691,7 +691,7 @@ mod tests {
             .unwrap();
 
             let (match_store, non_fatal_error_sets) =
-                DefaultMatchStore::load(&[base_file.to_string_lossy().to_string()]);
+                MatchStore::load(&[base_file.to_string_lossy().to_string()]);
             assert_eq!(non_fatal_error_sets.len(), 0);
 
             let match_set = match_store.query(&[

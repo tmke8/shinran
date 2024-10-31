@@ -30,14 +30,13 @@ use super::MatchGroup;
 
 pub(crate) mod yaml;
 
-trait Importer {
-    fn is_supported(&self, extension: &str) -> bool;
-    fn load_group(&self, path: &Path) -> Result<(MatchGroup, Option<NonFatalErrorSet>)>;
-}
+// trait Importer {
+//     fn is_supported(&self, extension: &str) -> bool;
+//     fn load_group(&self, path: &Path) -> Result<(MatchGroup, Option<NonFatalErrorSet>)>;
+// }
 
 lazy_static! {
-    static ref IMPORTERS: Vec<Box<dyn Importer + Sync + Send>> =
-        vec![Box::new(YAMLImporter::new()),];
+    static ref IMPORTERS: Vec<Box<YAMLImporter>> = vec![Box::new(YAMLImporter::new())];
 }
 
 pub(crate) fn load_match_group(path: &Path) -> Result<(MatchGroup, Option<NonFatalErrorSet>)> {

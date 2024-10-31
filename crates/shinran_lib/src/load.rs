@@ -19,9 +19,9 @@
 
 use anyhow::{Context, Result};
 use espanso_config::{
-    config::DefaultConfigStore,
+    config::ConfigStore,
     error::{ErrorLevel, NonFatalErrorSet},
-    matches::store::DefaultMatchStore,
+    matches::store::MatchStore,
 };
 use log::{error, info, warn};
 use std::path::Path;
@@ -72,8 +72,8 @@ pub fn populate_default_config(config_dir: &Path) -> Result<()> {
 }
 
 pub struct ConfigLoadResult {
-    pub config_store: Box<DefaultConfigStore>,
-    pub match_store: Box<DefaultMatchStore>,
+    pub config_store: Box<ConfigStore>,
+    pub match_store: Box<MatchStore>,
     pub is_legacy_config: bool,
     pub non_fatal_errors: Vec<NonFatalErrorSet>,
 }

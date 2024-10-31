@@ -20,8 +20,8 @@
 use std::collections::HashMap;
 
 use espanso_config::{
-    config::DefaultConfigStore,
-    matches::{store::DefaultMatchStore, Match, MatchCause},
+    config::ConfigStore,
+    matches::{store::MatchStore, Match, MatchCause},
 };
 // use espanso_engine::event::internal::DetectedMatch;
 use crate::engine::DetectedMatch;
@@ -35,7 +35,7 @@ pub struct MatchCache<'a> {
 }
 
 impl<'a> MatchCache<'a> {
-    pub fn load(config_store: &DefaultConfigStore, match_store: &'a DefaultMatchStore) -> Self {
+    pub fn load(config_store: &ConfigStore, match_store: &'a MatchStore) -> Self {
         let mut cache = HashMap::new();
 
         let paths = config_store.get_all_match_paths();

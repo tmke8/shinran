@@ -23,7 +23,7 @@ use std::collections::HashMap;
 pub mod extension;
 mod renderer;
 
-pub use renderer::DefaultRenderer;
+pub use renderer::Renderer;
 
 // pub trait Renderer {
 //     fn render(
@@ -34,8 +34,8 @@ pub use renderer::DefaultRenderer;
 //     ) -> RenderResult;
 // }
 
-pub fn create(extensions: Vec<Box<dyn Extension>>) -> DefaultRenderer {
-    renderer::DefaultRenderer::new(extensions)
+pub fn create(extensions: Vec<Box<dyn Extension>>) -> Renderer {
+    renderer::Renderer::new(extensions)
 }
 
 #[derive(Debug)]

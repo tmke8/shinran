@@ -78,7 +78,7 @@ pub fn setup() -> anyhow::Result<()> {
     let cache = match_cache::MatchCache::load(&config_store, &match_store);
     let manager = config::ConfigManager::new(config_store, &match_store);
     let extensions = get_extensions(paths);
-    let renderer = espanso_render::DefaultRenderer::new(extensions);
+    let renderer = espanso_render::Renderer::new(extensions);
     let builtin_matches = builtin::get_builtin_matches(&*manager.default());
     let combined_cache = match_cache::CombinedMatchCache::load(&cache, &builtin_matches);
     let adapter = render::RendererAdapter::new(&cache, Box::new(manager), Box::new(renderer));

@@ -20,8 +20,8 @@
 use std::{collections::HashSet, sync::Arc};
 
 use espanso_config::{
-    config::{DefaultConfigStore, ResolvedConfig},
-    matches::store::{DefaultMatchStore, MatchSet},
+    config::{Config, ConfigStore},
+    matches::store::{MatchSet, MatchStore},
 };
 // use espanso_info::{AppInfo, AppInfoProvider};
 
@@ -31,15 +31,15 @@ use super::{
 };
 
 pub struct ConfigManager<'a> {
-    config_store: Box<DefaultConfigStore>,
-    match_store: &'a DefaultMatchStore,
+    config_store: Box<ConfigStore>,
+    match_store: &'a MatchStore,
     // app_info_provider: &'a dyn AppInfoProvider,
 }
 
 impl<'a> ConfigManager<'a> {
     pub fn new(
-        config_store: Box<DefaultConfigStore>,
-        match_store: &'a DefaultMatchStore,
+        config_store: Box<ConfigStore>,
+        match_store: &'a MatchStore,
         // app_info_provider: &'a dyn AppInfoProvider,
     ) -> Self {
         Self {
@@ -49,19 +49,19 @@ impl<'a> ConfigManager<'a> {
         }
     }
 
-    pub fn active(&self) -> Arc<ResolvedConfig> {
+    pub fn active(&self) -> Arc<Config> {
         // let current_app = self.app_info_provider.get_info();
         // let info = to_app_properties(&current_app);
         self.config_store.active()
     }
 
-    pub fn active_context(&self) -> (Arc<ResolvedConfig>, MatchSet) {
+    pub fn active_context(&self) -> (Arc<Config>, MatchSet) {
         let config = self.active();
         let match_paths = config.match_paths();
         (config.clone(), self.match_store.query(match_paths))
     }
 
-    pub fn default(&self) -> Arc<ResolvedConfig> {
+    pub fn default(&self) -> Arc<Config> {
         self.config_store.default()
     }
 }
@@ -99,7 +99,7 @@ impl<'a> ConfigManager<'a> {
 }
 
 impl<'a> ConfigManager<'a> {
-    pub fn configs(&self) -> Vec<(Arc<ResolvedConfig>, MatchSet)> {
+    pub fn configs(&self) -> Vec<(Arc<Config>, MatchSet)> {
         self.config_store
             .configs()
             .into_iter()

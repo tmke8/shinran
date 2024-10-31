@@ -28,12 +28,12 @@ pub mod error;
 pub mod matches;
 mod util;
 
-use config::store::DefaultConfigStore;
-use matches::store::DefaultMatchStore;
+use config::store::ConfigStore;
+use matches::store::MatchStore;
 
 type LoadableConfig = (
-    Box<DefaultConfigStore>,
-    Box<DefaultMatchStore>,
+    Box<ConfigStore>,
+    Box<MatchStore>,
     Vec<error::NonFatalErrorSet>,
 );
 

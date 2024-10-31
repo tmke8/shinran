@@ -37,7 +37,7 @@ use thiserror::Error;
 const STANDARD_INCLUDES: &[&str] = &["../match/**/[!_]*.yml"];
 
 #[derive(Debug, Clone, Default)]
-pub struct ResolvedConfig {
+pub struct Config {
     pub(crate) parsed: ParsedConfig,
 
     pub(crate) source_path: Option<PathBuf>,
@@ -50,7 +50,7 @@ pub struct ResolvedConfig {
     // pub(crate) filter_exec: Option<Regex>,
 }
 
-impl ResolvedConfig {
+impl Config {
     pub fn id(&self) -> i32 {
         self.id
     }
@@ -693,7 +693,7 @@ mod tests {
     #[test]
     fn aggregate_includes_empty_config() {
         assert_eq!(
-            ResolvedConfig::aggregate_includes(&ParsedConfig {
+            Config::aggregate_includes(&ParsedConfig {
                 ..Default::default()
             }),
             ["../match/**/[!_]*.yml".to_string()]
@@ -706,7 +706,7 @@ mod tests {
     #[test]
     fn aggregate_includes_no_standard() {
         assert_eq!(
-            ResolvedConfig::aggregate_includes(&ParsedConfig {
+            Config::aggregate_includes(&ParsedConfig {
                 use_standard_includes: Some(false),
                 ..Default::default()
             }),
@@ -717,7 +717,7 @@ mod tests {
     #[test]
     fn aggregate_includes_custom_includes() {
         assert_eq!(
-            ResolvedConfig::aggregate_includes(&ParsedConfig {
+            Config::aggregate_includes(&ParsedConfig {
                 includes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
             }),
@@ -734,7 +734,7 @@ mod tests {
     #[test]
     fn aggregate_includes_extra_includes() {
         assert_eq!(
-            ResolvedConfig::aggregate_includes(&ParsedConfig {
+            Config::aggregate_includes(&ParsedConfig {
                 extra_includes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
             }),
@@ -751,7 +751,7 @@ mod tests {
     #[test]
     fn aggregate_includes_includes_and_extra_includes() {
         assert_eq!(
-            ResolvedConfig::aggregate_includes(&ParsedConfig {
+            Config::aggregate_includes(&ParsedConfig {
                 includes: Some(vec!["sub/*.yml".to_string()]),
                 extra_includes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
@@ -770,7 +770,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_empty_config() {
         assert_eq!(
-            ResolvedConfig::aggregate_excludes(&ParsedConfig {
+            Config::aggregate_excludes(&ParsedConfig {
                 ..Default::default()
             })
             .len(),
@@ -781,7 +781,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_no_standard() {
         assert_eq!(
-            ResolvedConfig::aggregate_excludes(&ParsedConfig {
+            Config::aggregate_excludes(&ParsedConfig {
                 use_standard_includes: Some(false),
                 ..Default::default()
             }),
@@ -792,7 +792,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_custom_excludes() {
         assert_eq!(
-            ResolvedConfig::aggregate_excludes(&ParsedConfig {
+            Config::aggregate_excludes(&ParsedConfig {
                 excludes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
             }),
@@ -806,7 +806,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_extra_excludes() {
         assert_eq!(
-            ResolvedConfig::aggregate_excludes(&ParsedConfig {
+            Config::aggregate_excludes(&ParsedConfig {
                 extra_excludes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
             }),
@@ -820,7 +820,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_excludes_and_extra_excludes() {
         assert_eq!(
-            ResolvedConfig::aggregate_excludes(&ParsedConfig {
+            Config::aggregate_excludes(&ParsedConfig {
                 excludes: Some(vec!["sub/*.yml".to_string()]),
                 extra_excludes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
@@ -843,7 +843,7 @@ mod tests {
         };
         assert_eq!(child.use_standard_includes, None);
 
-        ResolvedConfig::merge_parsed(&mut child, &parent);
+        Config::merge_parsed(&mut child, &parent);
         assert_eq!(child.use_standard_includes, Some(false));
     }
 
@@ -859,7 +859,7 @@ mod tests {
         };
         assert_eq!(child.use_standard_includes, Some(false));
 
-        ResolvedConfig::merge_parsed(&mut child, &parent);
+        Config::merge_parsed(&mut child, &parent);
         assert_eq!(child.use_standard_includes, Some(false));
     }
 
@@ -881,7 +881,7 @@ mod tests {
             let config_file = config_dir.join("default.yml");
             std::fs::write(&config_file, "").unwrap();
 
-            let config = ResolvedConfig::load(&config_file, None).unwrap();
+            let config = Config::load(&config_file, None).unwrap();
 
             let mut expected = vec![
                 base_file.to_string_lossy().to_string(),
@@ -936,8 +936,8 @@ mod tests {
             )
             .unwrap();
 
-            let parent = ResolvedConfig::load(&parent_file, None).unwrap();
-            let child = ResolvedConfig::load(&config_file, Some(&parent)).unwrap();
+            let parent = Config::load(&parent_file, None).unwrap();
+            let child = Config::load(&config_file, Some(&parent)).unwrap();
 
             let mut expected = vec![
                 sub_file.to_string_lossy().to_string(),
@@ -973,7 +973,7 @@ mod tests {
             let config_file = config_dir.join("default.yml");
             std::fs::write(&config_file, "extra_includes: ['../match/_sub.yml']").unwrap();
 
-            let config = ResolvedConfig::load(&config_file, None).unwrap();
+            let config = Config::load(&config_file, None).unwrap();
 
             let mut expected = vec![
                 base_file.to_string_lossy().to_string(),

@@ -28,8 +28,8 @@ mod resolve;
 pub(crate) mod store;
 mod util;
 
-pub use resolve::ResolvedConfig;
-pub use store::DefaultConfigStore;
+pub use resolve::Config;
+pub use store::ConfigStore;
 
 // #[cfg(test)]
 // use mockall::{automock, predicate::*};
@@ -341,8 +341,8 @@ impl std::fmt::Display for RMLVOConfig {
     }
 }
 
-pub fn load_store(config_dir: &Path) -> Result<(store::DefaultConfigStore, Vec<NonFatalErrorSet>)> {
-    store::DefaultConfigStore::load(config_dir)
+pub fn load_store(config_dir: &Path) -> Result<(store::ConfigStore, Vec<NonFatalErrorSet>)> {
+    store::ConfigStore::load(config_dir)
 }
 
 #[derive(Error, Debug)]

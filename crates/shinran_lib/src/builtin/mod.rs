@@ -19,7 +19,7 @@
 
 use std::cell::Cell;
 
-use espanso_config::config::ResolvedConfig;
+use espanso_config::config::Config;
 
 use crate::event::EventType;
 
@@ -51,7 +51,7 @@ impl Default for BuiltInMatch {
     }
 }
 
-pub fn get_builtin_matches(config: &ResolvedConfig) -> Vec<BuiltInMatch> {
+pub fn get_builtin_matches(config: &Config) -> Vec<BuiltInMatch> {
     let mut matches = vec![
         // debug::create_match_paste_active_config_info(),
         // debug::create_match_paste_active_app_info(),

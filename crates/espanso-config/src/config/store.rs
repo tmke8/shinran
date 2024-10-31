@@ -19,27 +19,27 @@
 
 use crate::error::NonFatalErrorSet;
 
-use super::{resolve::ResolvedConfig, ConfigStoreError};
+use super::{resolve::Config, ConfigStoreError};
 use anyhow::{Context, Result};
 use log::{debug, error};
 use std::sync::Arc;
 use std::{collections::HashSet, path::Path};
 
-pub struct DefaultConfigStore {
-    default: Arc<ResolvedConfig>,
-    customs: Vec<Arc<ResolvedConfig>>,
+pub struct ConfigStore {
+    default: Arc<Config>,
+    customs: Vec<Arc<Config>>,
 }
 
-impl DefaultConfigStore {
-    pub fn default(&self) -> Arc<ResolvedConfig> {
+impl ConfigStore {
+    pub fn default(&self) -> Arc<Config> {
         Arc::clone(&self.default)
     }
 
-    pub fn active(&self) -> Arc<ResolvedConfig> {
+    pub fn active(&self) -> Arc<Config> {
         Arc::clone(&self.default)
     }
 
-    pub fn configs(&self) -> Vec<Arc<ResolvedConfig>> {
+    pub fn configs(&self) -> Vec<Arc<Config>> {
         let mut configs = vec![Arc::clone(&self.default)];
 
         for custom in &self.customs {
@@ -62,7 +62,7 @@ impl DefaultConfigStore {
     }
 }
 
-impl DefaultConfigStore {
+impl ConfigStore {
     pub fn load(config_dir: &Path) -> Result<(Self, Vec<NonFatalErrorSet>)> {
         if !config_dir.is_dir() {
             return Err(ConfigStoreError::InvalidConfigDir().into());
@@ -76,12 +76,12 @@ impl DefaultConfigStore {
 
         let mut non_fatal_errors = Vec::new();
 
-        let default = ResolvedConfig::load(&default_file, None)
+        let default = Config::load(&default_file, None)
             .context("failed to load default.yml configuration")?;
         debug!("loaded default config at path: {:?}", default_file);
 
         // Then the others
-        let mut customs: Vec<Arc<ResolvedConfig>> = Vec::new();
+        let mut customs: Vec<Arc<Config>> = Vec::new();
         for entry in std::fs::read_dir(config_dir).map_err(ConfigStoreError::IOError)? {
             let entry = entry?;
             let config_file = entry.path();
@@ -96,7 +96,7 @@ impl DefaultConfigStore {
                 && config_file != default_file
                 && (extension == "yml" || extension == "yaml")
             {
-                match ResolvedConfig::load(&config_file, Some(&default)) {
+                match Config::load(&config_file, Some(&default)) {
                     Ok(config) => {
                         customs.push(Arc::new(config));
                         debug!("loaded config at path: {:?}", config_file);
@@ -135,14 +135,14 @@ mod tests {
 
     use super::*;
 
-    pub fn new_mock(label: &'static str) -> ResolvedConfig {
+    pub fn new_mock(label: &'static str) -> Config {
         let label = label.to_owned();
         // let mut mock = MockConfig::new();
         // mock.expect_id().return_const(0);
         // mock.expect_label().return_const(label);
         // mock.expect_is_match().return_const(is_match);
         // mock
-        ResolvedConfig {
+        Config {
             parsed: ParsedConfig {
                 label: Some(label),
                 ..Default::default()
@@ -158,7 +158,7 @@ mod tests {
         let custom1 = new_mock("custom1");
         let custom2 = new_mock("custom2");
 
-        let store = DefaultConfigStore {
+        let store = ConfigStore {
             default: Arc::new(default),
             customs: vec![Arc::new(custom1), Arc::new(custom2)],
         };
@@ -182,7 +182,7 @@ mod tests {
         let custom1 = new_mock("custom1");
         let custom2 = new_mock("custom2");
 
-        let store = DefaultConfigStore {
+        let store = ConfigStore {
             default: Arc::new(default),
             customs: vec![Arc::new(custom1), Arc::new(custom2)],
         };

@@ -37,7 +37,7 @@ use self::{
 };
 use crate::matches::{MatchCause, MatchEffect, TextEffect, TriggerCause};
 
-use super::Importer;
+// use super::Importer;
 
 pub(crate) mod parse;
 mod util;
@@ -59,12 +59,12 @@ impl YAMLImporter {
     }
 }
 
-impl Importer for YAMLImporter {
-    fn is_supported(&self, extension: &str) -> bool {
+impl YAMLImporter {
+    pub fn is_supported(&self, extension: &str) -> bool {
         extension == "yaml" || extension == "yml"
     }
 
-    fn load_group(
+    pub fn load_group(
         &self,
         path: &std::path::Path,
     ) -> anyhow::Result<(crate::matches::group::MatchGroup, Option<NonFatalErrorSet>)> {
