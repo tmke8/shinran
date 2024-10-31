@@ -31,11 +31,7 @@ mod util;
 use config::store::ConfigStore;
 use matches::store::MatchStore;
 
-type LoadableConfig = (
-    Box<ConfigStore>,
-    Box<MatchStore>,
-    Vec<error::NonFatalErrorSet>,
-);
+type LoadableConfig = (ConfigStore, MatchStore, Vec<error::NonFatalErrorSet>);
 
 pub fn load(base_path: &Path) -> Result<LoadableConfig> {
     let config_dir = base_path.join("config");
@@ -53,11 +49,7 @@ pub fn load(base_path: &Path) -> Result<LoadableConfig> {
     non_fatal_errors.extend(non_fatal_config_errors);
     non_fatal_errors.extend(non_fatal_match_errors);
 
-    Ok((
-        Box::new(config_store),
-        Box::new(match_store),
-        non_fatal_errors,
-    ))
+    Ok((config_store, match_store, non_fatal_errors))
 }
 
 // pub fn load_legacy(

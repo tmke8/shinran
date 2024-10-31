@@ -40,9 +40,9 @@ use crate::{config::ConfigManager, engine::RendererError, match_cache::MatchCach
 // }
 
 pub struct RendererAdapter<'a> {
-    renderer: Box<espanso_render::Renderer>,
-    match_provider: &'a MatchCache<'a>,
-    config_provider: Box<ConfigManager<'a>>,
+    renderer: espanso_render::Renderer,
+    match_cache: &'a MatchCache<'a>,
+    config_manager: ConfigManager<'a>,
 
     template_map: HashMap<i32, Option<Template>>,
     global_vars_map: HashMap<i32, Variable>,
@@ -52,17 +52,17 @@ pub struct RendererAdapter<'a> {
 
 impl<'a> RendererAdapter<'a> {
     pub fn new(
-        match_provider: &'a MatchCache<'a>,
-        config_provider: Box<ConfigManager<'a>>,
-        renderer: Box<espanso_render::Renderer>,
+        match_cache: &'a MatchCache<'a>,
+        config_manager: ConfigManager<'a>,
+        renderer: espanso_render::Renderer,
     ) -> Self {
-        let template_map = generate_template_map(match_provider);
-        let global_vars_map = generate_global_vars_map(&config_provider);
+        let template_map = generate_template_map(match_cache);
+        let global_vars_map = generate_global_vars_map(&config_manager);
 
         Self {
             renderer,
-            config_provider,
-            match_provider,
+            config_manager,
+            match_cache,
             template_map,
             global_vars_map,
             context_cache: RefCell::new(HashMap::new()),
@@ -194,14 +194,14 @@ impl<'a> RendererAdapter<'a> {
         trigger_vars: HashMap<String, String>,
     ) -> anyhow::Result<String> {
         if let Some(Some(template)) = self.template_map.get(&match_id) {
-            let (config, match_set) = self.config_provider.active_context();
+            let (config, match_set) = self.config_manager.active_context();
 
             let mut context_cache = self.context_cache.borrow_mut();
             let context = context_cache.entry(config.id()).or_insert_with(|| {
                 generate_context(&match_set, &self.template_map, &self.global_vars_map)
             });
 
-            let raw_match = self.match_provider.get(match_id);
+            let raw_match = self.match_cache.get(match_id);
             let propagate_case = raw_match.is_some_and(is_propagate_case);
             let preferred_uppercasing_style = raw_match.and_then(extract_uppercasing_style);
 

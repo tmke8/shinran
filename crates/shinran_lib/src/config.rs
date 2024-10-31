@@ -31,14 +31,14 @@ use super::{
 };
 
 pub struct ConfigManager<'a> {
-    config_store: Box<ConfigStore>,
+    config_store: ConfigStore,
     match_store: &'a MatchStore,
     // app_info_provider: &'a dyn AppInfoProvider,
 }
 
 impl<'a> ConfigManager<'a> {
     pub fn new(
-        config_store: Box<ConfigStore>,
+        config_store: ConfigStore,
         match_store: &'a MatchStore,
         // app_info_provider: &'a dyn AppInfoProvider,
     ) -> Self {

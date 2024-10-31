@@ -72,9 +72,8 @@ pub fn populate_default_config(config_dir: &Path) -> Result<()> {
 }
 
 pub struct ConfigLoadResult {
-    pub config_store: Box<ConfigStore>,
-    pub match_store: Box<MatchStore>,
-    pub is_legacy_config: bool,
+    pub config_store: ConfigStore,
+    pub match_store: MatchStore,
     pub non_fatal_errors: Vec<NonFatalErrorSet>,
 }
 
@@ -106,7 +105,6 @@ pub fn load_config(config_path: &Path, packages_path: &Path) -> Result<ConfigLoa
         // config_store: crate::patch::patch_store(config_store),
         config_store,
         match_store,
-        is_legacy_config: false,
         non_fatal_errors,
     })
 }

@@ -1,6 +1,7 @@
 use std::{collections::HashMap, path::PathBuf, time::SystemTime};
 
-use log::{error, info, warn};
+use espanso_config::{config::ConfigStore, matches::store::MatchStore};
+use log::info;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 mod builtin;
@@ -27,7 +28,7 @@ fn time_now() -> String {
     now.format(&Rfc3339).expect("valid date time")
 }
 
-fn get_extensions(paths: crate::path::Paths) -> Vec<Box<dyn espanso_render::Extension>> {
+fn get_extensions(paths: path::Paths) -> Vec<Box<dyn espanso_render::Extension>> {
     let date_extension = espanso_render::extension::date::DateExtension::new();
     let echo_extension = espanso_render::extension::echo::EchoExtension::new();
     // For backwards compatiblity purposes, the echo extension can also be called with "dummy" type
@@ -50,7 +51,7 @@ fn get_extensions(paths: crate::path::Paths) -> Vec<Box<dyn espanso_render::Exte
     ]
 }
 
-pub fn setup() -> anyhow::Result<()> {
+pub fn load_config_and_renderer() -> (espanso_render::Renderer, ConfigStore, MatchStore) {
     // See also
     // `initialize_and_spawn()`
     // in `espanso/src/cli/worker/engine/mod.rs`.
@@ -69,34 +70,63 @@ pub fn setup() -> anyhow::Result<()> {
     info!("reading configs from: {:?}", paths.config);
     info!("reading packages from: {:?}", paths.packages);
     info!("using runtime dir: {:?}", paths.runtime);
+
     let config_result =
         load::load_config(&paths.config, &paths.packages).expect("unable to load config");
-
     let config_store = config_result.config_store;
     let match_store = config_result.match_store;
 
-    let cache = match_cache::MatchCache::load(&config_store, &match_store);
-    let manager = config::ConfigManager::new(config_store, &match_store);
     let extensions = get_extensions(paths);
     let renderer = espanso_render::Renderer::new(extensions);
-    let builtin_matches = builtin::get_builtin_matches(&*manager.default());
-    let combined_cache = match_cache::CombinedMatchCache::load(&cache, &builtin_matches);
-    let adapter = render::RendererAdapter::new(&cache, Box::new(manager), Box::new(renderer));
 
-    let trigger = ":date";
-    let result = check_trigger(&adapter, &combined_cache, trigger)?;
-    println!("{result}");
-    Ok(())
+    (renderer, config_store, match_store)
 }
 
-pub fn check_trigger<'a>(
-    adapter: &'a render::RendererAdapter<'a>,
-    cache: &match_cache::CombinedMatchCache,
-    trigger: &str,
-) -> anyhow::Result<String> {
-    let matches = cache.find_matches_from_trigger(trigger);
-    let match_ = matches.into_iter().next().unwrap();
-    adapter.render(match_.id, Some(trigger), match_.args)
+pub fn make_cache<'store>(
+    config_store: ConfigStore,
+    match_store: &'store MatchStore,
+) -> (
+    match_cache::MatchCache<'store>,
+    config::ConfigManager<'store>,
+    Vec<builtin::BuiltInMatch>,
+) {
+    let match_cache = match_cache::MatchCache::load(&config_store, match_store);
+
+    // `config_manager` could own `match_store`
+    let config_manager = config::ConfigManager::new(config_store, match_store);
+
+    let config = &*config_manager.default();
+    let builtin_matches = builtin::get_builtin_matches(config);
+    (match_cache, config_manager, builtin_matches)
+}
+
+pub struct Backend<'a> {
+    adapter: render::RendererAdapter<'a>,
+    cache: match_cache::CombinedMatchCache<'a>,
+}
+
+impl<'a> Backend<'a> {
+    pub fn new(
+        renderer: espanso_render::Renderer,
+        match_cache: &'a match_cache::MatchCache,
+        config_manager: config::ConfigManager<'a>,
+        builtin_matches: &'a Vec<builtin::BuiltInMatch>,
+    ) -> anyhow::Result<Backend<'a>> {
+        // `combined_cache` stores references to `cache` and `builtin_matches`
+        let combined_cache = match_cache::CombinedMatchCache::load(match_cache, builtin_matches);
+        // `adapter` could own `cache`
+        let adapter = render::RendererAdapter::new(&match_cache, config_manager, renderer);
+        Ok(Backend {
+            adapter,
+            cache: combined_cache,
+        })
+    }
+
+    pub fn check_trigger(&'a self, trigger: &str) -> anyhow::Result<String> {
+        let matches = self.cache.find_matches_from_trigger(trigger);
+        let match_ = matches.into_iter().next().unwrap();
+        self.adapter.render(match_.id, Some(trigger), match_.args)
+    }
 }
 
 macro_rules! error_eprintln {
@@ -143,6 +173,12 @@ mod tests {
 
     #[test]
     fn all() {
-        setup().unwrap();
+        let (renderer, config_store, match_store) = load_config_and_renderer();
+        let (match_cache, config_manager, builtin_matches) = make_cache(config_store, &match_store);
+        let backend =
+            Backend::new(renderer, &match_cache, config_manager, &builtin_matches).unwrap();
+        let trigger = ":date";
+        let result = backend.check_trigger(trigger).unwrap();
+        println!("{result}");
     }
 }

@@ -97,7 +97,7 @@ pub enum MatchVariant<'a> {
 }
 
 impl<'a> CombinedMatchCache<'a> {
-    pub fn load(user_match_cache: &'a MatchCache<'a>, builtin_matches: &'a [BuiltInMatch]) -> Self {
+    pub fn load(match_cache: &'a MatchCache<'a>, builtin_matches: &'a [BuiltInMatch]) -> Self {
         let mut builtin_match_cache = HashMap::new();
 
         for m in builtin_matches {
@@ -105,7 +105,7 @@ impl<'a> CombinedMatchCache<'a> {
         }
 
         Self {
-            user_match_cache,
+            user_match_cache: match_cache,
             builtin_match_cache,
         }
     }

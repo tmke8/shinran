@@ -46,7 +46,7 @@ impl MatchStore {
         (Self { groups }, non_fatal_error_sets)
     }
 
-    pub fn query(&self, paths: &[String]) -> MatchSet {
+    pub fn query<'store>(&'store self, paths: &[String]) -> MatchSet<'store> {
         let mut matches: Vec<&Match> = Vec::new();
         let mut global_vars: Vec<&Variable> = Vec::new();
         let mut visited_paths = HashSet::new();
