@@ -31,14 +31,14 @@ use super::{
 };
 
 pub struct ConfigManager<'a> {
-    config_store: &'a DefaultConfigStore,
+    config_store: Box<DefaultConfigStore>,
     match_store: &'a DefaultMatchStore,
     // app_info_provider: &'a dyn AppInfoProvider,
 }
 
 impl<'a> ConfigManager<'a> {
     pub fn new(
-        config_store: &'a DefaultConfigStore,
+        config_store: Box<DefaultConfigStore>,
         match_store: &'a DefaultMatchStore,
         // app_info_provider: &'a dyn AppInfoProvider,
     ) -> Self {
@@ -75,7 +75,7 @@ impl<'a> ConfigManager<'a> {
 // }
 
 impl<'a> ConfigManager<'a> {
-    fn filter_active(&self, matches_ids: &[i32]) -> Vec<i32> {
+    pub fn filter_active(&self, matches_ids: &[i32]) -> Vec<i32> {
         let ids_set: HashSet<i32> = matches_ids.iter().copied().collect::<HashSet<_>>();
         let (_, match_set) = self.active_context();
 

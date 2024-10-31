@@ -35,7 +35,7 @@ pub struct MatchCache<'a> {
 }
 
 impl<'a> MatchCache<'a> {
-    pub fn load(config_store: &'a DefaultConfigStore, match_store: &'a DefaultMatchStore) -> Self {
+    pub fn load(config_store: &DefaultConfigStore, match_store: &'a DefaultMatchStore) -> Self {
         let mut cache = HashMap::new();
 
         let paths = config_store.get_all_match_paths();

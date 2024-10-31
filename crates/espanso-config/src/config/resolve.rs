@@ -24,14 +24,12 @@ use super::{
     },
     parse::ParsedConfig,
     path::calculate_paths,
-    util::os_matches,
     Backend, RMLVOConfig, ToggleKey,
 };
 use crate::{counter::next_id, merge};
 use anyhow::Result;
 use indoc::formatdoc;
 use log::error;
-use regex::Regex;
 use std::path::PathBuf;
 use std::{collections::HashSet, path::Path};
 use thiserror::Error;

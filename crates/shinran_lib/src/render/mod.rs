@@ -40,9 +40,9 @@ use crate::{config::ConfigManager, engine::RendererError, match_cache::MatchCach
 // }
 
 pub struct RendererAdapter<'a> {
-    renderer: &'a espanso_render::DefaultRenderer,
+    renderer: Box<espanso_render::DefaultRenderer>,
     match_provider: &'a MatchCache<'a>,
-    config_provider: &'a ConfigManager<'a>,
+    config_provider: Box<ConfigManager<'a>>,
 
     template_map: HashMap<i32, Option<Template>>,
     global_vars_map: HashMap<i32, Variable>,
@@ -53,11 +53,11 @@ pub struct RendererAdapter<'a> {
 impl<'a> RendererAdapter<'a> {
     pub fn new(
         match_provider: &'a MatchCache<'a>,
-        config_provider: &'a ConfigManager<'a>,
-        renderer: &'a espanso_render::DefaultRenderer,
+        config_provider: Box<ConfigManager<'a>>,
+        renderer: Box<espanso_render::DefaultRenderer>,
     ) -> Self {
         let template_map = generate_template_map(match_provider);
-        let global_vars_map = generate_global_vars_map(config_provider);
+        let global_vars_map = generate_global_vars_map(&config_provider);
 
         Self {
             renderer,
