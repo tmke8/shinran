@@ -36,7 +36,7 @@ pub struct MatchSet<'a> {
 }
 
 pub fn load(paths: &[String]) -> (MatchStore, Vec<NonFatalErrorSet>) {
-    // TODO: here we can replace the DefaultMatchStore with a caching wrapper
+    // TODO: here we can replace the MatchStore with a caching wrapper
     // that returns the same response for the given "paths" query
     default::MatchStore::load(paths)
 }
