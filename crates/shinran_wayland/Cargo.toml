@@ -13,3 +13,4 @@ wayland-protocols-misc = { version = "0.3.3", features = ["client"] }
 xkbcommon = { version = "0.7.0", features = ["wayland"] }
 calloop = "0.14.1"
 calloop-wayland-source = "0.4.0"
+slotmap = "1.0.7"

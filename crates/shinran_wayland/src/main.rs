@@ -11,6 +11,7 @@ use calloop::{
     Dispatcher, EventLoop, LoopHandle, RegistrationToken,
 };
 use calloop_wayland_source::WaylandSource;
+use slotmap::{new_key_type, SlotMap};
 use wayland_client::{
     delegate_noop,
     protocol::{
@@ -60,7 +61,7 @@ fn main() {
     let mut state = State {
         running: true,
         seats: vec![],
-        contexts: vec![],
+        contexts: SlotMap::with_key(),
         wl_compositor: None,
         input_method_manager: None,
         virtual_keyboard_manager: None,
@@ -105,35 +106,34 @@ fn init_protocols(state: &mut State, qh: &QueueHandle<State>, backend: Rc<Backen
         panic!("Compositor does not support wl_compositor");
     };
 
-    // The context vector should be empty at this point, otherwise the indices will be off.
-    // TODO: Avoid this by using a HashMap instead of a Vec.
-    assert_eq!(state.contexts.len(), 0);
-
-    for (seat_index, seat) in seats.into_iter().enumerate() {
-        let seat_index = SeatIndex(seat_index);
-        // We have to be a bit mindful of race conditions here.
-        // What we are doing here is creating a new input method and virtual keyboard for each seat,
-        // and we pass the seat index to the input method and virtual keyboard.
-        // However, the context object that the seat index refers to is not initialized yet here.
-        // It is only initialized at the end of the loop body.
-        // I *think* this is fine because when `init_protocols()` is called,
-        // the event queue hasn't been dispatched yet, so the context object should not be accessed
-        // by events on `input_method` and `virtual_keyboard`.
-        let input_method = input_method_manager.get_input_method(&seat, qh, seat_index);
-        let virtual_keyboard = virtual_keyboard_manager.create_virtual_keyboard(&seat, qh, ());
-        let wl_surface = wl_compositor.create_surface(qh, seat_index);
-        let popup_surface = input_method.get_input_popup_surface(&wl_surface, qh, ());
-        let backend = backend.clone();
-        state.contexts.push(InputContext::new(
-            seat,
-            input_method,
-            virtual_keyboard,
-            wl_surface,
-            popup_surface,
-            backend,
-        ))
+    for seat in seats.into_iter() {
+        state.contexts.insert_with_key(|seat_index| {
+            // We have to be a bit mindful of race conditions here.
+            // What we are doing here is creating a new input method and virtual keyboard for each seat,
+            // and we pass the seat index to the input method and virtual keyboard.
+            // However, the context object that the seat index refers to is not initialized yet here.
+            // It is only initialized at the end of the loop body.
+            // I *think* this is fine because when `init_protocols()` is called,
+            // the event queue hasn't been dispatched yet, so the context object should not be accessed
+            // by events on `input_method` and `virtual_keyboard`.
+            let input_method = input_method_manager.get_input_method(&seat, qh, seat_index);
+            let virtual_keyboard = virtual_keyboard_manager.create_virtual_keyboard(&seat, qh, ());
+            let wl_surface = wl_compositor.create_surface(qh, seat_index);
+            let popup_surface = input_method.get_input_popup_surface(&wl_surface, qh, ());
+            let backend = backend.clone();
+            InputContext::new(
+                seat,
+                input_method,
+                virtual_keyboard,
+                wl_surface,
+                popup_surface,
+                backend,
+            )
+        });
     }
 }
+
+new_key_type! { struct SeatIndex; }
 
 struct State {
     running: bool,
@@ -142,20 +142,14 @@ struct State {
     virtual_keyboard_manager: Option<ZwpVirtualKeyboardManagerV1>,
 
     seats: Vec<WlSeat>,
-    // TODO: Use a HashMap with identity hashing instead of a Vec.
-    // https://docs.rs/identity-hash/latest/identity_hash/
-    contexts: Vec<InputContext>,
+    contexts: SlotMap<SeatIndex, InputContext>,
     // configured: bool,
     loop_handle: LoopHandle<'static, State>,
 }
 
-#[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
-struct SeatIndex(usize);
-
 impl State {
     fn get_context(&mut self, seat_index: SeatIndex) -> &mut InputContext {
-        &mut self.contexts[seat_index.0]
+        &mut self.contexts[seat_index]
     }
 }
 
@@ -391,7 +385,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for State {
                     // TODO: Perhaps we can create the seat identifier already here and pass it to
                     // the handler of `WlSeat` events, so that we can actually associate the name
                     // we get in the `WlSeat` events with the right seat object.
-                    let seat = registry.bind::<WlSeat, _, _>(name, 1, qh, ());
+                    let seat = registry.bind::<WlSeat, _, _>(name, 2, qh, ());
                     // Collect all seats.
                     state.seats.push(seat);
                 }
@@ -432,14 +426,15 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                 state: key_state,
                 ..
             } => {
+                let WEnum::Value(key_state) = key_state else {
+                    panic!("Invalid key state.");
+                };
+
                 // With an X11-compatible keymap and Linux evdev scan codes (see linux/input.h),
                 // a fixed offset is used:
                 const SCANCODE_OFFSET: u32 = 8;
                 let keycode = xkb::Keycode::new(key + SCANCODE_OFFSET);
 
-                let WEnum::Value(key_state) = key_state else {
-                    panic!("Invalid key state.");
-                };
                 eprintln!("Key {} was {:?}.", key + SCANCODE_OFFSET, key_state);
                 let input_context = state.get_context(*seat_index);
                 if input_context.xkb_state.is_none() {
@@ -611,10 +606,11 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                     );
                 }
             }
-            zwp_input_method_keyboard_grab_v2::Event::Keymap { format, fd, size } => {
-                let WEnum::Value(format) = format else {
-                    return;
-                };
+            zwp_input_method_keyboard_grab_v2::Event::Keymap {
+                format: WEnum::Value(format),
+                fd,
+                size,
+            } => {
                 let input_context = state.get_context(*seat_index);
                 input_context
                     .virtual_keyboard
@@ -738,7 +734,11 @@ impl Dispatch<WlSeat, ()> for State {
             wl_seat::Event::Name { name } => {
                 eprintln!("Seat name: {}.", name);
             }
-            wl_seat::Event::Capabilities { capabilities } => {}
+            wl_seat::Event::Capabilities {
+                capabilities: WEnum::Value(capabilities),
+            } => {
+                eprintln!("Seat capabilities: {:?}.", capabilities);
+            }
             _ => todo!(),
         }
     }
