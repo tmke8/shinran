@@ -5,6 +5,7 @@ use log::info;
 
 mod builtin;
 mod config;
+mod cursor;
 mod engine;
 mod event;
 mod load;
@@ -148,7 +149,7 @@ impl Backend {
         };
         self.adapter
             .render(match_.id, Some(trigger), match_.args)
-            .map(Some)
+            .map(|body| Some(cursor::process_cursor_hint(body).0))
     }
 }
 
