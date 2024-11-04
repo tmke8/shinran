@@ -4,7 +4,7 @@
 // https://github.com/emersion/wlhangul/blob/bd2758227779d7748dea185c38cab11665d55502/include/wlhangul.h
 // https://github.com/emersion/wlhangul/blob/bd2758227779d7748dea185c38cab11665d55502/main.c
 
-use std::{collections::HashMap, mem, os::unix::io::AsFd, rc::Rc, time::Duration};
+use std::{collections::HashMap, os::unix::io::AsFd, rc::Rc, time::Duration};
 
 use calloop::{
     timer::{TimeoutAction, Timer},
@@ -91,9 +91,10 @@ fn main() {
         .unwrap();
 }
 
+/// Initialize the protocols we need for the input method.
+///
+/// This can only be done after we have received all the global objects from the server.
 fn init_protocols(state: &mut State, qh: &QueueHandle<State>, backend: Rc<Backend>) {
-    let seats = mem::replace(&mut state.seats, vec![]);
-
     let Some(input_method_manager) = &state.input_method_manager else {
         panic!("Compositor does not support zwp_input_method_manager_v2");
     };
@@ -106,7 +107,7 @@ fn init_protocols(state: &mut State, qh: &QueueHandle<State>, backend: Rc<Backen
         panic!("Compositor does not support wl_compositor");
     };
 
-    for seat in seats.into_iter() {
+    for (seat, seat_id) in state.seats.iter() {
         state.contexts.insert_with_key(|seat_index| {
             // We have to be a bit mindful of race conditions here.
             // What we are doing here is creating a new input method and virtual keyboard for each seat,
@@ -116,13 +117,13 @@ fn init_protocols(state: &mut State, qh: &QueueHandle<State>, backend: Rc<Backen
             // I *think* this is fine because when `init_protocols()` is called,
             // the event queue hasn't been dispatched yet, so the context object should not be accessed
             // by events on `input_method` and `virtual_keyboard`.
-            let input_method = input_method_manager.get_input_method(&seat, qh, seat_index);
-            let virtual_keyboard = virtual_keyboard_manager.create_virtual_keyboard(&seat, qh, ());
+            let input_method = input_method_manager.get_input_method(seat, qh, seat_index);
+            let virtual_keyboard = virtual_keyboard_manager.create_virtual_keyboard(seat, qh, ());
             let wl_surface = wl_compositor.create_surface(qh, seat_index);
             let popup_surface = input_method.get_input_popup_surface(&wl_surface, qh, ());
             let backend = backend.clone();
             InputContext::new(
-                seat,
+                *seat_id,
                 input_method,
                 virtual_keyboard,
                 wl_surface,
@@ -141,7 +142,7 @@ struct State {
     input_method_manager: Option<ZwpInputMethodManagerV2>,
     virtual_keyboard_manager: Option<ZwpVirtualKeyboardManagerV1>,
 
-    seats: Vec<WlSeat>,
+    seats: Vec<(WlSeat, u32)>,
     contexts: SlotMap<SeatIndex, InputContext>,
     // configured: bool,
     loop_handle: LoopHandle<'static, State>,
@@ -154,7 +155,8 @@ impl State {
 }
 
 struct InputContext {
-    seat: WlSeat,
+    seat_id: u32,
+    seat_name: Option<String>,
 
     input_method: ZwpInputMethodV2,
     virtual_keyboard: ZwpVirtualKeyboardV1,
@@ -163,9 +165,6 @@ struct InputContext {
     xkb_context: xkb::Context,
     xkb_keymap: Option<xkb::Keymap>,
     xkb_state: Option<xkb::State>,
-
-    // wl_seat
-    name: Option<String>,
 
     // zwp_input_method_v2
     pending_activate: bool,
@@ -191,7 +190,7 @@ struct InputContext {
 
 impl InputContext {
     fn new(
-        seat: WlSeat,
+        seat_id: u32,
         input_method: ZwpInputMethodV2,
         virtual_keyboard: ZwpVirtualKeyboardV1,
         wl_surface: WlSurface,
@@ -199,8 +198,8 @@ impl InputContext {
         backend: Rc<Backend>,
     ) -> Self {
         Self {
-            seat,
-            name: None, // Set in `name` event in WlSeat.
+            seat_id,
+            seat_name: None, // Set in `name` event in WlSeat.
             input_method,
             virtual_keyboard,
             xkb_context: xkb::Context::new(xkb::CONTEXT_NO_FLAGS),
@@ -356,7 +355,9 @@ impl InputContext {
         self.input_method.commit(self.num_done_events);
     }
 
-    fn draw_popup(&mut self) {}
+    fn draw_popup(&mut self) {
+        todo!("Draw popup!");
+    }
 }
 
 struct RepeatTimer {
@@ -377,34 +378,43 @@ impl Dispatch<wl_registry::WlRegistry, ()> for State {
     ) {
         match event {
             wl_registry::Event::Global {
-                name,
+                name: id,
                 interface,
                 version: _version,
             } => match &interface[..] {
                 "wl_seat" => {
-                    // TODO: Perhaps we can create the seat identifier already here and pass it to
-                    // the handler of `WlSeat` events, so that we can actually associate the name
-                    // we get in the `WlSeat` events with the right seat object.
-                    let seat = registry.bind::<WlSeat, _, _>(name, 2, qh, ());
+                    let seat = registry.bind::<WlSeat, _, _>(id, 2, qh, id);
                     // Collect all seats.
-                    state.seats.push(seat);
+                    state.seats.push((seat, id));
                 }
                 "wl_compositor" => {
-                    let compositor = registry.bind::<WlCompositor, _, _>(name, 4, qh, ());
+                    let compositor = registry.bind::<WlCompositor, _, _>(id, 4, qh, ());
                     state.wl_compositor = Some(compositor);
                 }
                 "zwp_input_method_manager_v2" => {
-                    let input_man = registry.bind::<ZwpInputMethodManagerV2, _, _>(name, 1, qh, ());
+                    let input_man = registry.bind::<ZwpInputMethodManagerV2, _, _>(id, 1, qh, ());
                     state.input_method_manager = Some(input_man);
                 }
                 "zwp_virtual_keyboard_manager_v1" => {
                     let keyboard_man =
-                        registry.bind::<ZwpVirtualKeyboardManagerV1, _, _>(name, 1, qh, ());
+                        registry.bind::<ZwpVirtualKeyboardManagerV1, _, _>(id, 1, qh, ());
                     state.virtual_keyboard_manager = Some(keyboard_man);
                 }
                 _ => {}
             },
-            wl_registry::Event::GlobalRemove { .. } => {}
+            wl_registry::Event::GlobalRemove { name: id } => {
+                // Iterating over these two vectors is somewhat expensive,
+                // but this event should be very rare.
+                state
+                    .seats
+                    .iter()
+                    .position(|(_, seat_id)| *seat_id == id)
+                    .map(|index| {
+                        state.seats.swap_remove(index);
+                    });
+                // Retain only the contexts that do not correspond to the removed seat.
+                state.contexts.retain(|_, context| context.seat_id != id);
+            }
             _ => {}
         }
     }
@@ -647,7 +657,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                 input_context.repeat_delay = Some(Duration::from_millis(delay as u64));
                 eprintln!("Repeat rate: {} ms, delay: {} ms.", rate, delay);
             }
-            _ => todo!(),
+            _ => unreachable!("Unknown event."),
         }
     }
 }
@@ -698,41 +708,51 @@ impl Dispatch<ZwpInputMethodV2, SeatIndex> for State {
             zwp_input_method_v2::Event::Unavailable => {
                 // Nothing.
             }
-            _ => todo!(),
+            _ => unreachable!("Unknown event."),
         }
     }
 }
 
 impl Dispatch<WlSurface, SeatIndex> for State {
     fn event(
-        state: &mut Self,
-        wl_surface: &WlSurface,
+        _state: &mut Self,
+        _wl_surface: &WlSurface,
         event: wl_surface::Event,
-        seat_index: &SeatIndex,
+        _seat_index: &SeatIndex,
         _: &Connection,
-        qh: &QueueHandle<Self>,
+        _qh: &QueueHandle<Self>,
     ) {
-        let input_context = state.get_context(*seat_index);
+        // let input_context = state.get_context(*seat_index);
         match event {
-            wl_surface::Event::Enter { output } => {}
-            wl_surface::Event::Leave { output } => {}
-            _ => todo!(),
+            wl_surface::Event::Enter { .. } => {
+                todo!("Enter event.");
+            }
+            wl_surface::Event::Leave { .. } => {
+                todo!("Leave event.");
+            }
+            _ => {}
         }
     }
 }
 
-impl Dispatch<WlSeat, ()> for State {
+impl Dispatch<WlSeat, u32> for State {
     fn event(
         state: &mut Self,
-        seat: &WlSeat,
+        _seat: &WlSeat,
         event: wl_seat::Event,
-        _: &(),
+        seat_id: &u32,
         _: &Connection,
-        qh: &QueueHandle<Self>,
+        _qh: &QueueHandle<Self>,
     ) {
         match event {
             wl_seat::Event::Name { name } => {
                 eprintln!("Seat name: {}.", name);
+                // Find the context with the given seat id and set the name.
+                state
+                    .contexts
+                    .values_mut()
+                    .find(|c| c.seat_id == *seat_id)
+                    .map(|c| c.seat_name = Some(name));
             }
             wl_seat::Event::Capabilities {
                 capabilities: WEnum::Value(capabilities),
