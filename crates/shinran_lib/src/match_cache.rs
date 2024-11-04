@@ -55,7 +55,7 @@ impl MatchCache {
     }
 
     pub fn matches(&self) -> Vec<&Match> {
-        self.cache.values().map(|m| m).collect()
+        self.cache.values().collect()
     }
 
     pub fn get(&self, id: i32) -> Option<&Match> {
@@ -110,7 +110,7 @@ impl CombinedMatchCache {
         }
     }
 
-    pub fn get<'a>(&'a self, match_id: i32) -> Option<MatchVariant<'a>> {
+    pub fn get(&self, match_id: i32) -> Option<MatchVariant<'_>> {
         if let Some(user_match) = self.user_match_cache.cache.get(&match_id) {
             return Some(MatchVariant::User(user_match));
         }
