@@ -12,6 +12,7 @@ mod match_cache;
 mod match_select;
 mod multiplex;
 mod path;
+mod regex;
 mod render;
 
 // pub fn check_command(command: &str) -> Option<String> {
@@ -84,6 +85,22 @@ fn load_config_and_renderer(
     (renderer, config_store, match_store)
 }
 
+fn get_regex_matches(
+    config_store: &ConfigStore,
+    match_store: &MatchStore,
+) -> Vec<regex::RegexMatch<i32>> {
+    let paths = config_store.get_all_match_paths();
+    let global_set = match_store.query(&paths.into_iter().collect::<Vec<_>>());
+    let mut regex_matches = Vec::new();
+
+    for m in global_set.matches {
+        if let espanso_config::matches::MatchCause::Regex(cause) = &m.cause {
+            regex_matches.push(regex::RegexMatch::new(m.id, &cause.regex));
+        }
+    }
+    regex_matches
+}
+
 pub struct Backend {
     adapter: render::RendererAdapter,
 }
@@ -93,6 +110,7 @@ impl Backend {
         let (renderer, config_store, match_store) = load_config_and_renderer(cli_overrides);
 
         let match_cache = match_cache::MatchCache::load(&config_store, &match_store);
+        let regex_matches = get_regex_matches(&config_store, &match_store);
 
         // `config_manager` could own `match_store`
         let config_manager = config::ConfigManager::new(config_store, match_store);
@@ -100,7 +118,8 @@ impl Backend {
         let config = &*config_manager.default();
         let builtin_matches = builtin::get_builtin_matches(config);
         // `combined_cache` stores references to `cache` and `builtin_matches`
-        let combined_cache = match_cache::CombinedMatchCache::load(match_cache, builtin_matches);
+        let combined_cache =
+            match_cache::CombinedMatchCache::load(match_cache, builtin_matches, regex_matches);
         // `adapter` could own `cache`
         let adapter = render::RendererAdapter::new(combined_cache, config_manager, renderer);
         Ok(Backend { adapter })
@@ -111,8 +130,21 @@ impl Backend {
             .adapter
             .combined_cache
             .find_matches_from_trigger(trigger);
-        let Some(match_) = matches.into_iter().next() else {
-            return Ok(None);
+        let match_ = if let Some(match_) = matches.into_iter().next() {
+            match_
+        } else {
+            let matches = self
+                .adapter
+                .combined_cache
+                .matcher
+                .find_matches(trigger)
+                .into_iter()
+                .next();
+            if let Some(matches) = matches {
+                matches
+            } else {
+                return Ok(None);
+            }
         };
         self.adapter
             .render(match_.id, Some(trigger), match_.args)
@@ -161,7 +193,8 @@ mod tests {
     fn test_date() {
         let cli_overrides = HashMap::new();
         let backend = Backend::new(&cli_overrides).unwrap();
-        let trigger = "date";
+        // let trigger = "date";
+        let trigger = "greet(Bob)";
         let result = backend.check_trigger(trigger).unwrap().unwrap();
         println!("{result}");
     }

@@ -14,3 +14,4 @@ dirs = "3.0.1"
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 log = { workspace = true }
+regex.workspace = true

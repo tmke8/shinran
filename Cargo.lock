@@ -1507,6 +1507,7 @@ dependencies = [
  "espanso-config",
  "espanso-render",
  "log",
+ "regex",
  "serde",
  "serde_yaml_ng",
  "thiserror",

@@ -27,6 +27,7 @@ use espanso_config::{
 use crate::engine::DetectedMatch;
 use crate::match_select::MatchSummary;
 use crate::multiplex::MatchResult;
+use crate::regex::{RegexMatch, RegexMatcher};
 
 use super::builtin::BuiltInMatch;
 
@@ -89,6 +90,7 @@ impl MatchCache {
 pub struct CombinedMatchCache {
     pub user_match_cache: MatchCache,
     builtin_match_cache: HashMap<i32, BuiltInMatch>,
+    pub matcher: RegexMatcher,
 }
 
 pub enum MatchVariant<'a> {
@@ -97,16 +99,23 @@ pub enum MatchVariant<'a> {
 }
 
 impl CombinedMatchCache {
-    pub fn load(match_cache: MatchCache, builtin_matches: Vec<BuiltInMatch>) -> Self {
+    pub fn load(
+        match_cache: MatchCache,
+        builtin_matches: Vec<BuiltInMatch>,
+        regex_matches: Vec<RegexMatch<i32>>,
+    ) -> Self {
         let mut builtin_match_cache = HashMap::new();
 
         for m in builtin_matches {
             builtin_match_cache.insert(m.id, m);
         }
 
+        let matcher = RegexMatcher::new(regex_matches);
+
         Self {
             user_match_cache: match_cache,
             builtin_match_cache,
+            matcher,
         }
     }
 
@@ -167,7 +176,7 @@ impl CombinedMatchCache {
                     if trigger_cause.triggers.iter().any(|t| t == trigger) {
                         Some(DetectedMatch {
                             id: m.id,
-                            trigger: Some(trigger.to_string()),
+                            trigger: trigger.to_string(),
                             ..Default::default()
                         })
                     } else {
@@ -186,7 +195,7 @@ impl CombinedMatchCache {
                 if m.triggers.iter().any(|t| t == trigger) {
                     Some(DetectedMatch {
                         id: m.id,
-                        trigger: Some(trigger.to_string()),
+                        trigger: trigger.to_string(),
                         ..Default::default()
                     })
                 } else {
