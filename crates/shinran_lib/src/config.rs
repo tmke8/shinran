@@ -17,18 +17,18 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use espanso_config::{
-    config::{Config, ConfigStore},
+    config::{ConfigFile, ConfigStore},
     matches::store::{MatchSet, MatchStore},
 };
 // use espanso_info::{AppInfo, AppInfoProvider};
 
-use super::{
-    builtin::is_builtin_match,
-    // engine::process::middleware::render::extension::clipboard::ClipboardOperationOptionsProvider,
-};
+// use super::{
+//     builtin::is_builtin_match,
+//     engine::process::middleware::render::extension::clipboard::ClipboardOperationOptionsProvider,
+// };
 
 pub struct ConfigManager {
     config_store: ConfigStore,
@@ -49,60 +49,56 @@ impl ConfigManager {
         }
     }
 
-    pub fn active(&self) -> Arc<Config> {
-        // let current_app = self.app_info_provider.get_info();
-        // let info = to_app_properties(&current_app);
-        self.config_store.active()
+    pub fn default(&self) -> Arc<ConfigFile> {
+        self.config_store.default()
     }
 
-    pub fn active_context(&self) -> (Arc<Config>, MatchSet) {
-        let config = self.active();
-        let match_paths = config.match_paths();
+    pub fn default_config_and_match_set(&self) -> (Arc<ConfigFile>, MatchSet) {
+        let config = self.config_store.default();
+        let match_paths = config.match_file_paths();
         (config.clone(), self.match_store.query(match_paths))
     }
 
-    pub fn default(&self) -> Arc<Config> {
-        self.config_store.default()
-    }
-}
+    // pub fn active(&self) -> Arc<ConfigFile> {
+    //     let current_app = self.app_info_provider.get_info();
+    //     let info = to_app_properties(&current_app);
+    //     self.config_store.active(info)
+    // }
 
-// fn to_app_properties(info: &AppInfo) -> AppProperties {
-//     AppProperties {
-//         title: info.title.as_deref(),
-//         class: info.class.as_deref(),
-//         exec: info.exec.as_deref(),
-//     }
-// }
+    // pub fn active_context(&self) -> (Arc<ConfigFile>, MatchSet) {
+    //     let config = self.active();
+    //     let match_paths = config.match_paths();
+    //     (config.clone(), self.match_store.query(match_paths))
+    // }
 
-impl ConfigManager {
-    pub fn filter_active(&self, matches_ids: &[i32]) -> Vec<i32> {
-        let ids_set: HashSet<i32> = matches_ids.iter().copied().collect::<HashSet<_>>();
-        let (_, match_set) = self.active_context();
+    // pub fn filter_active(&self, matches_ids: &[i32]) -> Vec<i32> {
+    //     let ids_set: HashSet<i32> = matches_ids.iter().copied().collect::<HashSet<_>>();
+    //     let (_, match_set) = self.active_context();
 
-        let active_user_defined_matches: Vec<i32> = match_set
-            .matches
-            .iter()
-            .filter(|m| ids_set.contains(&m.id))
-            .map(|m| m.id)
-            .collect();
+    //     let active_user_defined_matches: Vec<i32> = match_set
+    //         .matches
+    //         .iter()
+    //         .filter(|m| ids_set.contains(&m.id))
+    //         .map(|m| m.id)
+    //         .collect();
 
-        let builtin_matches: Vec<i32> = matches_ids
-            .iter()
-            .filter(|id| is_builtin_match(**id))
-            .copied()
-            .collect();
+    //     let builtin_matches: Vec<i32> = matches_ids
+    //         .iter()
+    //         .filter(|id| is_builtin_match(**id))
+    //         .copied()
+    //         .collect();
 
-        let mut output = active_user_defined_matches;
-        output.extend(builtin_matches);
-        output
-    }
+    //     let mut output = active_user_defined_matches;
+    //     output.extend(builtin_matches);
+    //     output
+    // }
 
-    pub fn configs(&self) -> Vec<(Arc<Config>, MatchSet)> {
+    pub fn configs(&self) -> Vec<(Arc<ConfigFile>, MatchSet)> {
         self.config_store
             .configs()
             .into_iter()
             .map(|config| {
-                let match_set = self.match_store.query(config.match_paths());
+                let match_set = self.match_store.query(config.match_file_paths());
                 (config, match_set)
             })
             .collect()

@@ -40,7 +40,7 @@ impl MatchCache {
         let mut cache = HashMap::new();
 
         let paths = config_store
-            .get_all_match_paths()
+            .get_all_match_file_paths()
             .into_iter()
             .collect::<Vec<_>>();
         let global_set = match_store.query(&paths);

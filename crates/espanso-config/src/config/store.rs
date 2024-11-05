@@ -19,7 +19,7 @@
 
 use crate::error::NonFatalErrorSet;
 
-use super::{resolve::Config, ConfigStoreError};
+use super::{resolve::ConfigFile, ConfigStoreError};
 use anyhow::{Context, Result};
 use log::{debug, error};
 use std::path::PathBuf;
@@ -27,20 +27,26 @@ use std::sync::Arc;
 use std::{collections::HashSet, path::Path};
 
 pub struct ConfigStore {
-    default: Arc<Config>,
-    customs: Vec<Arc<Config>>,
+    default: Arc<ConfigFile>,
+    customs: Vec<Arc<ConfigFile>>,
 }
 
 impl ConfigStore {
-    pub fn default(&self) -> Arc<Config> {
+    pub fn default(&self) -> Arc<ConfigFile> {
         Arc::clone(&self.default)
     }
 
-    pub fn active(&self) -> Arc<Config> {
-        Arc::clone(&self.default)
-    }
+    // fn active(&self, app: &super::AppProperties) -> Arc<ConfigFile> {
+    //     // Find a custom config that matches or fallback to the default one
+    //     for custom in &self.customs {
+    //         if custom.is_match(app) {
+    //             return Arc::clone(custom);
+    //         }
+    //     }
+    //     Arc::clone(&self.default)
+    // }
 
-    pub fn configs(&self) -> Vec<Arc<Config>> {
+    pub fn configs(&self) -> Vec<Arc<ConfigFile>> {
         let mut configs = vec![Arc::clone(&self.default)];
 
         for custom in &self.customs {
@@ -51,19 +57,17 @@ impl ConfigStore {
     }
 
     // TODO: test
-    pub fn get_all_match_paths(&self) -> HashSet<PathBuf> {
+    pub fn get_all_match_file_paths(&self) -> HashSet<PathBuf> {
         let mut paths = HashSet::new();
 
-        paths.extend(self.default().match_paths().iter().cloned());
+        paths.extend(self.default().match_file_paths().iter().cloned());
         for custom in &self.customs {
-            paths.extend(custom.match_paths().iter().cloned());
+            paths.extend(custom.match_file_paths().iter().cloned());
         }
 
         paths
     }
-}
 
-impl ConfigStore {
     pub fn load(config_dir: &Path) -> Result<(Self, Vec<NonFatalErrorSet>)> {
         if !config_dir.is_dir() {
             return Err(ConfigStoreError::InvalidConfigDir().into());
@@ -77,12 +81,12 @@ impl ConfigStore {
 
         let mut non_fatal_errors = Vec::new();
 
-        let default = Config::load(&default_file, None)
+        let default = ConfigFile::load_from_path(&default_file, None)
             .context("failed to load default.yml configuration")?;
         debug!("loaded default config at path: {:?}", default_file);
 
         // Then the others
-        let mut customs: Vec<Arc<Config>> = Vec::new();
+        let mut customs: Vec<Arc<ConfigFile>> = Vec::new();
         for entry in std::fs::read_dir(config_dir).map_err(ConfigStoreError::IOError)? {
             let entry = entry?;
             let config_file = entry.path();
@@ -97,7 +101,7 @@ impl ConfigStore {
                 && config_file != default_file
                 && (extension == "yml" || extension == "yaml")
             {
-                match Config::load(&config_file, Some(&default)) {
+                match ConfigFile::load_from_path(&config_file, Some(&default)) {
                     Ok(config) => {
                         customs.push(Arc::new(config));
                         debug!("loaded config at path: {:?}", config_file);
@@ -136,14 +140,14 @@ mod tests {
 
     use super::*;
 
-    pub fn new_mock(label: &'static str) -> Config {
+    pub fn new_mock(label: &'static str) -> ConfigFile {
         let label = label.to_owned();
         // let mut mock = MockConfig::new();
         // mock.expect_id().return_const(0);
         // mock.expect_label().return_const(label);
         // mock.expect_is_match().return_const(is_match);
         // mock
-        Config {
+        ConfigFile {
             parsed: ParsedConfig {
                 label: Some(label),
                 ..Default::default()

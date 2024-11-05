@@ -28,7 +28,7 @@ mod resolve;
 pub(crate) mod store;
 mod util;
 
-pub use resolve::Config;
+pub use resolve::{ConfigFile, ConfigId};
 pub use store::ConfigStore;
 
 // #[cfg(test)]

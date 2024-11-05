@@ -40,7 +40,10 @@ pub fn load(base_path: &Path) -> Result<LoadableConfig> {
     }
 
     let (config_store, non_fatal_config_errors) = config::load_store(&config_dir)?;
-    let root_paths: Vec<_> = config_store.get_all_match_paths().into_iter().collect();
+    let root_paths: Vec<_> = config_store
+        .get_all_match_file_paths()
+        .into_iter()
+        .collect();
 
     let (match_store, non_fatal_match_errors) = matches::store::load(&root_paths);
 
@@ -131,7 +134,7 @@ mod tests {
             let (config_store, match_store, errors) = load(base).unwrap();
 
             assert_eq!(errors.len(), 0);
-            assert_eq!(config_store.default().match_paths().len(), 2);
+            assert_eq!(config_store.default().match_file_paths().len(), 2);
             // assert_eq!(
             //     config_store
             //         .active(&AppProperties {
@@ -146,7 +149,7 @@ mod tests {
 
             assert_eq!(
                 match_store
-                    .query(config_store.default().match_paths())
+                    .query(config_store.default().match_file_paths())
                     .matches
                     .len(),
                 3
@@ -259,7 +262,7 @@ mod tests {
 
             assert_eq!(
                 match_store
-                    .query(config_store.default().match_paths())
+                    .query(config_store.default().match_file_paths())
                     .matches
                     .len(),
                 1

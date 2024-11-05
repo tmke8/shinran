@@ -30,27 +30,31 @@ use crate::{counter::next_id, merge};
 use anyhow::Result;
 use indoc::formatdoc;
 use log::error;
+use regex::Regex;
 use std::path::PathBuf;
 use std::{collections::HashSet, path::Path};
 use thiserror::Error;
 
 const STANDARD_INCLUDES: &[&str] = &["../match/**/[!_]*.yml"];
+pub type ConfigId = i32;
 
+/// Struct representing one loaded configuration file.
 #[derive(Debug, Clone, Default)]
-pub struct Config {
+pub struct ConfigFile {
     pub(crate) parsed: ParsedConfig,
 
-    pub(crate) source_path: Option<PathBuf>,
+    pub(crate) source_path: PathBuf,
 
-    // Generated properties
-    pub(crate) id: i32,
-    pub(crate) match_paths: Vec<PathBuf>,
-    // pub(crate) filter_title: Option<Regex>,
-    // pub(crate) filter_class: Option<Regex>,
-    // pub(crate) filter_exec: Option<Regex>,
+    pub(crate) id: ConfigId,
+    pub(crate) match_file_paths: Vec<PathBuf>,
+
+    // TODO: Any config file with non-None filters should probably be ignored on Wayland.
+    pub(crate) filter_title: Option<Regex>,
+    pub(crate) filter_class: Option<Regex>,
+    pub(crate) filter_exec: Option<Regex>,
 }
 
-impl Config {
+impl ConfigFile {
     pub fn id(&self) -> i32 {
         self.id
     }
@@ -60,17 +64,15 @@ impl Config {
             return label;
         }
 
-        if let Some(source_path) = self.source_path.as_ref() {
-            if let Some(source_path) = source_path.to_str() {
-                return source_path;
-            }
+        if let Some(source_path) = self.source_path.to_str() {
+            return source_path;
         }
 
         "none"
     }
 
-    pub fn match_paths(&self) -> &[PathBuf] {
-        &self.match_paths
+    pub fn match_file_paths(&self) -> &[PathBuf] {
+        &self.match_file_paths
     }
 
     // pub fn is_match(&self, app: &AppProperties) -> bool {
@@ -481,7 +483,7 @@ impl Config {
           win32_exclude_orphan_events: {:?}
           win32_keyboard_layout_cache_interval: {:?}
 
-          match_paths: {:#?}
+          match_file_paths: {:#?}
         ",
           self.label(),
           self.backend(),
@@ -518,11 +520,11 @@ impl Config {
           self.win32_exclude_orphan_events(),
           self.win32_keyboard_layout_cache_interval(),
 
-          self.match_paths(),
+          self.match_file_paths(),
         }
     }
 
-    pub fn load(path: &Path, parent: Option<&Self>) -> Result<Self> {
+    pub fn load_from_path(path: &Path, parent: Option<&Self>) -> Result<Self> {
         let mut config = ParsedConfig::load(path)?;
 
         // Merge with parent config if present
@@ -539,32 +541,32 @@ impl Config {
             .into_iter()
             .collect();
 
-        // let filter_title = if let Some(filter_title) = config.filter_title.as_deref() {
-        //     Some(Regex::new(filter_title)?)
-        // } else {
-        //     None
-        // };
+        let filter_title = if let Some(filter_title) = config.filter_title.as_deref() {
+            Some(Regex::new(filter_title)?)
+        } else {
+            None
+        };
 
-        // let filter_class = if let Some(filter_class) = config.filter_class.as_deref() {
-        //     Some(Regex::new(filter_class)?)
-        // } else {
-        //     None
-        // };
+        let filter_class = if let Some(filter_class) = config.filter_class.as_deref() {
+            Some(Regex::new(filter_class)?)
+        } else {
+            None
+        };
 
-        // let filter_exec = if let Some(filter_exec) = config.filter_exec.as_deref() {
-        //     Some(Regex::new(filter_exec)?)
-        // } else {
-        //     None
-        // };
+        let filter_exec = if let Some(filter_exec) = config.filter_exec.as_deref() {
+            Some(Regex::new(filter_exec)?)
+        } else {
+            None
+        };
 
         Ok(Self {
             parsed: config,
-            source_path: Some(path.to_owned()),
+            source_path: path.to_owned(),
             id: next_id(),
-            match_paths,
-            // filter_title,
-            // filter_class,
-            // filter_exec,
+            match_file_paths: match_paths,
+            filter_title,
+            filter_class,
+            filter_exec,
         })
     }
 
@@ -693,7 +695,7 @@ mod tests {
     #[test]
     fn aggregate_includes_empty_config() {
         assert_eq!(
-            Config::aggregate_includes(&ParsedConfig {
+            ConfigFile::aggregate_includes(&ParsedConfig {
                 ..Default::default()
             }),
             ["../match/**/[!_]*.yml".to_string()]
@@ -706,7 +708,7 @@ mod tests {
     #[test]
     fn aggregate_includes_no_standard() {
         assert_eq!(
-            Config::aggregate_includes(&ParsedConfig {
+            ConfigFile::aggregate_includes(&ParsedConfig {
                 use_standard_includes: Some(false),
                 ..Default::default()
             }),
@@ -717,7 +719,7 @@ mod tests {
     #[test]
     fn aggregate_includes_custom_includes() {
         assert_eq!(
-            Config::aggregate_includes(&ParsedConfig {
+            ConfigFile::aggregate_includes(&ParsedConfig {
                 includes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
             }),
@@ -734,7 +736,7 @@ mod tests {
     #[test]
     fn aggregate_includes_extra_includes() {
         assert_eq!(
-            Config::aggregate_includes(&ParsedConfig {
+            ConfigFile::aggregate_includes(&ParsedConfig {
                 extra_includes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
             }),
@@ -751,7 +753,7 @@ mod tests {
     #[test]
     fn aggregate_includes_includes_and_extra_includes() {
         assert_eq!(
-            Config::aggregate_includes(&ParsedConfig {
+            ConfigFile::aggregate_includes(&ParsedConfig {
                 includes: Some(vec!["sub/*.yml".to_string()]),
                 extra_includes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
@@ -770,7 +772,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_empty_config() {
         assert_eq!(
-            Config::aggregate_excludes(&ParsedConfig {
+            ConfigFile::aggregate_excludes(&ParsedConfig {
                 ..Default::default()
             })
             .len(),
@@ -781,7 +783,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_no_standard() {
         assert_eq!(
-            Config::aggregate_excludes(&ParsedConfig {
+            ConfigFile::aggregate_excludes(&ParsedConfig {
                 use_standard_includes: Some(false),
                 ..Default::default()
             }),
@@ -792,7 +794,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_custom_excludes() {
         assert_eq!(
-            Config::aggregate_excludes(&ParsedConfig {
+            ConfigFile::aggregate_excludes(&ParsedConfig {
                 excludes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
             }),
@@ -806,7 +808,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_extra_excludes() {
         assert_eq!(
-            Config::aggregate_excludes(&ParsedConfig {
+            ConfigFile::aggregate_excludes(&ParsedConfig {
                 extra_excludes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
             }),
@@ -820,7 +822,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_excludes_and_extra_excludes() {
         assert_eq!(
-            Config::aggregate_excludes(&ParsedConfig {
+            ConfigFile::aggregate_excludes(&ParsedConfig {
                 excludes: Some(vec!["sub/*.yml".to_string()]),
                 extra_excludes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
@@ -843,7 +845,7 @@ mod tests {
         };
         assert_eq!(child.use_standard_includes, None);
 
-        Config::merge_parsed(&mut child, &parent);
+        ConfigFile::merge_parsed(&mut child, &parent);
         assert_eq!(child.use_standard_includes, Some(false));
     }
 
@@ -859,7 +861,7 @@ mod tests {
         };
         assert_eq!(child.use_standard_includes, Some(false));
 
-        Config::merge_parsed(&mut child, &parent);
+        ConfigFile::merge_parsed(&mut child, &parent);
         assert_eq!(child.use_standard_includes, Some(false));
     }
 
@@ -881,12 +883,12 @@ mod tests {
             let config_file = config_dir.join("default.yml");
             std::fs::write(&config_file, "").unwrap();
 
-            let config = Config::load(&config_file, None).unwrap();
+            let config = ConfigFile::load_from_path(&config_file, None).unwrap();
 
             let mut expected = vec![base_file, another_file, sub_file];
             expected.sort();
 
-            let mut result = config.match_paths().to_vec();
+            let mut result = config.match_file_paths().to_vec();
             result.sort();
 
             assert_eq!(result, expected.as_slice());
@@ -932,19 +934,19 @@ mod tests {
             )
             .unwrap();
 
-            let parent = Config::load(&parent_file, None).unwrap();
-            let child = Config::load(&config_file, Some(&parent)).unwrap();
+            let parent = ConfigFile::load_from_path(&parent_file, None).unwrap();
+            let child = ConfigFile::load_from_path(&config_file, Some(&parent)).unwrap();
 
             let mut expected = vec![sub_file, sub_under_file];
             expected.sort();
 
-            let mut result = child.match_paths().to_vec();
+            let mut result = child.match_file_paths().to_vec();
             result.sort();
             assert_eq!(result, expected.as_slice());
 
             let expected = vec![base_file];
 
-            assert_eq!(parent.match_paths(), expected.as_slice());
+            assert_eq!(parent.match_file_paths(), expected.as_slice());
         });
     }
 
@@ -966,12 +968,12 @@ mod tests {
             let config_file = config_dir.join("default.yml");
             std::fs::write(&config_file, "extra_includes: ['../match/_sub.yml']").unwrap();
 
-            let config = Config::load(&config_file, None).unwrap();
+            let config = ConfigFile::load_from_path(&config_file, None).unwrap();
 
             let mut expected = vec![base_file, another_file, sub_file, under_file];
             expected.sort();
 
-            let mut result = config.match_paths().to_vec();
+            let mut result = config.match_file_paths().to_vec();
             result.sort();
 
             assert_eq!(result, expected.as_slice());

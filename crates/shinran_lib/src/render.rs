@@ -23,6 +23,7 @@ use std::{collections::HashMap, sync::RwLock};
 
 // pub mod extension;
 
+use espanso_config::config::ConfigId;
 use espanso_config::matches::{store::MatchSet, Match, MatchCause, MatchEffect, UpperCasingStyle};
 use espanso_render::{CasingStyle, Context, RenderOptions, Template, Value, VarType, Variable};
 
@@ -51,7 +52,7 @@ pub struct RendererAdapter {
     template_map: HashMap<i32, Option<Template>>,
     global_vars_map: HashMap<i32, Variable>,
 
-    context_cache: RwLock<HashMap<i32, Context>>,
+    context_cache: RwLock<HashMap<ConfigId, Context>>,
 }
 
 impl<'a> RendererAdapter {
@@ -215,7 +216,7 @@ impl RendererAdapter {
         trigger_vars: HashMap<String, String>,
     ) -> anyhow::Result<String> {
         if let Some(Some(template)) = self.template_map.get(&match_id) {
-            let (config, match_set) = self.config_manager.active_context();
+            let (config, match_set) = self.config_manager.default_config_and_match_set();
 
             let mut context_cache = self.context_cache.write().unwrap();
             let context = context_cache.entry(config.id()).or_insert_with(|| {
