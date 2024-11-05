@@ -153,7 +153,7 @@ impl CombinedMatchCache {
             .collect()
     }
 
-    fn get_result<'a>(&'a self, match_id: i32) -> Option<MatchResult<'a>> {
+    fn get_result(&self, match_id: i32) -> Option<MatchResult<'_>> {
         Some(match self.get(match_id)? {
             MatchVariant::User(m) => MatchResult::User(m),
             MatchVariant::Builtin(m) => MatchResult::Builtin(m),

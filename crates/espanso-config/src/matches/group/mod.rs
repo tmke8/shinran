@@ -18,7 +18,7 @@
  */
 
 use anyhow::Result;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::error::NonFatalErrorSet;
 
@@ -27,9 +27,13 @@ use super::{Match, Variable};
 pub(crate) mod loader;
 mod path;
 
+/// A match group describes one file in the `match` directory.
+///
+/// The match group has a list of imports, a list of global variables and a list of matches.
+/// The imports have been resolved to paths, but they haven't been loaded yet.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct MatchGroup {
-    pub imports: Vec<String>,
+    pub imports: Vec<PathBuf>,
     pub global_vars: Vec<Variable>,
     pub matches: Vec<Match>,
 }

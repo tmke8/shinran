@@ -103,7 +103,7 @@ impl RegexMatcher {
                             .collect();
 
                         let result = DetectedMatch {
-                            id: (*id).clone(),
+                            id: *id,
                             trigger: full_match.to_string(),
                             left_separator: None,
                             right_separator: None,

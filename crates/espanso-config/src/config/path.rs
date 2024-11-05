@@ -17,7 +17,10 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, path::Path};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 use glob::glob;
 use lazy_static::lazy_static;
@@ -31,7 +34,7 @@ lazy_static! {
 pub fn calculate_paths<'a>(
     base_dir: &Path,
     glob_patterns: impl Iterator<Item = &'a String>,
-) -> HashSet<String> {
+) -> HashSet<PathBuf> {
     let mut path_set = HashSet::new();
     for glob_pattern in glob_patterns {
         // Handle relative and absolute paths appropriately
@@ -50,7 +53,7 @@ pub fn calculate_paths<'a>(
                             // Canonicalize the path
                             match dunce::canonicalize(&path) {
                                 Ok(canonical_path) => {
-                                    path_set.insert(canonical_path.to_string_lossy().to_string());
+                                    path_set.insert(canonical_path);
                                 }
                                 Err(err) => {
                                     error!(
@@ -112,10 +115,10 @@ pub mod tests {
             );
 
             let mut expected = HashSet::new();
-            expected.insert(base_file.to_string_lossy().to_string());
-            expected.insert(another_file.to_string_lossy().to_string());
-            expected.insert(under_file.to_string_lossy().to_string());
-            expected.insert(sub_file.to_string_lossy().to_string());
+            expected.insert(base_file);
+            expected.insert(another_file);
+            expected.insert(under_file);
+            expected.insert(sub_file);
 
             assert_eq!(result, expected);
         });
@@ -139,7 +142,7 @@ pub mod tests {
             let result = calculate_paths(base, ["match/sub/../sub/*.yml".to_string()].iter());
 
             let mut expected = HashSet::new();
-            expected.insert(sub_file.to_string_lossy().to_string());
+            expected.insert(sub_file);
 
             assert_eq!(result, expected);
         });
@@ -172,10 +175,10 @@ pub mod tests {
             );
 
             let mut expected = HashSet::new();
-            expected.insert(base_file.to_string_lossy().to_string());
-            expected.insert(another_file.to_string_lossy().to_string());
-            expected.insert(under_file.to_string_lossy().to_string());
-            expected.insert(sub_file.to_string_lossy().to_string());
+            expected.insert(base_file);
+            expected.insert(another_file);
+            expected.insert(under_file);
+            expected.insert(sub_file);
 
             assert_eq!(result, expected);
         });

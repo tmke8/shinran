@@ -101,7 +101,7 @@ impl<M: Extension> Renderer<M> {
                     .iter()
                     .filter_map(|var| {
                         if matches!(var.var_type, VarType::Global) {
-                            global_vars.get(&*var.name).map(|v| *v)
+                            global_vars.get(&*var.name).copied()
                         } else {
                             Some(var)
                         }

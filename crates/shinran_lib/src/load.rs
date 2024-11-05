@@ -18,11 +18,7 @@
  */
 
 use anyhow::{Context, Result};
-use espanso_config::{
-    config::ConfigStore,
-    error::{ErrorLevel, NonFatalErrorSet},
-    matches::store::MatchStore,
-};
+use espanso_config::{config::ConfigStore, error::ErrorLevel, matches::store::MatchStore};
 use log::{error, info, warn};
 use std::path::Path;
 

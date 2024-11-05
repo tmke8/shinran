@@ -44,7 +44,7 @@ pub struct Config {
 
     // Generated properties
     pub(crate) id: i32,
-    pub(crate) match_paths: Vec<String>,
+    pub(crate) match_paths: Vec<PathBuf>,
     // pub(crate) filter_title: Option<Regex>,
     // pub(crate) filter_class: Option<Regex>,
     // pub(crate) filter_exec: Option<Regex>,
@@ -69,7 +69,7 @@ impl Config {
         "none"
     }
 
-    pub fn match_paths(&self) -> &[String] {
+    pub fn match_paths(&self) -> &[PathBuf] {
         &self.match_paths
     }
 
@@ -663,7 +663,7 @@ impl Config {
         excludes
     }
 
-    fn generate_match_paths(config: &ParsedConfig, base_dir: &Path) -> HashSet<String> {
+    fn generate_match_paths(config: &ParsedConfig, base_dir: &Path) -> HashSet<PathBuf> {
         let includes = Self::aggregate_includes(config);
         let excludes = Self::aggregate_excludes(config);
 
@@ -883,11 +883,7 @@ mod tests {
 
             let config = Config::load(&config_file, None).unwrap();
 
-            let mut expected = vec![
-                base_file.to_string_lossy().to_string(),
-                another_file.to_string_lossy().to_string(),
-                sub_file.to_string_lossy().to_string(),
-            ];
+            let mut expected = vec![base_file, another_file, sub_file];
             expected.sort();
 
             let mut result = config.match_paths().to_vec();
@@ -939,17 +935,14 @@ mod tests {
             let parent = Config::load(&parent_file, None).unwrap();
             let child = Config::load(&config_file, Some(&parent)).unwrap();
 
-            let mut expected = vec![
-                sub_file.to_string_lossy().to_string(),
-                sub_under_file.to_string_lossy().to_string(),
-            ];
+            let mut expected = vec![sub_file, sub_under_file];
             expected.sort();
 
             let mut result = child.match_paths().to_vec();
             result.sort();
             assert_eq!(result, expected.as_slice());
 
-            let expected = vec![base_file.to_string_lossy().to_string()];
+            let expected = vec![base_file];
 
             assert_eq!(parent.match_paths(), expected.as_slice());
         });
@@ -975,12 +968,7 @@ mod tests {
 
             let config = Config::load(&config_file, None).unwrap();
 
-            let mut expected = vec![
-                base_file.to_string_lossy().to_string(),
-                another_file.to_string_lossy().to_string(),
-                sub_file.to_string_lossy().to_string(),
-                under_file.to_string_lossy().to_string(),
-            ];
+            let mut expected = vec![base_file, another_file, sub_file, under_file];
             expected.sort();
 
             let mut result = config.match_paths().to_vec();

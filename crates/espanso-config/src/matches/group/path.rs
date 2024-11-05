@@ -26,7 +26,7 @@ use crate::error::ErrorRecord;
 pub fn resolve_imports(
     group_path: &Path,
     imports: &[String],
-) -> Result<(Vec<String>, Vec<ErrorRecord>)> {
+) -> Result<(Vec<PathBuf>, Vec<ErrorRecord>)> {
     let mut paths = Vec::new();
 
     // Get the containing directory
@@ -73,12 +73,12 @@ pub fn resolve_imports(
         }
     }
 
-    let string_paths = paths
-        .into_iter()
-        .map(|path| path.to_string_lossy().to_string())
-        .collect();
+    // let string_paths = paths
+    //     .into_iter()
+    //     .map(|path| path.to_string_lossy().to_string())
+    //     .collect();
 
-    Ok((string_paths, non_fatal_errors))
+    Ok((paths, non_fatal_errors))
 }
 
 #[derive(Error, Debug)]
@@ -122,11 +122,7 @@ pub mod tests {
 
             assert_eq!(
                 resolved_imports,
-                vec![
-                    another_file.to_string_lossy().to_string(),
-                    sub_file.to_string_lossy().to_string(),
-                    absolute_file.to_string_lossy().to_string(),
-                ]
+                vec![another_file, sub_file, absolute_file,]
             );
 
             // The "sub/invalid.yml" should generate an error
@@ -150,10 +146,7 @@ pub mod tests {
 
             let (resolved_imports, errors) = resolve_imports(&sub_file, &imports).unwrap();
 
-            assert_eq!(
-                resolved_imports,
-                vec![base_file.to_string_lossy().to_string(),]
-            );
+            assert_eq!(resolved_imports, vec![base_file]);
 
             assert_eq!(errors.len(), 0);
         });

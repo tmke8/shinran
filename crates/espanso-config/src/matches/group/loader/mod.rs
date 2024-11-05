@@ -36,26 +36,23 @@ pub(crate) mod yaml;
 // }
 
 lazy_static! {
-    static ref IMPORTERS: Vec<Box<YAMLImporter>> = vec![Box::new(YAMLImporter::new())];
+    static ref IMPORTER: YAMLImporter = YAMLImporter::new();
 }
 
 pub(crate) fn load_match_group(path: &Path) -> Result<(MatchGroup, Option<NonFatalErrorSet>)> {
-    if let Some(extension) = path.extension() {
-        let extension = extension.to_string_lossy().to_lowercase();
+    let Some(extension) = path.extension() else {
+        return Err(LoadError::MissingExtension.into());
+    };
 
-        let importer = IMPORTERS
-            .iter()
-            .find(|importer| importer.is_supported(&extension));
+    let extension = extension.to_string_lossy().to_lowercase();
 
-        match importer {
-            Some(importer) => match importer.load_group(path) {
-                Ok((group, non_fatal_error_set)) => Ok((group, non_fatal_error_set)),
-                Err(err) => Err(LoadError::ParsingError(err).into()),
-            },
-            None => Err(LoadError::InvalidFormat.into()),
-        }
-    } else {
-        Err(LoadError::MissingExtension.into())
+    if !IMPORTER.is_supported(&extension) {
+        return Err(LoadError::InvalidFormat.into());
+    }
+
+    match IMPORTER.load_group(path) {
+        Ok((group, non_fatal_error_set)) => Ok((group, non_fatal_error_set)),
+        Err(err) => Err(LoadError::ParsingError(err).into()),
     }
 }
 

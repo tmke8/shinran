@@ -17,6 +17,8 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::path::PathBuf;
+
 use crate::error::NonFatalErrorSet;
 
 use super::{Match, Variable};
@@ -35,7 +37,7 @@ pub struct MatchSet<'a> {
     pub global_vars: Vec<&'a Variable>,
 }
 
-pub fn load(paths: &[String]) -> (MatchStore, Vec<NonFatalErrorSet>) {
+pub fn load(paths: &[PathBuf]) -> (MatchStore, Vec<NonFatalErrorSet>) {
     // TODO: here we can replace the MatchStore with a caching wrapper
     // that returns the same response for the given "paths" query
     default::MatchStore::load(paths)

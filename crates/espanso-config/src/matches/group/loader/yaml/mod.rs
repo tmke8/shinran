@@ -122,6 +122,7 @@ impl YAMLImporter {
     }
 }
 
+/// Convert a YAMLMatch into a Match.
 pub fn try_convert_into_match(
     yaml_match: YAMLMatch,
     use_compatibility_mode: bool,
@@ -886,7 +887,7 @@ mod tests {
             assert_eq!(
                 group,
                 MatchGroup {
-                    imports: vec![sub_file.to_string_lossy().to_string(),],
+                    imports: vec![sub_file],
                     global_vars: vars,
                     matches: vec![Match {
                         cause: MatchCause::Trigger(TriggerCause {

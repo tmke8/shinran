@@ -53,14 +53,14 @@ impl Extension for DateExtension {
         let offset = params.get("offset");
         if let Some(Value::Number(Number::Integer(offset))) = offset {
             let offset = Duration::seconds(*offset);
-            now = now + offset;
+            now += offset;
         }
 
         let format = params.get("format");
         let locale = params
             .get("locale")
             .and_then(|val| val.as_string())
-            .map_or_else(|| get_system_locale(), String::from);
+            .map_or_else(get_system_locale, String::from);
 
         let date = if let Some(Value::String(format)) = format {
             DateExtension::format_date_with_locale_string(now, format, &locale)

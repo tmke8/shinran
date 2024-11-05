@@ -22,6 +22,7 @@ use crate::error::NonFatalErrorSet;
 use super::{resolve::Config, ConfigStoreError};
 use anyhow::{Context, Result};
 use log::{debug, error};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::{collections::HashSet, path::Path};
 
@@ -50,7 +51,7 @@ impl ConfigStore {
     }
 
     // TODO: test
-    pub fn get_all_match_paths(&self) -> HashSet<String> {
+    pub fn get_all_match_paths(&self) -> HashSet<PathBuf> {
         let mut paths = HashSet::new();
 
         paths.extend(self.default().match_paths().iter().cloned());

@@ -40,10 +40,9 @@ pub fn load(base_path: &Path) -> Result<LoadableConfig> {
     }
 
     let (config_store, non_fatal_config_errors) = config::load_store(&config_dir)?;
-    let root_paths = config_store.get_all_match_paths();
+    let root_paths: Vec<_> = config_store.get_all_match_paths().into_iter().collect();
 
-    let (match_store, non_fatal_match_errors) =
-        matches::store::load(&root_paths.into_iter().collect::<Vec<String>>());
+    let (match_store, non_fatal_match_errors) = matches::store::load(&root_paths);
 
     let mut non_fatal_errors = Vec::new();
     non_fatal_errors.extend(non_fatal_config_errors);
