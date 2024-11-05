@@ -26,7 +26,7 @@ use serde_yaml_ng::Mapping;
 use crate::util::is_yaml_empty;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct YAMLMatchGroup {
+pub struct YAMLMatchFile {
     #[serde(default)]
     pub imports: Option<Vec<String>>,
 
@@ -37,7 +37,7 @@ pub struct YAMLMatchGroup {
     pub matches: Option<Vec<YAMLMatch>>,
 }
 
-impl YAMLMatchGroup {
+impl YAMLMatchFile {
     pub fn parse_from_str(yaml: &str) -> Result<Self> {
         // Because an empty string is not valid YAML but we want to support it anyway
         if is_yaml_empty(yaml) {

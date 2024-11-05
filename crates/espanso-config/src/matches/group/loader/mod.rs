@@ -26,7 +26,7 @@ use crate::error::NonFatalErrorSet;
 
 use self::yaml::YAMLImporter;
 
-use super::MatchGroup;
+use super::LoadedMatchFile;
 
 pub(crate) mod yaml;
 
@@ -39,7 +39,7 @@ lazy_static! {
     static ref IMPORTER: YAMLImporter = YAMLImporter::new();
 }
 
-pub(crate) fn load_match_group(path: &Path) -> Result<(MatchGroup, Option<NonFatalErrorSet>)> {
+pub(crate) fn load_match_file(path: &Path) -> Result<(LoadedMatchFile, Option<NonFatalErrorSet>)> {
     let Some(extension) = path.extension() else {
         return Err(LoadError::MissingExtension.into());
     };
@@ -50,7 +50,7 @@ pub(crate) fn load_match_group(path: &Path) -> Result<(MatchGroup, Option<NonFat
         return Err(LoadError::InvalidFormat.into());
     }
 
-    match IMPORTER.load_group(path) {
+    match IMPORTER.load_file(path) {
         Ok((group, non_fatal_error_set)) => Ok((group, non_fatal_error_set)),
         Err(err) => Err(LoadError::ParsingError(err).into()),
     }
@@ -80,7 +80,7 @@ mod tests {
             std::fs::write(&file, "test").unwrap();
 
             assert!(matches!(
-                load_match_group(&file)
+                load_match_file(&file)
                     .unwrap_err()
                     .downcast::<LoadError>()
                     .unwrap(),
@@ -96,7 +96,7 @@ mod tests {
             std::fs::write(&file, "test").unwrap();
 
             assert!(matches!(
-                load_match_group(&file)
+                load_match_file(&file)
                     .unwrap_err()
                     .downcast::<LoadError>()
                     .unwrap(),
@@ -112,7 +112,7 @@ mod tests {
             std::fs::write(&file, "test").unwrap();
 
             assert!(matches!(
-                load_match_group(&file)
+                load_match_file(&file)
                     .unwrap_err()
                     .downcast::<LoadError>()
                     .unwrap(),
@@ -135,7 +135,7 @@ mod tests {
             )
             .unwrap();
 
-            assert_eq!(load_match_group(&file).unwrap().0.matches.len(), 1);
+            assert_eq!(load_match_file(&file).unwrap().0.matches.len(), 1);
         });
     }
 
@@ -153,7 +153,7 @@ mod tests {
             )
             .unwrap();
 
-            assert_eq!(load_match_group(&file).unwrap().0.matches.len(), 1);
+            assert_eq!(load_match_file(&file).unwrap().0.matches.len(), 1);
         });
     }
 
@@ -171,7 +171,7 @@ mod tests {
             )
             .unwrap();
 
-            assert_eq!(load_match_group(&file).unwrap().0.matches.len(), 1);
+            assert_eq!(load_match_file(&file).unwrap().0.matches.len(), 1);
         });
     }
 }

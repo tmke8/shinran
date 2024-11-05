@@ -70,7 +70,7 @@ pub enum CasingStyle {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Template {
-    pub ids: Vec<String>,
+    pub triggers: Vec<String>,
     pub body: String,
     pub vars: Vec<Variable>,
 }

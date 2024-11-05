@@ -27,20 +27,20 @@ use super::{Match, Variable};
 pub(crate) mod loader;
 mod path;
 
-/// A match group describes one file in the `match` directory.
+/// A `LoadedMatchFile` describes one file in the `match` directory.
 ///
-/// The match group has a list of imports, a list of global variables and a list of matches.
+/// Such a file has a list of imports, a list of global variables and a list of matches.
 /// The imports have been resolved to paths, but they haven't been loaded yet.
 #[derive(Debug, Clone, PartialEq, Default)]
-pub struct MatchGroup {
+pub struct LoadedMatchFile {
     pub imports: Vec<PathBuf>,
     pub global_vars: Vec<Variable>,
     pub matches: Vec<Match>,
 }
 
-impl MatchGroup {
+impl LoadedMatchFile {
     // TODO: test
-    pub fn load(group_path: &Path) -> Result<(Self, Option<NonFatalErrorSet>)> {
-        loader::load_match_group(group_path)
+    pub fn load(file_path: &Path) -> Result<(Self, Option<NonFatalErrorSet>)> {
+        loader::load_match_file(file_path)
     }
 }

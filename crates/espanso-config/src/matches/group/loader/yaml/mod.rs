@@ -21,14 +21,14 @@ use crate::{
     counter::next_id,
     error::{ErrorRecord, NonFatalErrorSet},
     matches::{
-        group::{path::resolve_imports, MatchGroup},
+        group::{path::resolve_imports, LoadedMatchFile},
         ImageEffect, Match, Params, RegexCause, TextFormat, TextInjectMode, UpperCasingStyle,
         Value, Variable,
     },
 };
 use anyhow::{anyhow, bail, Context, Result};
 use lazy_static::lazy_static;
-use parse::YAMLMatchGroup;
+use parse::YAMLMatchFile;
 use regex::{Captures, Regex};
 
 use self::{
@@ -64,17 +64,20 @@ impl YAMLImporter {
         extension == "yaml" || extension == "yml"
     }
 
-    pub fn load_group(
+    pub fn load_file(
         &self,
         path: &std::path::Path,
-    ) -> anyhow::Result<(crate::matches::group::MatchGroup, Option<NonFatalErrorSet>)> {
-        let yaml_group =
-            YAMLMatchGroup::parse_from_file(path).context("failed to parse YAML match group")?;
+    ) -> anyhow::Result<(
+        crate::matches::group::LoadedMatchFile,
+        Option<NonFatalErrorSet>,
+    )> {
+        let yaml_loaded =
+            YAMLMatchFile::parse_from_file(path).context("failed to parse YAML match group")?;
 
         let mut non_fatal_errors = Vec::new();
 
         let mut global_vars = Vec::new();
-        for yaml_global_var in yaml_group.global_vars.clone().unwrap_or_default() {
+        for yaml_global_var in yaml_loaded.global_vars.clone().unwrap_or_default() {
             match try_convert_into_variable(yaml_global_var, false) {
                 Ok((var, warnings)) => {
                     global_vars.push(var);
@@ -87,7 +90,7 @@ impl YAMLImporter {
         }
 
         let mut matches = Vec::new();
-        for yaml_match in yaml_group.matches.clone().unwrap_or_default() {
+        for yaml_match in yaml_loaded.matches.clone().unwrap_or_default() {
             match try_convert_into_match(yaml_match, false) {
                 Ok((m, warnings)) => {
                     matches.push(m);
@@ -101,8 +104,8 @@ impl YAMLImporter {
 
         // Resolve imports
         let (resolved_imports, import_errors) =
-            resolve_imports(path, &yaml_group.imports.unwrap_or_default())
-                .context("failed to resolve YAML match group imports")?;
+            resolve_imports(path, &yaml_loaded.imports.unwrap_or_default())
+                .context("failed to resolve YAML match file imports")?;
         non_fatal_errors.extend(import_errors);
 
         let non_fatal_error_set = if non_fatal_errors.is_empty() {
@@ -112,7 +115,7 @@ impl YAMLImporter {
         };
 
         Ok((
-            MatchGroup {
+            LoadedMatchFile {
                 imports: resolved_imports,
                 global_vars,
                 matches,
@@ -869,13 +872,13 @@ mod tests {
             std::fs::write(&sub_file, "").unwrap();
 
             let importer = YAMLImporter::new();
-            let (mut group, non_fatal_error_set) = importer.load_group(&base_file).unwrap();
+            let (mut file, non_fatal_error_set) = importer.load_file(&base_file).unwrap();
             // The invalid import path should be reported as error
             assert_eq!(non_fatal_error_set.unwrap().errors.len(), 1);
 
             // Reset the ids to compare them correctly
-            group.matches.iter_mut().for_each(|m| m.id = 0);
-            group.global_vars.iter_mut().for_each(|v| v.id = 0);
+            file.matches.iter_mut().for_each(|m| m.id = 0);
+            file.global_vars.iter_mut().for_each(|v| v.id = 0);
 
             let vars = vec![Variable {
                 name: "var1".to_string(),
@@ -885,8 +888,8 @@ mod tests {
             }];
 
             assert_eq!(
-                group,
-                MatchGroup {
+                file,
+                LoadedMatchFile {
                     imports: vec![sub_file],
                     global_vars: vars,
                     matches: vec![Match {
@@ -920,7 +923,7 @@ mod tests {
             .unwrap();
 
             let importer = YAMLImporter::new();
-            assert!(importer.load_group(&base_file).is_err());
+            assert!(importer.load_file(&base_file).is_err());
         });
     }
 }

@@ -26,15 +26,14 @@ use super::{Match, Variable};
 mod default;
 pub use default::MatchStore;
 
-// pub trait MatchStore: Send {
-//     fn query(&self, paths: &[String]) -> MatchSet;
-//     fn loaded_paths(&self) -> Vec<String>;
-// }
-
+/// The set of matches returned by a query to the `MatchStore`.
+///
+/// This struct contains a list of references to the matches that matched the query
+/// and a list of references to the global variables that were defined in the matches.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MatchSet<'a> {
-    pub matches: Vec<&'a Match>,
-    pub global_vars: Vec<&'a Variable>,
+pub struct MatchSet<'store> {
+    pub matches: Vec<&'store Match>,
+    pub global_vars: Vec<&'store Variable>,
 }
 
 pub fn load(paths: &[PathBuf]) -> (MatchStore, Vec<NonFatalErrorSet>) {

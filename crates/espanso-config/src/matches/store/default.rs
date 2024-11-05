@@ -21,7 +21,7 @@ use super::MatchSet;
 use crate::{
     counter::StructId,
     error::NonFatalErrorSet,
-    matches::{group::MatchGroup, Match, Variable},
+    matches::{group::LoadedMatchFile, Match, Variable},
 };
 use anyhow::Context;
 use std::{
@@ -29,23 +29,30 @@ use std::{
     path::PathBuf,
 };
 
+/// The MatchStore contains all matches that we have loaded.
+///
+/// We first have hash map of all match files, indexed by their file system path.
+/// Then inside the match files, we have a vector of matches and a vector of global variables.
 pub struct MatchStore {
-    pub groups: HashMap<PathBuf, MatchGroup>,
+    pub loaded_files: HashMap<PathBuf, LoadedMatchFile>,
 }
 
 impl MatchStore {
     pub fn load(paths: &[PathBuf]) -> (Self, Vec<NonFatalErrorSet>) {
-        let mut groups = HashMap::new();
+        let mut loaded_files = HashMap::new();
         let mut non_fatal_error_sets = Vec::new();
 
-        // Because match groups can imports other match groups,
+        // Because match files can imports other match files,
         // we have to load them recursively starting from the
         // top-level ones.
-        load_match_groups_recursively(&mut groups, paths, &mut non_fatal_error_sets);
+        load_match_files_recursively(&mut loaded_files, paths, &mut non_fatal_error_sets);
 
-        (Self { groups }, non_fatal_error_sets)
+        (Self { loaded_files }, non_fatal_error_sets)
     }
 
+    /// Returns all matches that were defined in the given paths.
+    ///
+    /// This function recursively loads all the matches in the given paths and their imports.
     pub fn query<'store>(&'store self, paths: &[PathBuf]) -> MatchSet<'store> {
         let mut matches: Vec<&Match> = Vec::new();
         let mut global_vars: Vec<&Variable> = Vec::new();
@@ -54,7 +61,7 @@ impl MatchStore {
         let mut visited_global_vars = HashSet::new();
 
         query_matches_for_paths(
-            &self.groups,
+            &self.loaded_files,
             &mut visited_paths,
             &mut visited_matches,
             &mut visited_global_vars,
@@ -70,41 +77,46 @@ impl MatchStore {
     }
 
     pub fn loaded_paths(&self) -> Vec<PathBuf> {
-        self.groups.keys().cloned().collect()
+        self.loaded_files.keys().cloned().collect()
     }
 }
 
-fn load_match_groups_recursively(
-    groups: &mut HashMap<PathBuf, MatchGroup>,
+/// Load the files in the given paths and their imports recursively.
+///
+/// This function fills up the `groups` HashMap with the loaded match groups.
+fn load_match_files_recursively(
+    groups: &mut HashMap<PathBuf, LoadedMatchFile>,
     paths: &[PathBuf],
     non_fatal_error_sets: &mut Vec<NonFatalErrorSet>,
 ) {
     for path in paths {
-        if !groups.contains_key(path) {
-            let group_path = PathBuf::from(path);
-            match MatchGroup::load(&group_path)
-                .with_context(|| format!("unable to load match group {group_path:?}"))
-            {
-                Ok((group, non_fatal_error_set)) => {
-                    let imports = group.imports.clone();
-                    groups.insert(path.clone(), group);
+        if groups.contains_key(path) {
+            continue; // Already loaded
+        }
 
-                    if let Some(non_fatal_error_set) = non_fatal_error_set {
-                        non_fatal_error_sets.push(non_fatal_error_set);
-                    }
+        let group_path = PathBuf::from(path);
+        match LoadedMatchFile::load(&group_path)
+            .with_context(|| format!("unable to load match group {group_path:?}"))
+        {
+            Ok((group, non_fatal_error_set)) => {
+                let imports = group.imports.clone();
+                groups.insert(path.clone(), group);
 
-                    load_match_groups_recursively(groups, &imports, non_fatal_error_sets);
+                if let Some(non_fatal_error_set) = non_fatal_error_set {
+                    non_fatal_error_sets.push(non_fatal_error_set);
                 }
-                Err(err) => {
-                    non_fatal_error_sets.push(NonFatalErrorSet::single_error(&group_path, err));
-                }
+
+                load_match_files_recursively(groups, &imports, non_fatal_error_sets);
+            }
+            Err(err) => {
+                non_fatal_error_sets.push(NonFatalErrorSet::single_error(&group_path, err));
             }
         }
     }
 }
 
 fn query_matches_for_paths<'a>(
-    groups: &'a HashMap<PathBuf, MatchGroup>,
+    loaded_files: &'a HashMap<PathBuf, LoadedMatchFile>,
     visited_paths: &mut HashSet<PathBuf>,
     visited_matches: &mut HashSet<StructId>,
     visited_global_vars: &mut HashSet<StructId>,
@@ -113,32 +125,34 @@ fn query_matches_for_paths<'a>(
     paths: &[PathBuf],
 ) {
     for path in paths {
-        if !visited_paths.contains(path) {
-            visited_paths.insert(path.clone());
+        if visited_paths.contains(path) {
+            continue; // Already visited
+        }
 
-            if let Some(group) = groups.get(path) {
-                query_matches_for_paths(
-                    groups,
-                    visited_paths,
-                    visited_matches,
-                    visited_global_vars,
-                    matches,
-                    global_vars,
-                    &group.imports,
-                );
+        visited_paths.insert(path.clone());
 
-                for m in &group.matches {
-                    if !visited_matches.contains(&m.id) {
-                        matches.push(m);
-                        visited_matches.insert(m.id);
-                    }
+        if let Some(file) = loaded_files.get(path) {
+            query_matches_for_paths(
+                loaded_files,
+                visited_paths,
+                visited_matches,
+                visited_global_vars,
+                matches,
+                global_vars,
+                &file.imports,
+            );
+
+            for m in &file.matches {
+                if !visited_matches.contains(&m.id) {
+                    matches.push(m);
+                    visited_matches.insert(m.id);
                 }
+            }
 
-                for var in &group.global_vars {
-                    if !visited_global_vars.contains(&var.id) {
-                        global_vars.push(var);
-                        visited_global_vars.insert(var.id);
-                    }
+            for var in &file.global_vars {
+                if !visited_global_vars.contains(&var.id) {
+                    global_vars.push(var);
+                    visited_global_vars.insert(var.id);
                 }
             }
         }
@@ -236,9 +250,9 @@ mod tests {
 
             let (match_store, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
             assert_eq!(non_fatal_error_sets.len(), 0);
-            assert_eq!(match_store.groups.len(), 3);
+            assert_eq!(match_store.loaded_files.len(), 3);
 
-            let base_group = &match_store.groups.get(&base_file).unwrap().matches;
+            let base_group = &match_store.loaded_files.get(&base_file).unwrap().matches;
             let base_group: Vec<Match> = base_group
                 .iter()
                 .map(|m| {
@@ -250,7 +264,7 @@ mod tests {
 
             assert_eq!(base_group, create_matches(&[("hello", "world")]));
 
-            let another_group = &match_store.groups.get(&another_file).unwrap().matches;
+            let another_group = &match_store.loaded_files.get(&another_file).unwrap().matches;
             let another_group: Vec<Match> = another_group
                 .iter()
                 .map(|m| {
@@ -264,7 +278,7 @@ mod tests {
                 create_matches(&[("hello", "world2"), ("foo", "bar")])
             );
 
-            let sub_group = &match_store.groups.get(&sub_file).unwrap().matches;
+            let sub_group = &match_store.loaded_files.get(&sub_file).unwrap().matches;
             let sub_group: Vec<Match> = sub_group
                 .iter()
                 .map(|m| {
@@ -329,7 +343,7 @@ mod tests {
 
             let (match_store, non_fatal_error_sets) = MatchStore::load(&[base_file]);
 
-            assert_eq!(match_store.groups.len(), 3);
+            assert_eq!(match_store.loaded_files.len(), 3);
             assert_eq!(non_fatal_error_sets.len(), 0);
         });
     }

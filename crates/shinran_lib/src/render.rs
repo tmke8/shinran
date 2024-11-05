@@ -100,23 +100,25 @@ fn generate_global_vars_map(config_provider: &ConfigManager) -> HashMap<i32, Var
     global_vars_map
 }
 
-// TODO: test
+/// Iterates over the matches in the match set and finds the corresponding templates.
+///
+/// Analogously, it iterates over the global vars in the match set and finds the corresponding vars.
 fn generate_context(
-    match_set: &MatchSet,
+    match_set: MatchSet,
     template_map: &HashMap<i32, Option<Template>>,
     global_vars_map: &HashMap<i32, Variable>,
 ) -> Context {
     let mut templates = Vec::new();
     let mut global_vars = Vec::new();
 
-    for m in &match_set.matches {
+    for m in match_set.matches {
         if let Some(Some(template)) = template_map.get(&m.id) {
             // TODO: Investigate how to avoid this clone.
             templates.push(template.clone());
         }
     }
 
-    for var in &match_set.global_vars {
+    for var in match_set.global_vars {
         if let Some(var) = global_vars_map.get(&var.id) {
             // TODO: Investigate how to avoid this clone.
             global_vars.push(var.clone());
@@ -129,18 +131,16 @@ fn generate_context(
     }
 }
 
-// TODO: move conversion methods to new file?
-
 fn convert_to_template(m: &Match) -> Option<Template> {
     if let MatchEffect::Text(text_effect) = &m.effect {
-        let ids = if let MatchCause::Trigger(cause) = &m.cause {
+        let triggers = if let MatchCause::Trigger(cause) = &m.cause {
             cause.triggers.clone()
         } else {
             Vec::new()
         };
 
         Some(Template {
-            ids,
+            triggers,
             body: text_effect.replace.clone(),
             vars: convert_vars(text_effect.vars.clone()),
         })
@@ -219,7 +219,7 @@ impl RendererAdapter {
 
             let mut context_cache = self.context_cache.write().unwrap();
             let context = context_cache.entry(config.id()).or_insert_with(|| {
-                generate_context(&match_set, &self.template_map, &self.global_vars_map)
+                generate_context(match_set, &self.template_map, &self.global_vars_map)
             });
 
             let raw_match = self.combined_cache.user_match_cache.get(match_id);

@@ -23,7 +23,7 @@ use espanso_config::{
     config::ConfigStore,
     matches::{store::MatchStore, Match, MatchCause},
 };
-// use espanso_engine::event::internal::DetectedMatch;
+
 use crate::engine::DetectedMatch;
 use crate::match_select::MatchSummary;
 use crate::multiplex::MatchResult;
@@ -39,8 +39,11 @@ impl MatchCache {
     pub fn load(config_store: &ConfigStore, match_store: &MatchStore) -> Self {
         let mut cache = HashMap::new();
 
-        let paths = config_store.get_all_match_paths();
-        let global_set = match_store.query(&paths.into_iter().collect::<Vec<_>>());
+        let paths = config_store
+            .get_all_match_paths()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let global_set = match_store.query(&paths);
 
         for m in global_set.matches {
             // We clone the match because we need to own it.

@@ -268,9 +268,11 @@ fn get_matching_template<'a>(
     templates: &'a [Template],
 ) -> Option<&'a Template> {
     // Find matching template
-    let id = variable.params.get("trigger")?;
-    if let Value::String(id) = id {
-        templates.iter().find(|template| template.ids.contains(id))
+    let trigger = variable.params.get("trigger")?;
+    if let Value::String(trigger) = trigger {
+        templates
+            .iter()
+            .find(|template| template.triggers.contains(trigger))
     } else {
         None
     }
@@ -348,7 +350,7 @@ mod tests {
 
     pub fn template_for_str(str: &str) -> Template {
         Template {
-            ids: vec!["id".to_string()],
+            triggers: vec!["id".to_string()],
             body: str.to_string(),
             vars: Vec::new(),
         }
@@ -367,7 +369,7 @@ mod tests {
             })
             .collect();
         Template {
-            ids: vec!["id".to_string()],
+            triggers: vec!["id".to_string()],
             body: body.to_string(),
             vars,
         }
@@ -709,7 +711,7 @@ mod tests {
             ..Default::default()
         };
         let nested_template = Template {
-            ids: vec!["nested".to_string()],
+            triggers: vec!["nested".to_string()],
             body: "world".to_string(),
             ..Default::default()
         };
