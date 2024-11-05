@@ -16,42 +16,6 @@ mod path;
 mod regex;
 mod render;
 
-// pub fn check_command(command: &str) -> Option<String> {
-//     match command {
-//         "times" => Some("×".to_string()),
-//         "time" => Some(time_now()),
-//         _ => None,
-//     }
-// }
-
-// fn time_now() -> String {
-//     let now: OffsetDateTime = SystemTime::now().into();
-//     now.format(&Rfc3339).expect("valid date time")
-// }
-
-fn get_extensions(paths: path::Paths) -> Vec<Box<dyn espanso_render::Extension>> {
-    let date_extension = espanso_render::extension::date::DateExtension::new();
-    let echo_extension = espanso_render::extension::echo::EchoExtension::new();
-    // For backwards compatiblity purposes, the echo extension can also be called with "dummy" type
-    let dummy_extension = espanso_render::extension::echo::EchoExtension::new_with_alias("dummy");
-    let random_extension = espanso_render::extension::random::RandomExtension::new();
-    let home_path = dirs::home_dir().expect("unable to obtain home dir path");
-    let script_extension = espanso_render::extension::script::ScriptExtension::new(
-        &paths.config,
-        &home_path,
-        &paths.packages,
-    );
-    let shell_extension = espanso_render::extension::shell::ShellExtension::new(&paths.config);
-    vec![
-        Box::new(date_extension),
-        Box::new(echo_extension),
-        Box::new(dummy_extension),
-        Box::new(random_extension),
-        Box::new(script_extension),
-        Box::new(shell_extension),
-    ]
-}
-
 fn load_config_and_renderer(
     cli_overrides: &HashMap<String, String>,
 ) -> (espanso_render::Renderer, ConfigStore, MatchStore) {
@@ -73,8 +37,7 @@ fn load_config_and_renderer(
     info!("reading packages from: {:?}", paths.packages);
     info!("using runtime dir: {:?}", paths.runtime);
 
-    let config_result =
-        load::load_config(&paths.config, &paths.packages).expect("unable to load config");
+    let config_result = load::load_config(&paths.config).expect("unable to load config");
     let config_store = config_result.config_store;
     let match_store = config_result.match_store;
 
@@ -116,8 +79,7 @@ impl Backend {
         // `config_manager` could own `match_store`
         let config_manager = config::ConfigManager::new(config_store, match_store);
 
-        let config = &*config_manager.default();
-        let builtin_matches = builtin::get_builtin_matches(config);
+        let builtin_matches = builtin::get_builtin_matches();
         // `combined_cache` stores references to `cache` and `builtin_matches`
         let combined_cache =
             match_cache::CombinedMatchCache::load(match_cache, builtin_matches, regex_matches);

@@ -276,24 +276,6 @@ fn get_matching_template<'a>(
     }
 }
 
-fn log_new_form_syntax_tip() {
-    error!("");
-    error!("TIP: This error might be happening because since version 2.1.0-alpha, Espanso changed");
-    error!("the syntax to define form controls. Instead of `{{{{control}}}}` you need to use");
-    error!("[[control]] (using square brackets instead of curly brackets).");
-    error!("");
-    error!("For example, if you have a form defined like the following:");
-    error!("  - trigger: test");
-    error!("    form: |");
-    error!("      Hi {{{{name}}}}!");
-    error!("");
-    error!("You'll need to replace it with:");
-    error!("  - trigger: test");
-    error!("    form: |");
-    error!("      Hi [[name]]!");
-    error!("");
-}
-
 #[derive(Error, Debug)]
 pub enum RendererError {
     #[error("missing variable: `{0}`")]

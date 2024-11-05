@@ -74,10 +74,9 @@ pub fn populate_default_config(config_dir: &Path) -> Result<()> {
 pub struct ConfigLoadResult {
     pub config_store: ConfigStore,
     pub match_store: MatchStore,
-    pub non_fatal_errors: Vec<NonFatalErrorSet>,
 }
 
-pub fn load_config(config_path: &Path, packages_path: &Path) -> Result<ConfigLoadResult> {
+pub fn load_config(config_path: &Path) -> Result<ConfigLoadResult> {
     let (config_store, match_store, non_fatal_errors) =
         espanso_config::load(config_path).context("unable to load config")?;
 
@@ -105,6 +104,5 @@ pub fn load_config(config_path: &Path, packages_path: &Path) -> Result<ConfigLoa
         // config_store: crate::patch::patch_store(config_store),
         config_store,
         match_store,
-        non_fatal_errors,
     })
 }

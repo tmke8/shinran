@@ -28,8 +28,6 @@ pub struct Paths {
     pub config: PathBuf,
     pub runtime: PathBuf,
     pub packages: PathBuf,
-
-    pub is_portable_mode: bool,
 }
 
 pub fn resolve_paths(
@@ -77,14 +75,10 @@ pub fn resolve_paths(
         packages_dir
     };
 
-    let is_portable_mode =
-        is_portable_mode() && force_config_dir.is_none() && force_runtime_dir.is_none();
-
     Paths {
         config: config_dir,
         runtime: runtime_dir,
         packages: packages_dir,
-        is_portable_mode,
     }
 }
 
