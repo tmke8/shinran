@@ -44,9 +44,7 @@ pub(crate) fn load_match_file(path: &Path) -> Result<(LoadedMatchFile, Option<No
         return Err(LoadError::MissingExtension.into());
     };
 
-    let extension = extension.to_string_lossy().to_lowercase();
-
-    if !IMPORTER.is_supported(&extension) {
+    if !IMPORTER.is_supported(extension) {
         return Err(LoadError::InvalidFormat.into());
     }
 

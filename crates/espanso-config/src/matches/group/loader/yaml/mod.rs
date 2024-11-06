@@ -17,6 +17,8 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::ffi::OsStr;
+
 use crate::{
     counter::next_id,
     error::{ErrorRecord, NonFatalErrorSet},
@@ -60,8 +62,8 @@ impl YAMLImporter {
 }
 
 impl YAMLImporter {
-    pub fn is_supported(&self, extension: &str) -> bool {
-        extension == "yaml" || extension == "yml"
+    pub fn is_supported(&self, extension: &OsStr) -> bool {
+        extension.eq_ignore_ascii_case("yaml") || extension.eq_ignore_ascii_case("yml")
     }
 
     pub fn load_file(
@@ -337,7 +339,7 @@ mod tests {
         matches::{Match, Params, Value},
         util::tests::use_test_directory,
     };
-    use std::fs::create_dir_all;
+    use std::{ffi::OsString, fs::create_dir_all};
 
     fn create_match_with_warnings(
         yaml: &str,
@@ -838,9 +840,11 @@ mod tests {
     #[test]
     fn importer_is_supported() {
         let importer = YAMLImporter::new();
-        assert!(importer.is_supported("yaml"));
-        assert!(importer.is_supported("yml"));
-        assert!(!importer.is_supported("invalid"));
+        assert!(importer.is_supported(&OsString::from("yaml")));
+        assert!(importer.is_supported(&OsString::from("YAML")));
+        assert!(importer.is_supported(&OsString::from("yml")));
+        assert!(importer.is_supported(&OsString::from("yMl")));
+        assert!(!importer.is_supported(&OsString::from("invalid")));
     }
 
     #[test]
