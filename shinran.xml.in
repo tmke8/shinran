@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component>
+	<name>org.freedesktop.IBus.Shinran</name>
+	<description>Shell input method</description>
+	<version>1.0.0</version>
+	<author>Thomas K &lt;tmke8@posteo.net&gt;</author>
+	<license>GPL-3.0</license>
+	<homepage>https://github.com/tmke8/shinran</homepage>
+	<exec>$(SHINRAN_DIR)/shinran_ibus</exec>
+	<engines>
+		<engine>
+			<name>shinran</name>
+			<longname>Shinran</longname>
+			<description>Shell input method</description>
+			<author>Thomas K &lt;tmke8@posteo.net&gt;</author>
+			<license>GPL-3.0</license>
+			<layout>default</layout>
+		</engine>
+	</engines>
+</component>

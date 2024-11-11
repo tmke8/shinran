@@ -4,5 +4,6 @@ mod text;
 
 pub use address::get_ibus_address;
 pub use text::{
-    rgb_to_u32, Attribute, EmptyDict, IBusAttrList, IBusAttribute, IBusText, Underline,
+    rgb_to_u32, Attribute, EmptyDict, IBusAttrList, IBusAttribute, IBusEnginePreedit, IBusText,
+    Underline,
 };

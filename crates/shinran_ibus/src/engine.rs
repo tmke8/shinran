@@ -9,7 +9,9 @@ use std::{
 
 use async_std::task::sleep;
 use event_listener::Event;
-use ibus_utils::{ibus_constants, Attribute, IBusAttribute, IBusText, Underline};
+use ibus_utils::{
+    ibus_constants, Attribute, IBusAttribute, IBusEnginePreedit, IBusText, Underline,
+};
 use xkeysym::Keysym;
 use zbus::{fdo, interface, object_server::SignalContext};
 
@@ -61,6 +63,7 @@ impl ShinranEngine {
             ibus_text.into(),
             self.cursor_pos,
             !self.text.is_empty(),
+            IBusEnginePreedit::Clear as u32,
         )
         .await?;
         Ok(())
@@ -209,15 +212,6 @@ impl ShinranEngine {
     /// UpdatePreeditText signal
     #[zbus(signal)]
     async fn update_preedit_text(
-        ctxt: &SignalContext<'_>,
-        text: zbus::zvariant::Value<'_>,
-        cursor_pos: u32,
-        visible: bool,
-    ) -> zbus::Result<()>;
-
-    /// UpdatePreeditTextWithMode signal
-    #[zbus(signal)]
-    async fn update_preedit_text_with_mode(
         ctxt: &SignalContext<'_>,
         text: zbus::zvariant::Value<'_>,
         cursor_pos: u32,
