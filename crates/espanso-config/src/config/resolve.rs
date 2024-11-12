@@ -527,9 +527,9 @@ impl ConfigFile {
     pub fn load_from_path(path: &Path, parent: Option<&Self>) -> Result<Self> {
         let mut config = ParsedConfig::load(path)?;
 
-        // Merge with parent config if present
+        // Inherit from the parent config if present
         if let Some(parent) = parent {
-            Self::merge_parsed(&mut config, &parent.parsed);
+            Self::inherit(&mut config, &parent.parsed);
         }
 
         // Extract the base directory
@@ -570,8 +570,8 @@ impl ConfigFile {
         })
     }
 
-    fn merge_parsed(child: &mut ParsedConfig, parent: &ParsedConfig) {
-        // Override the None fields with the parent's value
+    /// Override the `None` fields in the child with the parent's value.
+    fn inherit(child: &mut ParsedConfig, parent: &ParsedConfig) {
         merge!(
             ParsedConfig,
             child,
@@ -845,7 +845,7 @@ mod tests {
         };
         assert_eq!(child.use_standard_includes, None);
 
-        ConfigFile::merge_parsed(&mut child, &parent);
+        ConfigFile::inherit(&mut child, &parent);
         assert_eq!(child.use_standard_includes, Some(false));
     }
 
@@ -861,7 +861,7 @@ mod tests {
         };
         assert_eq!(child.use_standard_includes, Some(false));
 
-        ConfigFile::merge_parsed(&mut child, &parent);
+        ConfigFile::inherit(&mut child, &parent);
         assert_eq!(child.use_standard_includes, Some(false));
     }
 

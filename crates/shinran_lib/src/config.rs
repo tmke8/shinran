@@ -17,8 +17,6 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
-
 use espanso_config::{
     config::{ConfigFile, ConfigStore},
     matches::store::{MatchSet, MatchStore},
@@ -49,14 +47,14 @@ impl ConfigManager {
         }
     }
 
-    pub fn default(&self) -> Arc<ConfigFile> {
+    pub fn default(&self) -> &ConfigFile {
         self.config_store.default()
     }
 
-    pub fn default_config_and_match_set(&self) -> (Arc<ConfigFile>, MatchSet) {
-        let config = self.config_store.default();
+    pub fn default_config_and_match_set(&self) -> (&ConfigFile, MatchSet) {
+        let config = self.default();
         let match_paths = config.match_file_paths();
-        (config.clone(), self.match_store.query(match_paths))
+        (config, self.match_store.query(match_paths))
     }
 
     // pub fn active(&self) -> Arc<ConfigFile> {
@@ -93,7 +91,7 @@ impl ConfigManager {
     //     output
     // }
 
-    pub fn configs(&self) -> Vec<(Arc<ConfigFile>, MatchSet)> {
+    pub fn configs(&self) -> Vec<(&ConfigFile, MatchSet)> {
         self.config_store
             .configs()
             .into_iter()

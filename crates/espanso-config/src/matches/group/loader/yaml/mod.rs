@@ -62,7 +62,7 @@ impl YAMLImporter {
 }
 
 impl YAMLImporter {
-    pub fn is_supported(&self, extension: &OsStr) -> bool {
+    pub fn is_supported(extension: &OsStr) -> bool {
         extension.eq_ignore_ascii_case("yaml") || extension.eq_ignore_ascii_case("yml")
     }
 
@@ -839,12 +839,11 @@ mod tests {
 
     #[test]
     fn importer_is_supported() {
-        let importer = YAMLImporter::new();
-        assert!(importer.is_supported(&OsString::from("yaml")));
-        assert!(importer.is_supported(&OsString::from("YAML")));
-        assert!(importer.is_supported(&OsString::from("yml")));
-        assert!(importer.is_supported(&OsString::from("yMl")));
-        assert!(!importer.is_supported(&OsString::from("invalid")));
+        assert!(YAMLImporter::is_supported(&OsString::from("yaml")));
+        assert!(YAMLImporter::is_supported(&OsString::from("YAML")));
+        assert!(YAMLImporter::is_supported(&OsString::from("yml")));
+        assert!(YAMLImporter::is_supported(&OsString::from("yMl")));
+        assert!(!YAMLImporter::is_supported(&OsString::from("invalid")));
     }
 
     #[test]

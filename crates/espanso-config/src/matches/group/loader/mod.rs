@@ -44,7 +44,7 @@ pub(crate) fn load_match_file(path: &Path) -> Result<(LoadedMatchFile, Option<No
         return Err(LoadError::MissingExtension.into());
     };
 
-    if !IMPORTER.is_supported(extension) {
+    if !YAMLImporter::is_supported(extension) {
         return Err(LoadError::InvalidFormat.into());
     }
 

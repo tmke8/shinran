@@ -18,22 +18,26 @@
  */
 
 use crate::error::NonFatalErrorSet;
+use crate::matches::group::loader::yaml::YAMLImporter;
 
 use super::{resolve::ConfigFile, ConfigStoreError};
 use anyhow::{Context, Result};
 use log::{debug, error};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::{collections::HashSet, path::Path};
 
 pub struct ConfigStore {
-    default: Arc<ConfigFile>,
-    customs: Vec<Arc<ConfigFile>>,
+    /// The `default.yml` file in the `config` directory.
+    default: ConfigFile,
+    /// All the other `.yml` files in the `config` directory.
+    /// These files may specify one or more of `filter_title`, `filter_class`, `filter_exec`.
+    /// We can think of these also as profiles.
+    customs: Vec<ConfigFile>,
 }
 
 impl ConfigStore {
-    pub fn default(&self) -> Arc<ConfigFile> {
-        Arc::clone(&self.default)
+    pub fn default(&self) -> &ConfigFile {
+        &self.default
     }
 
     // fn active(&self, app: &super::AppProperties) -> Arc<ConfigFile> {
@@ -46,11 +50,11 @@ impl ConfigStore {
     //     Arc::clone(&self.default)
     // }
 
-    pub fn configs(&self) -> Vec<Arc<ConfigFile>> {
-        let mut configs = vec![Arc::clone(&self.default)];
+    pub fn configs(&self) -> Vec<&ConfigFile> {
+        let mut configs = vec![&self.default];
 
         for custom in &self.customs {
-            configs.push(Arc::clone(custom));
+            configs.push(custom);
         }
 
         configs
@@ -86,24 +90,21 @@ impl ConfigStore {
         debug!("loaded default config at path: {:?}", default_file);
 
         // Then the others
-        let mut customs: Vec<Arc<ConfigFile>> = Vec::new();
+        let mut customs: Vec<ConfigFile> = Vec::new();
         for entry in std::fs::read_dir(config_dir).map_err(ConfigStoreError::IOError)? {
-            let entry = entry?;
-            let config_file = entry.path();
-            let extension = config_file
-                .extension()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_lowercase();
+            let config_file = entry?.path();
+            let Some(extension) = config_file.extension() else {
+                continue;
+            };
 
             // Additional config files are loaded best-effort
             if config_file.is_file()
                 && config_file != default_file
-                && (extension == "yml" || extension == "yaml")
+                && YAMLImporter::is_supported(extension)
             {
                 match ConfigFile::load_from_path(&config_file, Some(&default)) {
                     Ok(config) => {
-                        customs.push(Arc::new(config));
+                        customs.push(config);
                         debug!("loaded config at path: {:?}", config_file);
                     }
                     Err(err) => {
@@ -117,13 +118,7 @@ impl ConfigStore {
             }
         }
 
-        Ok((
-            Self {
-                default: Arc::new(default),
-                customs,
-            },
-            non_fatal_errors,
-        ))
+        Ok((Self { default, customs }, non_fatal_errors))
     }
 
     // pub fn from_configs(
@@ -164,8 +159,8 @@ mod tests {
         let custom2 = new_mock("custom2");
 
         let store = ConfigStore {
-            default: Arc::new(default),
-            customs: vec![Arc::new(custom1), Arc::new(custom2)],
+            default: default,
+            customs: vec![custom1, custom2],
         };
 
         assert_eq!(store.default().label(), "default");
@@ -188,8 +183,8 @@ mod tests {
         let custom2 = new_mock("custom2");
 
         let store = ConfigStore {
-            default: Arc::new(default),
-            customs: vec![Arc::new(custom1), Arc::new(custom2)],
+            default: default,
+            customs: vec![custom1, custom2],
         };
 
         assert_eq!(store.default().label(), "default");
