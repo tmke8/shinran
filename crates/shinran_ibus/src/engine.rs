@@ -24,6 +24,7 @@ pub(crate) struct ShinranEngine {
     start_time: Instant,
     new_key_pressed: bool,
     backend: Backend,
+    candidates: Vec<String>,
 }
 
 impl ShinranEngine {
@@ -36,11 +37,13 @@ impl ShinranEngine {
             start_time: Instant::now(),
             new_key_pressed: false,
             backend: Backend::new(&cli_overrides).unwrap(),
+            candidates: vec!["foo".to_string(), "bar".to_string(), "baz".to_string()],
         }
     }
 
     async fn exit(&self) {
-        println!("FocusOut");
+        println!("Exit!");
+        println!("============================");
         sleep(Duration::from_millis(100)).await;
         self.done.notify(1);
     }
@@ -66,6 +69,13 @@ impl ShinranEngine {
             IBusEnginePreedit::Clear as u32,
         )
         .await?;
+
+        let mut table = ibus_utils::IBusLookupTable::default();
+        for candidate in &self.candidates {
+            table.append_candidate(candidate);
+        }
+
+        ShinranEngine::update_lookup_table(ctxt, table.into(), true).await?;
         Ok(())
     }
 
@@ -89,6 +99,8 @@ fn text_length(text: &str) -> u32 {
 
 #[interface(name = "org.freedesktop.IBus.Engine")]
 impl ShinranEngine {
+    // ========= Method =========
+
     /// ProcessKeyEvent method
     async fn process_key_event(
         &mut self,
@@ -174,6 +186,12 @@ impl ShinranEngine {
     /// FocusIn method
     fn focus_in(&self) {}
 
+    /// FocusInId method
+    fn focus_in_id(&self, object_path: &str, client: &str) -> fdo::Result<()> {
+        println!("FocusInId: object_path={}, client={}", object_path, client);
+        Ok(())
+    }
+
     /// FocusOut method
     async fn focus_out(
         &mut self,
@@ -209,6 +227,77 @@ impl ShinranEngine {
         self.done.notify(1);
     }
 
+    /// CancelHandWriting method
+    fn cancel_hand_writing(&self, _n_strokes: u32) {}
+
+    /// CandidateClicked method
+    fn candidate_clicked(&self, _index: u32, _button: u32, _state: u32) {}
+
+    /// CursorDown method
+    fn cursor_down(&self) {}
+
+    /// CursorUp method
+    fn cursor_up(&self) {}
+
+    /// FocusOutId method
+    fn focus_out_id(&self, _object_path: &str) {}
+
+    /// PageDown method
+    fn page_down(&self) {}
+
+    /// PageUp method
+    fn page_up(&self) {}
+
+    /// PanelExtensionReceived method
+    fn panel_extension_received(&self, _event: zbus::zvariant::Value<'_>) {}
+
+    /// PanelExtensionRegisterKeys method
+    fn panel_extension_register_keys(&self, _data: zbus::zvariant::Value<'_>) {}
+
+    /// ProcessHandWritingEvent method
+    fn process_hand_writing_event(&self, _coordinates: Vec<f64>) {}
+
+    /// PropertyActivate method
+    fn property_activate(&self, _name: &str, _state: u32) {}
+
+    /// PropertyHide method
+    fn property_hide(&self, _name: &str) {}
+
+    /// PropertyShow method
+    fn property_show(&self, _name: &str) {}
+
+    /// SetCapabilities method
+    fn set_capabilities(&self, _caps: u32) {}
+
+    /// SetCursorLocation method
+    fn set_cursor_location(&self, _x: i32, _y: i32, _w: i32, _h: i32) {}
+
+    /// SetSurroundingText method
+    fn set_surrounding_text(
+        &self,
+        _text: zbus::zvariant::Value<'_>,
+        _cursor_pos: u32,
+        _anchor_pos: u32,
+    ) {
+    }
+
+    // ========= Property =========
+
+    /// FocusId property
+    #[zbus(property)]
+    fn focus_id(&self) -> bool {
+        // Ok((true,))
+        true
+    }
+
+    /// ActiveSurroundingText property
+    #[zbus(property)]
+    fn active_surrounding_text(&self) -> bool {
+        false
+    }
+
+    // ========= Signals =========
+
     /// UpdatePreeditText signal
     #[zbus(signal)]
     async fn update_preedit_text(
@@ -233,5 +322,13 @@ impl ShinranEngine {
         keyval: u32,
         keycode: u32,
         state: u32,
+    ) -> zbus::Result<()>;
+
+    /// UpdateLookupTable signal
+    #[zbus(signal)]
+    async fn update_lookup_table(
+        ctxt: &SignalContext<'_>,
+        table: zbus::zvariant::Value<'_>,
+        visible: bool,
     ) -> zbus::Result<()>;
 }

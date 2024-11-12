@@ -37,6 +37,20 @@
     <method name='CancelHandWriting'>
       <arg direction='in'  type='u' name='n_strokes' />
     </method>
+
+    <!--
+     * IBusEngine::set-capabilities:
+     * @engine: An IBusEngine.
+     * @caps: Capabilities flags of IBusEngine, see #IBusCapabilite
+     *
+     * Emitted when the client application capabilities is set.
+     * Implement the member function IBusEngineClass::set_capabilities
+     * in extended class to receive this signal.
+     *
+     * See also:  ibus_input_context_set_capabilities().
+     * <note><para>Argument @user_data is ignored in this function.</para>
+     * </note>
+    -->
     <method name='SetCapabilities'>
       <arg direction='in'  type='u' name='caps' />
     </method>
@@ -71,12 +85,6 @@
       <arg direction='in'  type='u' name='state' />
     </method>
     <method name='FocusIn' />
-    <method name='FocusInId'>
-      <arg direction='in'  type='s' name='object_path' />
-      <arg direction='in'  type='s' name='client' />
-    </method>
-    <method name='FocusIn' />
-    <method name='FocusOut' />
 
     <!--
      * IBusEngine::focus-in-id:
@@ -118,6 +126,12 @@
      * <note><para>Argument @user_data is ignored in this function.</para>
      * </note>
     -->
+    <method name='FocusInId'>
+      <arg direction='in'  type='s' name='object_path' />
+      <arg direction='in'  type='s' name='client' />
+    </method>
+    <method name='FocusIn' />
+    <method name='FocusOut' />
     <method name='FocusOutId'>
       <arg direction='in'  type='s' name='object_path' />
     </method>
@@ -154,6 +168,19 @@
       <arg type='v' name='text' />
       <arg type='b' name='visible' />
     </signal>
+
+    <!--
+     * ibus_engine_update_lookup_table:
+     * @engine: An IBusEngine.
+     * @lookup_table: An lookup_table.
+     * @visible: Whether the lookup_table is visible.
+     *
+     * Update the lookup table.
+     *
+     * (Note: The table object will be released, if it is floating.
+     *  If caller want to keep the object, caller should make the object
+     *  sink by g_object_ref_sink.)
+    -->
     <signal name='UpdateLookupTable'>
       <arg type='v' name='table' />
       <arg type='b' name='visible' />
