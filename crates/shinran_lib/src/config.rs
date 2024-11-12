@@ -20,7 +20,7 @@
 use std::collections::HashSet;
 
 use espanso_config::{
-    config::{ConfigFile, ConfigStore},
+    config::{ProfileFile, ProfileStore},
     matches::store::{MatchStore, MatchesAndGlobalVars},
 };
 
@@ -34,32 +34,32 @@ use crate::builtin::is_builtin_match;
 
 /// Struct containing all information loaded from the configuration files.
 /// This includes the config files in the `config` directory and the match files in the `match` directory.
-pub struct ConfigManager {
-    config_store: ConfigStore,
+pub struct Configuration {
+    profile_store: ProfileStore,
     match_store: MatchStore,
     // app_info_provider: &'a dyn AppInfoProvider,
 }
 
-impl ConfigManager {
+impl Configuration {
     pub fn new(
-        config_store: ConfigStore,
+        profile_store: ProfileStore,
         match_store: MatchStore,
         // app_info_provider: &'a dyn AppInfoProvider,
     ) -> Self {
         Self {
-            config_store,
+            profile_store,
             match_store,
             // app_info_provider,
         }
     }
 
     #[inline]
-    pub fn default_config(&self) -> &ConfigFile {
-        self.config_store.default_config()
+    pub fn default_profile(&self) -> &ProfileFile {
+        self.profile_store.default_config()
     }
 
-    pub fn default_config_and_matches(&self) -> (&ConfigFile, MatchesAndGlobalVars) {
-        let config = self.default_config();
+    pub fn default_profile_and_matches(&self) -> (&ProfileFile, MatchesAndGlobalVars) {
+        let config = self.default_profile();
         let match_paths = config.match_file_paths();
         (
             config,
@@ -71,7 +71,7 @@ impl ConfigManager {
     /// Get the active configuration file according to the current app.
     ///
     /// This functionality is not implemented yet.
-    pub fn active_config(&self) -> &ConfigFile {
+    pub fn active_profile(&self) -> &ProfileFile {
         // let current_app = self.app_info_provider.get_info();
         // let info = to_app_properties(&current_app);
         let info = espanso_config::config::AppProperties {
@@ -79,14 +79,14 @@ impl ConfigManager {
             class: None,
             exec: None,
         };
-        self.config_store.active_config(&info)
+        self.profile_store.active_config(&info)
     }
 
-    pub fn active_config_and_matches(&self) -> (&ConfigFile, MatchesAndGlobalVars) {
-        let config = self.active_config();
-        let match_paths = config.match_file_paths();
+    pub fn active_profile_and_matches(&self) -> (&ProfileFile, MatchesAndGlobalVars) {
+        let profile = self.active_profile();
+        let match_paths = profile.match_file_paths();
         (
-            config,
+            profile,
             self.match_store
                 .collect_matches_and_global_vars(match_paths),
         )
@@ -94,7 +94,7 @@ impl ConfigManager {
 
     pub fn filter_active(&self, matches_ids: &[i32]) -> Vec<i32> {
         let ids_set: HashSet<i32> = matches_ids.iter().copied().collect::<HashSet<_>>();
-        let (_, match_set) = self.active_config_and_matches();
+        let (_, match_set) = self.active_profile_and_matches();
 
         let active_user_defined_matches: Vec<i32> = match_set
             .matches
@@ -117,8 +117,8 @@ impl ConfigManager {
     /// Get all the configs and their match sets.
     pub fn collect_matches_and_global_vars_from_all_configs(
         &self,
-    ) -> Vec<(&ConfigFile, MatchesAndGlobalVars)> {
-        self.config_store
+    ) -> Vec<(&ProfileFile, MatchesAndGlobalVars)> {
+        self.profile_store
             .all_configs()
             .into_iter()
             .map(|config| {

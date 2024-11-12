@@ -24,7 +24,7 @@ use super::{
     },
     parse::ParsedConfig,
     path::calculate_paths,
-    AppProperties, RMLVOConfig, ToggleKey,
+    AppProperties, RMLVOConfig,
 };
 use crate::{counter::next_id, merge};
 use anyhow::Result;
@@ -36,31 +36,33 @@ use std::{collections::HashSet, path::Path};
 use thiserror::Error;
 
 const STANDARD_INCLUDES: &[&str] = &["../match/**/[!_]*.yml"];
-pub type ConfigId = i32;
+pub type ProfileId = i32;
 
 /// Struct representing one loaded configuration file.
 #[derive(Debug, Clone, Default)]
-pub struct ConfigFile {
-    pub(crate) parsed: ParsedConfig,
+pub struct ProfileFile {
+    pub(crate) content: ParsedConfig,
 
     pub(crate) source_path: PathBuf,
 
-    pub(crate) id: ConfigId,
+    pub(crate) id: ProfileId,
     pub(crate) match_file_paths: Vec<PathBuf>,
 
     // TODO: Any config file with non-None filters should probably be ignored on Wayland.
+    // TODO: Should we throw an error if the user specifies filters in the default file?
+    //       (We're currently implicitly ignoring filters in the default file.)
     pub(crate) filter_title: Option<Regex>,
     pub(crate) filter_class: Option<Regex>,
     pub(crate) filter_exec: Option<Regex>,
 }
 
-impl ConfigFile {
+impl ProfileFile {
     pub fn id(&self) -> i32 {
         self.id
     }
 
     pub fn label(&self) -> &str {
-        if let Some(label) = self.parsed.label.as_deref() {
+        if let Some(label) = self.content.label.as_deref() {
             return label;
         }
 
@@ -125,7 +127,7 @@ impl ConfigFile {
     // This option can be used to selectively disable espanso when
     // using a specific application (by creating an app-specific config).
     pub fn enable(&self) -> bool {
-        self.parsed.enable.unwrap_or(true)
+        self.content.enable.unwrap_or(true)
     }
 
     // Number of chars after which a match is injected with the clipboard
@@ -133,7 +135,7 @@ impl ConfigFile {
     // reasons, as injecting a long match through separate events becomes
     // slow for long strings.
     pub fn clipboard_threshold(&self) -> usize {
-        self.parsed
+        self.content
             .clipboard_threshold
             .unwrap_or(DEFAULT_CLIPBOARD_THRESHOLD)
     }
@@ -141,7 +143,7 @@ impl ConfigFile {
     // If true, instructs the daemon process to restart the worker (and refresh
     // the configuration) after a configuration file change is detected on disk.
     pub fn auto_restart(&self) -> bool {
-        self.parsed.auto_restart.unwrap_or(true)
+        self.content.auto_restart.unwrap_or(true)
     }
 
     // Delay (in ms) that espanso should wait to trigger the paste shortcut
@@ -149,46 +151,15 @@ impl ConfigFile {
     // if we trigger a "paste" shortcut before the content is actually
     // copied in the clipboard, the operation will fail.
     pub fn pre_paste_delay(&self) -> usize {
-        self.parsed
+        self.content
             .pre_paste_delay
             .unwrap_or(DEFAULT_PRE_PASTE_DELAY)
-    }
-
-    // Defines the key that disables/enables espanso when double pressed
-    pub fn toggle_key(&self) -> Option<ToggleKey> {
-        // TODO: test
-        match self
-            .parsed
-            .toggle_key
-            .as_deref()
-            .map(str::to_lowercase)
-            .as_deref()
-        {
-            Some("ctrl") => Some(ToggleKey::Ctrl),
-            Some("alt") => Some(ToggleKey::Alt),
-            Some("shift") => Some(ToggleKey::Shift),
-            Some("meta" | "cmd") => Some(ToggleKey::Meta),
-            Some("right_ctrl") => Some(ToggleKey::RightCtrl),
-            Some("right_alt") => Some(ToggleKey::RightAlt),
-            Some("right_shift") => Some(ToggleKey::RightShift),
-            Some("right_meta" | "right_cmd") => Some(ToggleKey::RightMeta),
-            Some("left_ctrl") => Some(ToggleKey::LeftCtrl),
-            Some("left_alt") => Some(ToggleKey::LeftAlt),
-            Some("left_shift") => Some(ToggleKey::LeftShift),
-            Some("left_meta" | "left_cmd") => Some(ToggleKey::LeftMeta),
-            Some("off") => None,
-            None => None,
-            err => {
-                error!("invalid toggle_key specified {:?}", err);
-                None
-            }
-        }
     }
 
     // If true, espanso will attempt to preserve the previous clipboard content
     // after an expansion has taken place (when using the Clipboard backend).
     pub fn preserve_clipboard(&self) -> bool {
-        self.parsed.preserve_clipboard.unwrap_or(true)
+        self.content.preserve_clipboard.unwrap_or(true)
     }
 
     // The number of milliseconds to wait before restoring the previous clipboard
@@ -196,7 +167,7 @@ impl ConfigFile {
     // the target application detects the previous clipboard content instead of
     // the expansion content.
     pub fn restore_clipboard_delay(&self) -> usize {
-        self.parsed
+        self.content
             .restore_clipboard_delay
             .unwrap_or(DEFAULT_RESTORE_CLIPBOARD_DELAY)
     }
@@ -206,7 +177,7 @@ impl ConfigFile {
     // This is needed as sometimes (for example on macOS), without a delay some keystrokes
     // were not registered correctly
     pub fn paste_shortcut_event_delay(&self) -> usize {
-        self.parsed
+        self.content
             .paste_shortcut_event_delay
             .unwrap_or(DEFAULT_SHORTCUT_EVENT_DELAY)
     }
@@ -214,7 +185,7 @@ impl ConfigFile {
     // Customize the keyboard shortcut used to paste an expansion.
     // This should follow this format: CTRL+SHIFT+V
     pub fn paste_shortcut(&self) -> Option<String> {
-        self.parsed.paste_shortcut.clone()
+        self.content.paste_shortcut.clone()
     }
 
     // NOTE: This is only relevant on Linux under X11 environments
@@ -223,25 +194,25 @@ impl ConfigFile {
     // From my experiements, disabling fast inject becomes particularly slow when
     // using the Gnome desktop environment.
     pub fn disable_x11_fast_inject(&self) -> bool {
-        self.parsed.disable_x11_fast_inject.unwrap_or(false)
+        self.content.disable_x11_fast_inject.unwrap_or(false)
     }
 
     // Number of milliseconds between text injection events. Increase if the target
     // application is missing some characters.
     pub fn inject_delay(&self) -> Option<usize> {
-        self.parsed.inject_delay
+        self.content.inject_delay
     }
 
     // Number of milliseconds between key injection events. Increase if the target
     // application is missing some key events.
     pub fn key_delay(&self) -> Option<usize> {
-        self.parsed.key_delay
+        self.content.key_delay
     }
 
     // Chars that when pressed mark the start and end of a word.
     // Examples of this are . or ,
     pub fn word_separators(&self) -> Vec<String> {
-        self.parsed.word_separators.clone().unwrap_or_else(|| {
+        self.content.word_separators.clone().unwrap_or_else(|| {
             vec![
                 " ".to_string(),
                 ",".to_string(),
@@ -272,18 +243,18 @@ impl ConfigFile {
     // For example, this is needed to correctly expand even if typos
     // are typed.
     pub fn backspace_limit(&self) -> usize {
-        self.parsed.backspace_limit.unwrap_or(5)
+        self.content.backspace_limit.unwrap_or(5)
     }
 
     // If false, avoid applying the built-in patches to the current config.
     pub fn apply_patch(&self) -> bool {
-        self.parsed.apply_patch.unwrap_or(true)
+        self.content.apply_patch.unwrap_or(true)
     }
 
     // On Wayland, overrides the auto-detected keyboard configuration (RMLVO)
     // which is used both for the detection and injection process.
     pub fn keyboard_layout(&self) -> Option<RMLVOConfig> {
-        self.parsed
+        self.content
             .keyboard_layout
             .as_ref()
             .map(|layout| RMLVOConfig {
@@ -297,7 +268,7 @@ impl ConfigFile {
 
     // Trigger used to show the Search UI
     pub fn search_trigger(&self) -> Option<String> {
-        match self.parsed.search_trigger.as_deref() {
+        match self.content.search_trigger.as_deref() {
             Some("OFF" | "off") => None,
             Some(x) => Some(x.to_string()),
             None => None,
@@ -306,7 +277,7 @@ impl ConfigFile {
 
     // Hotkey used to trigger the Search UI
     pub fn search_shortcut(&self) -> Option<String> {
-        match self.parsed.search_shortcut.as_deref() {
+        match self.content.search_shortcut.as_deref() {
             Some("OFF" | "off") => None,
             Some(x) => Some(x.to_string()),
             None => Some("ALT+SPACE".to_string()),
@@ -316,23 +287,23 @@ impl ConfigFile {
     // When enabled, espanso automatically "reverts" an expansion if the user
     // presses the Backspace key afterwards.
     pub fn undo_backspace(&self) -> bool {
-        self.parsed.undo_backspace.unwrap_or(true)
+        self.content.undo_backspace.unwrap_or(true)
     }
 
     // If false, avoid showing the espanso icon on the system's tray bar
     // Note: currently not working on Linux
     pub fn show_icon(&self) -> bool {
-        self.parsed.show_icon.unwrap_or(true)
+        self.content.show_icon.unwrap_or(true)
     }
 
     // If false, disable all notifications
     pub fn show_notifications(&self) -> bool {
-        self.parsed.show_notifications.unwrap_or(true)
+        self.content.show_notifications.unwrap_or(true)
     }
 
     // If false, avoid showing the `SecureInput`` notification on macOS
     pub fn secure_input_notification(&self) -> bool {
-        self.parsed.secure_input_notification.unwrap_or(true)
+        self.content.secure_input_notification.unwrap_or(true)
     }
 
     // If enabled, Espanso emulates the Alt Code feature available on Windows
@@ -342,7 +313,7 @@ impl ConfigFile {
     // as a side effect.
     // Because many users relied on this feature, we try to bring it back by emulating it.
     pub fn emulate_alt_codes(&self) -> bool {
-        self.parsed
+        self.content
             .emulate_alt_codes
             .unwrap_or(cfg!(target_os = "windows"))
     }
@@ -352,19 +323,19 @@ impl ConfigFile {
     // after a form has been closed, otherwise the injection might
     // not be targeted to the right application.
     pub fn post_form_delay(&self) -> usize {
-        self.parsed
+        self.content
             .post_form_delay
             .unwrap_or(DEFAULT_POST_FORM_DELAY)
     }
 
     // The maximum width that a form window can take.
     pub fn max_form_width(&self) -> usize {
-        self.parsed.max_form_width.unwrap_or(700)
+        self.content.max_form_width.unwrap_or(700)
     }
 
     // The maximum height that a form window can take.
     fn max_form_height(&self) -> usize {
-        self.parsed.max_form_height.unwrap_or(500)
+        self.content.max_form_height.unwrap_or(500)
     }
 
     // The number of milliseconds to wait after the search bar has been closed.
@@ -372,7 +343,7 @@ impl ConfigFile {
     // after the search bar has been closed, otherwise the injection might
     // not be targeted to the right application.
     pub fn post_search_delay(&self) -> usize {
-        self.parsed
+        self.content
             .post_search_delay
             .unwrap_or(DEFAULT_POST_SEARCH_DELAY)
     }
@@ -382,7 +353,7 @@ impl ConfigFile {
     // those from espanso, but might need to be disabled when using some software-level keyboards.
     // Disabling this option might conflict with the undo feature.
     pub fn win32_exclude_orphan_events(&self) -> bool {
-        self.parsed.win32_exclude_orphan_events.unwrap_or(true)
+        self.content.win32_exclude_orphan_events.unwrap_or(true)
     }
 
     // Extra delay to apply when injecting modifiers under the EVDEV backend.
@@ -390,7 +361,7 @@ impl ConfigFile {
     // cased letters, for example "Hi theRE1" instead of "Hi there!".
     // Increase if necessary, decrease to speed up the injection.
     pub fn evdev_modifier_delay(&self) -> Option<usize> {
-        self.parsed.evdev_modifier_delay
+        self.content.evdev_modifier_delay
     }
 
     // The maximum interval (in milliseconds) for which a keyboard layout
@@ -398,7 +369,7 @@ impl ConfigFile {
     // could lower this amount to avoid the "lost detection" effect described
     // in this issue: https://github.com/espanso/espanso/issues/745
     pub fn win32_keyboard_layout_cache_interval(&self) -> i64 {
-        self.parsed
+        self.content
             .win32_keyboard_layout_cache_interval
             .unwrap_or(2000)
     }
@@ -406,13 +377,13 @@ impl ConfigFile {
     // If true, use an alternative injection backend based on the `xdotool` library.
     // This might improve the situation for certain locales/layouts on X11.
     pub fn x11_use_xclip_backend(&self) -> bool {
-        self.parsed.x11_use_xclip_backend.unwrap_or(false)
+        self.content.x11_use_xclip_backend.unwrap_or(false)
     }
 
     // If true, use an alternative injection backend based on the `xdotool` library.
     // This might improve the situation for certain locales/layouts on X11.
     pub fn x11_use_xdotool_backend(&self) -> bool {
-        self.parsed.x11_use_xdotool_backend.unwrap_or(false)
+        self.content.x11_use_xdotool_backend.unwrap_or(false)
     }
 
     pub fn pretty_dump(&self) -> String {
@@ -431,7 +402,6 @@ impl ConfigFile {
           disable_x11_fast_inject: {}
           pre_paste_delay: {}
           paste_shortcut_event_delay: {}
-          toggle_key: {:?}
           auto_restart: {:?}
           restore_clipboard_delay: {:?}
           post_form_delay: {:?}
@@ -467,7 +437,6 @@ impl ConfigFile {
           self.disable_x11_fast_inject(),
           self.pre_paste_delay(),
           self.paste_shortcut_event_delay(),
-          self.toggle_key(),
           self.auto_restart(),
           self.restore_clipboard_delay(),
           self.post_form_delay(),
@@ -497,7 +466,7 @@ impl ConfigFile {
 
         // Inherit from the parent config if present
         if let Some(parent) = parent {
-            Self::inherit(&mut config, &parent.parsed);
+            Self::inherit(&mut config, &parent.content);
         }
 
         // Extract the base directory
@@ -528,7 +497,7 @@ impl ConfigFile {
         };
 
         Ok(Self {
-            parsed: config,
+            content: config,
             source_path: path.to_owned(),
             id: next_id(),
             match_file_paths: match_paths,
@@ -663,7 +632,7 @@ mod tests {
     #[test]
     fn aggregate_includes_empty_config() {
         assert_eq!(
-            ConfigFile::aggregate_includes(&ParsedConfig {
+            ProfileFile::aggregate_includes(&ParsedConfig {
                 ..Default::default()
             }),
             ["../match/**/[!_]*.yml".to_string()]
@@ -676,7 +645,7 @@ mod tests {
     #[test]
     fn aggregate_includes_no_standard() {
         assert_eq!(
-            ConfigFile::aggregate_includes(&ParsedConfig {
+            ProfileFile::aggregate_includes(&ParsedConfig {
                 use_standard_includes: Some(false),
                 ..Default::default()
             }),
@@ -687,7 +656,7 @@ mod tests {
     #[test]
     fn aggregate_includes_custom_includes() {
         assert_eq!(
-            ConfigFile::aggregate_includes(&ParsedConfig {
+            ProfileFile::aggregate_includes(&ParsedConfig {
                 includes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
             }),
@@ -704,7 +673,7 @@ mod tests {
     #[test]
     fn aggregate_includes_extra_includes() {
         assert_eq!(
-            ConfigFile::aggregate_includes(&ParsedConfig {
+            ProfileFile::aggregate_includes(&ParsedConfig {
                 extra_includes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
             }),
@@ -721,7 +690,7 @@ mod tests {
     #[test]
     fn aggregate_includes_includes_and_extra_includes() {
         assert_eq!(
-            ConfigFile::aggregate_includes(&ParsedConfig {
+            ProfileFile::aggregate_includes(&ParsedConfig {
                 includes: Some(vec!["sub/*.yml".to_string()]),
                 extra_includes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
@@ -740,7 +709,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_empty_config() {
         assert_eq!(
-            ConfigFile::aggregate_excludes(&ParsedConfig {
+            ProfileFile::aggregate_excludes(&ParsedConfig {
                 ..Default::default()
             })
             .len(),
@@ -751,7 +720,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_no_standard() {
         assert_eq!(
-            ConfigFile::aggregate_excludes(&ParsedConfig {
+            ProfileFile::aggregate_excludes(&ParsedConfig {
                 use_standard_includes: Some(false),
                 ..Default::default()
             }),
@@ -762,7 +731,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_custom_excludes() {
         assert_eq!(
-            ConfigFile::aggregate_excludes(&ParsedConfig {
+            ProfileFile::aggregate_excludes(&ParsedConfig {
                 excludes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
             }),
@@ -776,7 +745,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_extra_excludes() {
         assert_eq!(
-            ConfigFile::aggregate_excludes(&ParsedConfig {
+            ProfileFile::aggregate_excludes(&ParsedConfig {
                 extra_excludes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
             }),
@@ -790,7 +759,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_excludes_and_extra_excludes() {
         assert_eq!(
-            ConfigFile::aggregate_excludes(&ParsedConfig {
+            ProfileFile::aggregate_excludes(&ParsedConfig {
                 excludes: Some(vec!["sub/*.yml".to_string()]),
                 extra_excludes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
@@ -813,7 +782,7 @@ mod tests {
         };
         assert_eq!(child.use_standard_includes, None);
 
-        ConfigFile::inherit(&mut child, &parent);
+        ProfileFile::inherit(&mut child, &parent);
         assert_eq!(child.use_standard_includes, Some(false));
     }
 
@@ -829,7 +798,7 @@ mod tests {
         };
         assert_eq!(child.use_standard_includes, Some(false));
 
-        ConfigFile::inherit(&mut child, &parent);
+        ProfileFile::inherit(&mut child, &parent);
         assert_eq!(child.use_standard_includes, Some(false));
     }
 
@@ -851,7 +820,7 @@ mod tests {
             let config_file = config_dir.join("default.yml");
             std::fs::write(&config_file, "").unwrap();
 
-            let config = ConfigFile::load_from_path(&config_file, None).unwrap();
+            let config = ProfileFile::load_from_path(&config_file, None).unwrap();
 
             let mut expected = vec![base_file, another_file, sub_file];
             expected.sort();
@@ -902,8 +871,8 @@ mod tests {
             )
             .unwrap();
 
-            let parent = ConfigFile::load_from_path(&parent_file, None).unwrap();
-            let child = ConfigFile::load_from_path(&config_file, Some(&parent)).unwrap();
+            let parent = ProfileFile::load_from_path(&parent_file, None).unwrap();
+            let child = ProfileFile::load_from_path(&config_file, Some(&parent)).unwrap();
 
             let mut expected = vec![sub_file, sub_under_file];
             expected.sort();
@@ -936,7 +905,7 @@ mod tests {
             let config_file = config_dir.join("default.yml");
             std::fs::write(&config_file, "extra_includes: ['../match/_sub.yml']").unwrap();
 
-            let config = ConfigFile::load_from_path(&config_file, None).unwrap();
+            let config = ProfileFile::load_from_path(&config_file, None).unwrap();
 
             let mut expected = vec![base_file, another_file, sub_file, under_file];
             expected.sort();
@@ -955,7 +924,7 @@ mod tests {
             let config_file = config_dir.join("default.yml");
             std::fs::write(&config_file, config).unwrap();
 
-            let config = ConfigFile::load_from_path(&config_file, None).unwrap();
+            let config = ProfileFile::load_from_path(&config_file, None).unwrap();
 
             *result_ref = config.is_match(app);
         });

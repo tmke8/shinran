@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use espanso_config::{config::ConfigStore, matches::store::MatchStore};
+use espanso_config::{config::ProfileStore, matches::store::MatchStore};
 use log::info;
 
 mod builtin;
@@ -10,15 +10,13 @@ mod engine;
 mod event;
 mod load;
 mod match_cache;
-mod match_select;
-mod multiplex;
 mod path;
 mod regex;
 mod render;
 
 fn load_config_and_renderer(
     cli_overrides: &HashMap<String, String>,
-) -> (espanso_render::Renderer, ConfigStore, MatchStore) {
+) -> (espanso_render::Renderer, ProfileStore, MatchStore) {
     // See also
     // `initialize_and_spawn()`
     // in `espanso/src/cli/worker/engine/mod.rs`.
@@ -38,7 +36,7 @@ fn load_config_and_renderer(
     info!("using runtime dir: {:?}", paths.runtime);
 
     let config_result = load::load_config(&paths.config).expect("unable to load config");
-    let config_store = config_result.config_store;
+    let profile_store = config_result.profile_store;
     let match_store = config_result.match_store;
 
     let home_path = dirs::home_dir().expect("unable to obtain home dir path");
@@ -46,14 +44,14 @@ fn load_config_and_renderer(
     let packages_path = &paths.packages;
     let renderer = espanso_render::Renderer::new(config_path, &home_path, packages_path);
 
-    (renderer, config_store, match_store)
+    (renderer, profile_store, match_store)
 }
 
 fn get_regex_matches(
-    config_store: &ConfigStore,
+    profile_store: &ProfileStore,
     match_store: &MatchStore,
 ) -> Vec<regex::RegexMatch<i32>> {
-    let paths = config_store.get_all_match_file_paths();
+    let paths = profile_store.get_all_match_file_paths();
     let global_set =
         match_store.collect_matches_and_global_vars(&paths.into_iter().collect::<Vec<_>>());
     let mut regex_matches = Vec::new();
@@ -72,38 +70,29 @@ pub struct Backend {
 
 impl Backend {
     pub fn new(cli_overrides: &HashMap<String, String>) -> anyhow::Result<Backend> {
-        let (renderer, config_store, match_store) = load_config_and_renderer(cli_overrides);
+        let (renderer, profile_store, match_store) = load_config_and_renderer(cli_overrides);
 
-        let match_cache = match_cache::MatchCache::load(&config_store, &match_store);
-        let regex_matches = get_regex_matches(&config_store, &match_store);
+        let match_cache = match_cache::MatchCache::load(&profile_store, &match_store);
+        let regex_matches = get_regex_matches(&profile_store, &match_store);
 
-        // `config_manager` could own `match_store`
-        let config_manager = config::ConfigManager::new(config_store, match_store);
+        // `configuration` could own `match_store`
+        let configuration = config::Configuration::new(profile_store, match_store);
 
         let builtin_matches = builtin::get_builtin_matches();
         // `combined_cache` stores references to `cache` and `builtin_matches`
         let combined_cache =
             match_cache::CombinedMatchCache::load(match_cache, builtin_matches, regex_matches);
         // `adapter` could own `cache`
-        let adapter = render::RendererAdapter::new(combined_cache, config_manager, renderer);
+        let adapter = render::RendererAdapter::new(combined_cache, configuration, renderer);
         Ok(Backend { adapter })
     }
 
     pub fn check_trigger(&self, trigger: &str) -> anyhow::Result<Option<String>> {
-        let matches = self
-            .adapter
-            .combined_cache
-            .find_matches_from_trigger(trigger);
+        let matches = self.adapter.find_matches_from_trigger(trigger);
         let match_ = if let Some(match_) = matches.into_iter().next() {
             match_
         } else {
-            let matches = self
-                .adapter
-                .combined_cache
-                .matcher
-                .find_matches(trigger)
-                .into_iter()
-                .next();
+            let matches = self.adapter.find_regex_matches(trigger).into_iter().next();
             if let Some(matches) = matches {
                 matches
             } else {

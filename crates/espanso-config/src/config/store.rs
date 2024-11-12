@@ -20,30 +20,30 @@
 use crate::error::NonFatalErrorSet;
 use crate::matches::group::loader::yaml::YAMLImporter;
 
-use super::{resolve::ConfigFile, ConfigStoreError};
+use super::{resolve::ProfileFile, ConfigStoreError};
 use anyhow::{Context, Result};
 use log::{debug, error};
 use std::path::PathBuf;
 use std::{collections::HashSet, path::Path};
 
-pub struct ConfigStore {
+pub struct ProfileStore {
     /// The `default.yml` file in the `config` directory.
-    default: ConfigFile,
+    default: ProfileFile,
     /// All the other `.yml` files in the `config` directory.
     /// These files may specify one or more of `filter_title`, `filter_class`, `filter_exec`.
     /// We can think of these also as profiles.
-    customs: Vec<ConfigFile>,
+    customs: Vec<ProfileFile>,
 }
 
-impl ConfigStore {
-    pub fn default_config(&self) -> &ConfigFile {
+impl ProfileStore {
+    pub fn default_config(&self) -> &ProfileFile {
         &self.default
     }
 
     /// Get the active configuration for the given app.
     ///
     /// This will return the *first* custom configuration that matches the app properties.
-    pub fn active_config(&self, app: &super::AppProperties) -> &ConfigFile {
+    pub fn active_config(&self, app: &super::AppProperties) -> &ProfileFile {
         // Find a custom config that matches or fallback to the default one
         for custom in &self.customs {
             if custom.is_match(app) {
@@ -53,7 +53,7 @@ impl ConfigStore {
         &self.default
     }
 
-    pub fn all_configs(&self) -> Vec<&ConfigFile> {
+    pub fn all_configs(&self) -> Vec<&ProfileFile> {
         let mut configs = vec![&self.default];
 
         for custom in &self.customs {
@@ -88,12 +88,12 @@ impl ConfigStore {
 
         let mut non_fatal_errors = Vec::new();
 
-        let default = ConfigFile::load_from_path(&default_file, None)
+        let default = ProfileFile::load_from_path(&default_file, None)
             .context("failed to load default.yml configuration")?;
         debug!("loaded default config at path: {:?}", default_file);
 
         // Then the others
-        let mut customs: Vec<ConfigFile> = Vec::new();
+        let mut customs: Vec<ProfileFile> = Vec::new();
         for entry in std::fs::read_dir(config_dir).map_err(ConfigStoreError::IOError)? {
             let config_file = entry?.path();
             let Some(extension) = config_file.extension() else {
@@ -105,7 +105,7 @@ impl ConfigStore {
                 && config_file != default_file
                 && YAMLImporter::is_supported(extension)
             {
-                match ConfigFile::load_from_path(&config_file, Some(&default)) {
+                match ProfileFile::load_from_path(&config_file, Some(&default)) {
                     Ok(config) => {
                         customs.push(config);
                         debug!("loaded config at path: {:?}", config_file);
@@ -140,15 +140,15 @@ mod tests {
 
     use super::*;
 
-    pub fn new_mock(label: &'static str) -> ConfigFile {
+    pub fn new_mock(label: &'static str) -> ProfileFile {
         let label = label.to_owned();
         // let mut mock = MockConfig::new();
         // mock.expect_id().return_const(0);
         // mock.expect_label().return_const(label);
         // mock.expect_is_match().return_const(is_match);
         // mock
-        ConfigFile {
-            parsed: ParsedConfig {
+        ProfileFile {
+            content: ParsedConfig {
                 label: Some(label),
                 ..Default::default()
             },
@@ -164,7 +164,7 @@ mod tests {
         let mut custom2 = new_mock("custom2");
         custom2.filter_class = Some(Regex::new("foo").unwrap());
 
-        let store = ConfigStore {
+        let store = ProfileStore {
             default,
             customs: vec![custom1, custom2],
         };
@@ -188,7 +188,7 @@ mod tests {
         let custom1 = new_mock("custom1");
         let custom2 = new_mock("custom2");
 
-        let store = ConfigStore {
+        let store = ProfileStore {
             default,
             customs: vec![custom1, custom2],
         };

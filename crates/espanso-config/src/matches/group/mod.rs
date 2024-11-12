@@ -29,7 +29,7 @@ mod path;
 
 /// A `LoadedMatchFile` describes one file in the `match` directory.
 ///
-/// Such a file has a list of imports, a list of global variables and a list of matches.
+/// Such a file has a list of imports, a list of global [`Variable`]s and a list of [`Match`]es.
 /// The imports have been resolved to paths, but they haven't been loaded yet.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct LoadedMatchFile {

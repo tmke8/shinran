@@ -20,13 +20,12 @@
 use std::collections::HashMap;
 
 use espanso_config::{
-    config::ConfigStore,
+    config::ProfileStore,
     matches::{store::MatchStore, Match, MatchCause},
 };
 
 use crate::engine::DetectedMatch;
-use crate::match_select::MatchSummary;
-use crate::multiplex::MatchResult;
+// use crate::match_select::MatchSummary;
 use crate::regex::{RegexMatch, RegexMatcher};
 
 use super::builtin::BuiltInMatch;
@@ -36,10 +35,10 @@ pub struct MatchCache {
 }
 
 impl MatchCache {
-    pub fn load(config_store: &ConfigStore, match_store: &MatchStore) -> Self {
+    pub fn load(profile_store: &ProfileStore, match_store: &MatchStore) -> Self {
         let mut cache = HashMap::new();
 
-        let all_paths = config_store
+        let all_paths = profile_store
             .get_all_match_file_paths()
             .into_iter()
             .collect::<Vec<_>>();
@@ -93,7 +92,7 @@ impl MatchCache {
 pub struct CombinedMatchCache {
     pub user_match_cache: MatchCache,
     builtin_match_cache: HashMap<i32, BuiltInMatch>,
-    pub matcher: RegexMatcher,
+    pub regex_matcher: RegexMatcher,
 }
 
 pub enum MatchVariant<'a> {
@@ -118,7 +117,7 @@ impl CombinedMatchCache {
         Self {
             user_match_cache: match_cache,
             builtin_match_cache,
-            matcher,
+            regex_matcher: matcher,
         }
     }
 
@@ -134,34 +133,27 @@ impl CombinedMatchCache {
         None
     }
 
-    fn get_matches<'a>(&'a self, ids: &[i32]) -> Vec<MatchSummary<'a>> {
-        ids.iter()
-            .filter_map(|id| self.get(*id))
-            .map(|m| match m {
-                MatchVariant::User(m) => MatchSummary {
-                    id: m.id,
-                    label: m.description(),
-                    tag: m.cause_description(),
-                    additional_search_terms: m.search_terms(),
-                    is_builtin: false,
-                },
-                MatchVariant::Builtin(m) => MatchSummary {
-                    id: m.id,
-                    label: m.label,
-                    tag: m.triggers.first().map(String::as_ref),
-                    additional_search_terms: vec![],
-                    is_builtin: true,
-                },
-            })
-            .collect()
-    }
-
-    fn get_result(&self, match_id: i32) -> Option<MatchResult<'_>> {
-        Some(match self.get(match_id)? {
-            MatchVariant::User(m) => MatchResult::User(m),
-            MatchVariant::Builtin(m) => MatchResult::Builtin(m),
-        })
-    }
+    // fn get_matches<'a>(&'a self, ids: &[i32]) -> Vec<MatchSummary<'a>> {
+    //     ids.iter()
+    //         .filter_map(|id| self.get(*id))
+    //         .map(|m| match m {
+    //             MatchVariant::User(m) => MatchSummary {
+    //                 id: m.id,
+    //                 label: m.description(),
+    //                 tag: m.cause_description(),
+    //                 additional_search_terms: m.search_terms(),
+    //                 is_builtin: false,
+    //             },
+    //             MatchVariant::Builtin(m) => MatchSummary {
+    //                 id: m.id,
+    //                 label: m.label,
+    //                 tag: m.triggers.first().map(String::as_ref),
+    //                 additional_search_terms: vec![],
+    //                 is_builtin: true,
+    //             },
+    //         })
+    //         .collect()
+    // }
 
     fn get_all_matches_ids(&self) -> Vec<i32> {
         let mut ids: Vec<i32> = self.builtin_match_cache.keys().copied().collect();
@@ -169,7 +161,7 @@ impl CombinedMatchCache {
         ids
     }
 
-    pub fn find_matches_from_trigger(&self, trigger: &str) -> Vec<DetectedMatch> {
+    pub(crate) fn find_matches_from_trigger(&self, trigger: &str) -> Vec<DetectedMatch> {
         let user_matches: Vec<DetectedMatch> = self
             .user_match_cache
             .cache

@@ -18,7 +18,7 @@
  */
 
 use anyhow::{Context, Result};
-use espanso_config::{config::ConfigStore, error::ErrorLevel, matches::store::MatchStore};
+use espanso_config::{config::ProfileStore, error::ErrorLevel, matches::store::MatchStore};
 use log::{error, info, warn};
 use std::path::Path;
 
@@ -68,12 +68,12 @@ pub fn populate_default_config(config_dir: &Path) -> Result<()> {
 }
 
 pub struct ConfigLoadResult {
-    pub config_store: ConfigStore,
+    pub profile_store: ProfileStore,
     pub match_store: MatchStore,
 }
 
 pub fn load_config(config_path: &Path) -> Result<ConfigLoadResult> {
-    let (config_store, match_store, non_fatal_errors) =
+    let (profile_store, match_store, non_fatal_errors) =
         espanso_config::load(config_path).context("unable to load config")?;
 
     // TODO: add an option to avoid dumping the errors in the logs
@@ -98,7 +98,7 @@ pub fn load_config(config_path: &Path) -> Result<ConfigLoadResult> {
     Ok(ConfigLoadResult {
         // Apply the built-in patches
         // config_store: crate::patch::patch_store(config_store),
-        config_store,
+        profile_store,
         match_store,
     })
 }

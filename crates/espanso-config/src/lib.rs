@@ -28,10 +28,10 @@ pub mod error;
 pub mod matches;
 mod util;
 
-use config::store::ConfigStore;
+use config::store::ProfileStore;
 use matches::store::MatchStore;
 
-type LoadableConfig = (ConfigStore, MatchStore, Vec<error::NonFatalErrorSet>);
+type LoadableConfig = (ProfileStore, MatchStore, Vec<error::NonFatalErrorSet>);
 
 pub fn load(base_path: &Path) -> Result<LoadableConfig> {
     let config_dir = base_path.join("config");
@@ -39,8 +39,8 @@ pub fn load(base_path: &Path) -> Result<LoadableConfig> {
         return Err(ConfigError::MissingConfigDir().into());
     }
 
-    let (config_store, non_fatal_config_errors) = config::load_store(&config_dir)?;
-    let root_paths: Vec<_> = config_store
+    let (profile_store, non_fatal_config_errors) = config::load_store(&config_dir)?;
+    let root_paths: Vec<_> = profile_store
         .get_all_match_file_paths()
         .into_iter()
         .collect();
@@ -51,7 +51,7 @@ pub fn load(base_path: &Path) -> Result<LoadableConfig> {
     non_fatal_errors.extend(non_fatal_config_errors);
     non_fatal_errors.extend(non_fatal_match_errors);
 
-    Ok((config_store, match_store, non_fatal_errors))
+    Ok((profile_store, match_store, non_fatal_errors))
 }
 
 // pub fn load_legacy(

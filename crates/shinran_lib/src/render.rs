@@ -23,53 +23,48 @@ use std::{collections::HashMap, sync::RwLock};
 
 // pub mod extension;
 
-use espanso_config::config::ConfigId;
+use espanso_config::config::ProfileId;
 use espanso_config::matches::{
     store::MatchesAndGlobalVars, Match, MatchCause, MatchEffect, UpperCasingStyle,
 };
 use espanso_render::{CasingStyle, Context, RenderOptions, Template, Value, VarType, Variable};
 
 use crate::{
-    config::ConfigManager,
+    config::Configuration,
     engine::RendererError,
     match_cache::{self, MatchCache},
 };
-// use espanso_engine::process::{Renderer, RendererError};
-
-// pub trait MatchProvider<'a> {
-//     fn matches(&self) -> Vec<&'a Match>;
-//     fn get(&self, id: i32) -> Option<&'a Match>;
-// }
-
-// pub trait ConfigProvider<'a> {
-//     fn configs(&self) -> Vec<(Arc<ResolvedConfig>, MatchSet)>;
-//     fn active(&self) -> (Arc<ResolvedConfig>, MatchSet);
-// }
 
 pub struct RendererAdapter {
+    /// Renderer for the variables.
     renderer: espanso_render::Renderer,
-    pub combined_cache: match_cache::CombinedMatchCache,
-    config_manager: ConfigManager,
+    combined_cache: match_cache::CombinedMatchCache,
+    /// Configuration of the shinran instance.
+    configuration: Configuration,
 
+    /// Map of all templates, indexed by the corresponding match ID.
     template_map: HashMap<i32, Option<Template>>,
+    /// Map of all global variables, indexed by the corresponding variable ID.
     global_vars_map: HashMap<i32, Variable>,
 
-    context_cache: RwLock<HashMap<ConfigId, Context>>,
+    /// Cache for the context objects. We need internal mutability here because we need to
+    /// update the cache.
+    context_cache: RwLock<HashMap<ProfileId, Context>>,
 }
 
-impl<'a> RendererAdapter {
+impl RendererAdapter {
     pub fn new(
         combined_cache: crate::match_cache::CombinedMatchCache,
-        config_manager: ConfigManager,
+        configuration: Configuration,
         renderer: espanso_render::Renderer,
     ) -> Self {
         let match_cache = &combined_cache.user_match_cache;
         let template_map = generate_template_map(match_cache);
-        let global_vars_map = generate_global_vars_map(&config_manager);
+        let global_vars_map = generate_global_vars_map(&configuration);
 
         Self {
             renderer,
-            config_manager,
+            configuration,
             combined_cache,
             template_map,
             global_vars_map,
@@ -90,14 +85,14 @@ fn generate_template_map(match_cache: &MatchCache) -> HashMap<i32, Option<Templa
 }
 
 // TODO: test
-fn generate_global_vars_map(config_manager: &ConfigManager) -> HashMap<i32, Variable> {
+fn generate_global_vars_map(configuration: &Configuration) -> HashMap<i32, Variable> {
     let mut global_vars_map = HashMap::new();
 
     // Variables are stored in match files, so we need to iterate over all match files recursively.
     // We're using `collect_matches_and_global_vars` here under the hood to do this, even though
     // that function is overkill (it also collects all matches, for example).
     // But on the other hand, we don't want to reimplement the recursive logic here.
-    for (_, match_set) in config_manager.collect_matches_and_global_vars_from_all_configs() {
+    for (_, match_set) in configuration.collect_matches_and_global_vars_from_all_configs() {
         for &var in &match_set.global_vars {
             // TODO: Investigate how to avoid this clone.
             global_vars_map
@@ -235,13 +230,14 @@ impl RendererAdapter {
             return Err(RendererError::NotFound.into());
         };
 
-        let (config, match_set) = self.config_manager.default_config_and_matches();
+        let (profile, match_set) = self.configuration.default_profile_and_matches();
 
         let mut context_cache = self.context_cache.write().unwrap();
-        let context = context_cache.entry(config.id()).or_insert_with(|| {
+        let context = context_cache.entry(profile.id()).or_insert_with(|| {
             generate_context(match_set, &self.template_map, &self.global_vars_map)
         });
 
+        // TODO: We should use `combined_cache.get()` here to also get the built-in matches.
         let raw_match = self.combined_cache.user_match_cache.get(match_id);
         let propagate_case = raw_match.is_some_and(is_propagate_case);
         let preferred_uppercasing_style = raw_match.and_then(extract_uppercasing_style);
@@ -291,6 +287,16 @@ impl RendererAdapter {
                 Err(RendererError::RenderingError(err).into())
             }
         }
+    }
+
+    #[inline]
+    pub fn find_matches_from_trigger(&self, trigger: &str) -> Vec<crate::engine::DetectedMatch> {
+        self.combined_cache.find_matches_from_trigger(trigger)
+    }
+
+    #[inline]
+    pub fn find_regex_matches(&self, trigger: &str) -> Vec<crate::engine::DetectedMatch> {
+        self.combined_cache.regex_matcher.find_matches(trigger)
     }
 }
 
