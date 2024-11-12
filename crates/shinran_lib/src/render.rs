@@ -186,6 +186,10 @@ fn convert_params(params: espanso_config::matches::Params) -> espanso_render::Pa
     new_params
 }
 
+// TODO: Investigate whether this is necessary.
+//       The only difference between the two `Value` types is the `Object` variant.
+//       In espano_config, `Object` is a `BTreeMap<String, Value>`, while in espanso_render it is
+//       a `HashMap<String, Value>`.
 fn convert_value(value: espanso_config::matches::Value) -> espanso_render::Value {
     match value {
         espanso_config::matches::Value::Null => espanso_render::Value::Null,
@@ -195,7 +199,7 @@ fn convert_value(value: espanso_config::matches::Value) -> espanso_render::Value
                 espanso_render::Value::Number(espanso_render::Number::Integer(i))
             }
             espanso_config::matches::Number::Float(f) => {
-                espanso_render::Value::Number(espanso_render::Number::Float(f.into_inner()))
+                espanso_render::Value::Number(espanso_render::Number::Float(f))
             }
         },
         espanso_config::matches::Value::String(s) => espanso_render::Value::String(s),

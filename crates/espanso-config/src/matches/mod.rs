@@ -26,7 +26,7 @@ use crate::counter::StructId;
 pub(crate) mod group;
 pub mod store;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Match {
     pub id: StructId,
 
@@ -155,14 +155,14 @@ pub struct RegexCause {
 
 // Effects
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum MatchEffect {
     None,
     Text(TextEffect),
     Image(ImageEffect),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TextEffect {
     pub replace: String,
     pub vars: Vec<Variable>,
@@ -199,7 +199,7 @@ pub struct ImageEffect {
     pub path: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Variable {
     pub id: StructId,
     pub name: String,
@@ -224,7 +224,7 @@ impl Default for Variable {
 
 pub type Params = BTreeMap<String, Value>;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum Value {
     Null,
     Bool(bool),
@@ -234,10 +234,11 @@ pub enum Value {
     Object(Params),
 }
 
-#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Number {
     Integer(i64),
-    Float(OrderedFloat<f64>),
+    // Float(OrderedFloat<f64>),
+    Float(f64),
 }
 
 #[cfg(test)]
