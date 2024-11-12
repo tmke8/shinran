@@ -68,6 +68,7 @@ pub enum CasingStyle {
     Uppercase,
 }
 
+/// Template for rendering a match with a `Text` effect.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Template {
     pub triggers: Vec<String>,
@@ -88,6 +89,7 @@ pub enum VarType {
     Global,
 }
 
+/// A variable that can be used in a template.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Variable {
     pub name: String,

@@ -24,7 +24,9 @@ use std::{collections::HashMap, sync::RwLock};
 // pub mod extension;
 
 use espanso_config::config::ConfigId;
-use espanso_config::matches::{store::MatchSet, Match, MatchCause, MatchEffect, UpperCasingStyle};
+use espanso_config::matches::{
+    store::MatchesAndGlobalVars, Match, MatchCause, MatchEffect, UpperCasingStyle,
+};
 use espanso_render::{CasingStyle, Context, RenderOptions, Template, Value, VarType, Variable};
 
 use crate::{
@@ -77,24 +79,30 @@ impl<'a> RendererAdapter {
 }
 
 // TODO: test
-fn generate_template_map(match_provider: &MatchCache) -> HashMap<i32, Option<Template>> {
+fn generate_template_map(match_cache: &MatchCache) -> HashMap<i32, Option<Template>> {
     let mut template_map = HashMap::new();
-    for m in match_provider.matches() {
+    for m in match_cache.matches() {
         let entry = convert_to_template(m);
+        // TODO: Why are we inserting entries that are `None`?
         template_map.insert(m.id, entry);
     }
     template_map
 }
 
 // TODO: test
-fn generate_global_vars_map(config_provider: &ConfigManager) -> HashMap<i32, Variable> {
+fn generate_global_vars_map(config_manager: &ConfigManager) -> HashMap<i32, Variable> {
     let mut global_vars_map = HashMap::new();
 
-    for (_, match_set) in config_provider.configs() {
-        for var in &match_set.global_vars {
+    // Variables are stored in match files, so we need to iterate over all match files recursively.
+    // We're using `collect_matches_and_global_vars` here under the hood to do this, even though
+    // that function is overkill (it also collects all matches, for example).
+    // But on the other hand, we don't want to reimplement the recursive logic here.
+    for (_, match_set) in config_manager.collect_matches_and_global_vars_from_all_configs() {
+        for &var in &match_set.global_vars {
+            // TODO: Investigate how to avoid this clone.
             global_vars_map
                 .entry(var.id)
-                .or_insert_with(|| convert_var((*var).clone()));
+                .or_insert_with(|| convert_var(var.clone()));
         }
     }
 
@@ -105,7 +113,7 @@ fn generate_global_vars_map(config_provider: &ConfigManager) -> HashMap<i32, Var
 ///
 /// Analogously, it iterates over the global vars in the match set and finds the corresponding vars.
 fn generate_context(
-    match_set: MatchSet,
+    match_set: MatchesAndGlobalVars,
     template_map: &HashMap<i32, Option<Template>>,
     global_vars_map: &HashMap<i32, Variable>,
 ) -> Context {
@@ -135,6 +143,7 @@ fn generate_context(
 fn convert_to_template(m: &Match) -> Option<Template> {
     if let MatchEffect::Text(text_effect) = &m.effect {
         let triggers = if let MatchCause::Trigger(cause) = &m.cause {
+            // TODO: Investigate how to avoid this clone.
             cause.triggers.clone()
         } else {
             Vec::new()
@@ -142,7 +151,9 @@ fn convert_to_template(m: &Match) -> Option<Template> {
 
         Some(Template {
             triggers,
+            // TODO: Investigate how to avoid this clone.
             body: text_effect.replace.clone(),
+            // TODO: Investigate how to avoid this clone.
             vars: convert_vars(text_effect.vars.clone()),
         })
     } else {
@@ -219,65 +230,66 @@ impl RendererAdapter {
         trigger: Option<&str>,
         trigger_vars: HashMap<String, String>,
     ) -> anyhow::Result<String> {
-        if let Some(Some(template)) = self.template_map.get(&match_id) {
-            let (config, match_set) = self.config_manager.default_config_and_match_set();
+        let Some(Some(template)) = self.template_map.get(&match_id) else {
+            // Found no template for the given match ID.
+            return Err(RendererError::NotFound.into());
+        };
 
-            let mut context_cache = self.context_cache.write().unwrap();
-            let context = context_cache.entry(config.id()).or_insert_with(|| {
-                generate_context(match_set, &self.template_map, &self.global_vars_map)
-            });
+        let (config, match_set) = self.config_manager.default_config_and_matches();
 
-            let raw_match = self.combined_cache.user_match_cache.get(match_id);
-            let propagate_case = raw_match.is_some_and(is_propagate_case);
-            let preferred_uppercasing_style = raw_match.and_then(extract_uppercasing_style);
+        let mut context_cache = self.context_cache.write().unwrap();
+        let context = context_cache.entry(config.id()).or_insert_with(|| {
+            generate_context(match_set, &self.template_map, &self.global_vars_map)
+        });
 
-            let options = RenderOptions {
-                casing_style: if !propagate_case {
-                    CasingStyle::None
-                } else if let Some(trigger) = trigger {
-                    calculate_casing_style(trigger, preferred_uppercasing_style)
-                } else {
-                    CasingStyle::None
-                },
-            };
+        let raw_match = self.combined_cache.user_match_cache.get(match_id);
+        let propagate_case = raw_match.is_some_and(is_propagate_case);
+        let preferred_uppercasing_style = raw_match.and_then(extract_uppercasing_style);
 
-            // If some trigger vars are specified, augment the template with them
-            let augmented_template = if trigger_vars.is_empty() {
-                None
+        let options = RenderOptions {
+            casing_style: if !propagate_case {
+                CasingStyle::None
+            } else if let Some(trigger) = trigger {
+                calculate_casing_style(trigger, preferred_uppercasing_style)
             } else {
-                let mut augmented = template.clone();
-                for (name, value) in trigger_vars {
-                    let mut params = espanso_render::Params::new();
-                    params.insert("echo".to_string(), Value::String(value));
-                    augmented.vars.insert(
-                        0,
-                        Variable {
-                            name,
-                            var_type: VarType::Echo,
-                            params,
-                            inject_vars: false,
-                            ..Default::default()
-                        },
-                    );
-                }
-                Some(augmented)
-            };
+                CasingStyle::None
+            },
+        };
 
-            let template = if let Some(augmented) = augmented_template.as_ref() {
-                augmented
-            } else {
-                template
-            };
-
-            match self.renderer.render(template, context, &options) {
-                espanso_render::RenderResult::Success(body) => Ok(body),
-                espanso_render::RenderResult::Aborted => Err(RendererError::Aborted.into()),
-                espanso_render::RenderResult::Error(err) => {
-                    Err(RendererError::RenderingError(err).into())
-                }
-            }
+        // If some trigger vars are specified, augment the template with them
+        let augmented_template = if trigger_vars.is_empty() {
+            None
         } else {
-            Err(RendererError::NotFound.into())
+            let mut augmented = template.clone();
+            for (name, value) in trigger_vars {
+                let mut params = espanso_render::Params::new();
+                params.insert("echo".to_string(), Value::String(value));
+                augmented.vars.insert(
+                    0,
+                    Variable {
+                        name,
+                        var_type: VarType::Echo,
+                        params,
+                        inject_vars: false,
+                        ..Default::default()
+                    },
+                );
+            }
+            Some(augmented)
+        };
+
+        let template = if let Some(augmented) = augmented_template.as_ref() {
+            augmented
+        } else {
+            template
+        };
+
+        match self.renderer.render_template(template, context, &options) {
+            espanso_render::RenderResult::Success(body) => Ok(body),
+            espanso_render::RenderResult::Aborted => Err(RendererError::Aborted.into()),
+            espanso_render::RenderResult::Error(err) => {
+                Err(RendererError::RenderingError(err).into())
+            }
         }
     }
 }

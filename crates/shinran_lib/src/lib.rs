@@ -54,7 +54,8 @@ fn get_regex_matches(
     match_store: &MatchStore,
 ) -> Vec<regex::RegexMatch<i32>> {
     let paths = config_store.get_all_match_file_paths();
-    let global_set = match_store.query(&paths.into_iter().collect::<Vec<_>>());
+    let global_set =
+        match_store.collect_matches_and_global_vars(&paths.into_iter().collect::<Vec<_>>());
     let mut regex_matches = Vec::new();
 
     for m in global_set.matches {

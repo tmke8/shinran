@@ -17,10 +17,14 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::HashSet;
+
 use espanso_config::{
     config::{ConfigFile, ConfigStore},
-    matches::store::{MatchSet, MatchStore},
+    matches::store::{MatchStore, MatchesAndGlobalVars},
 };
+
+use crate::builtin::is_builtin_match;
 // use espanso_info::{AppInfo, AppInfoProvider};
 
 // use super::{
@@ -28,6 +32,8 @@ use espanso_config::{
 //     engine::process::middleware::render::extension::clipboard::ClipboardOperationOptionsProvider,
 // };
 
+/// Struct containing all information loaded from the configuration files.
+/// This includes the config files in the `config` directory and the match files in the `match` directory.
 pub struct ConfigManager {
     config_store: ConfigStore,
     match_store: MatchStore,
@@ -47,167 +53,80 @@ impl ConfigManager {
         }
     }
 
-    pub fn default(&self) -> &ConfigFile {
-        self.config_store.default()
+    #[inline]
+    pub fn default_config(&self) -> &ConfigFile {
+        self.config_store.default_config()
     }
 
-    pub fn default_config_and_match_set(&self) -> (&ConfigFile, MatchSet) {
-        let config = self.default();
+    pub fn default_config_and_matches(&self) -> (&ConfigFile, MatchesAndGlobalVars) {
+        let config = self.default_config();
         let match_paths = config.match_file_paths();
-        (config, self.match_store.query(match_paths))
+        (
+            config,
+            self.match_store
+                .collect_matches_and_global_vars(match_paths),
+        )
     }
 
-    // pub fn active(&self) -> Arc<ConfigFile> {
-    //     let current_app = self.app_info_provider.get_info();
-    //     let info = to_app_properties(&current_app);
-    //     self.config_store.active(info)
-    // }
+    /// Get the active configuration file according to the current app.
+    ///
+    /// This functionality is not implemented yet.
+    pub fn active_config(&self) -> &ConfigFile {
+        // let current_app = self.app_info_provider.get_info();
+        // let info = to_app_properties(&current_app);
+        let info = espanso_config::config::AppProperties {
+            title: None,
+            class: None,
+            exec: None,
+        };
+        self.config_store.active_config(&info)
+    }
 
-    // pub fn active_context(&self) -> (Arc<ConfigFile>, MatchSet) {
-    //     let config = self.active();
-    //     let match_paths = config.match_paths();
-    //     (config.clone(), self.match_store.query(match_paths))
-    // }
+    pub fn active_config_and_matches(&self) -> (&ConfigFile, MatchesAndGlobalVars) {
+        let config = self.active_config();
+        let match_paths = config.match_file_paths();
+        (
+            config,
+            self.match_store
+                .collect_matches_and_global_vars(match_paths),
+        )
+    }
 
-    // pub fn filter_active(&self, matches_ids: &[i32]) -> Vec<i32> {
-    //     let ids_set: HashSet<i32> = matches_ids.iter().copied().collect::<HashSet<_>>();
-    //     let (_, match_set) = self.active_context();
+    pub fn filter_active(&self, matches_ids: &[i32]) -> Vec<i32> {
+        let ids_set: HashSet<i32> = matches_ids.iter().copied().collect::<HashSet<_>>();
+        let (_, match_set) = self.active_config_and_matches();
 
-    //     let active_user_defined_matches: Vec<i32> = match_set
-    //         .matches
-    //         .iter()
-    //         .filter(|m| ids_set.contains(&m.id))
-    //         .map(|m| m.id)
-    //         .collect();
+        let active_user_defined_matches: Vec<i32> = match_set
+            .matches
+            .iter()
+            .filter(|m| ids_set.contains(&m.id))
+            .map(|m| m.id)
+            .collect();
 
-    //     let builtin_matches: Vec<i32> = matches_ids
-    //         .iter()
-    //         .filter(|id| is_builtin_match(**id))
-    //         .copied()
-    //         .collect();
+        let builtin_matches: Vec<i32> = matches_ids
+            .iter()
+            .filter(|id| is_builtin_match(**id))
+            .copied()
+            .collect();
 
-    //     let mut output = active_user_defined_matches;
-    //     output.extend(builtin_matches);
-    //     output
-    // }
+        let mut output = active_user_defined_matches;
+        output.extend(builtin_matches);
+        output
+    }
 
-    pub fn configs(&self) -> Vec<(&ConfigFile, MatchSet)> {
+    /// Get all the configs and their match sets.
+    pub fn collect_matches_and_global_vars_from_all_configs(
+        &self,
+    ) -> Vec<(&ConfigFile, MatchesAndGlobalVars)> {
         self.config_store
-            .configs()
+            .all_configs()
             .into_iter()
             .map(|config| {
-                let match_set = self.match_store.query(config.match_file_paths());
+                let match_set = self
+                    .match_store
+                    .collect_matches_and_global_vars(config.match_file_paths());
                 (config, match_set)
             })
             .collect()
     }
 }
-
-// impl<'a> ConfigManager<'a> {
-//     fn active_mode(&self) -> espanso_engine::dispatch::Mode {
-//         let config = self.active();
-//         match config.backend() {
-//             espanso_config::config::Backend::Inject => espanso_engine::dispatch::Mode::Event,
-//             espanso_config::config::Backend::Clipboard => espanso_engine::dispatch::Mode::Clipboard,
-//             espanso_config::config::Backend::Auto => espanso_engine::dispatch::Mode::Auto {
-//                 clipboard_threshold: config.clipboard_threshold(),
-//             },
-//         }
-//     }
-// }
-
-// impl<'a> super::engine::dispatch::executor::clipboard_injector::ClipboardParamsProvider
-//     for ConfigManager<'a>
-// {
-//     fn get(&self) -> super::engine::dispatch::executor::clipboard_injector::ClipboardParams {
-//         let active = self.active();
-//         super::engine::dispatch::executor::clipboard_injector::ClipboardParams {
-//             pre_paste_delay: active.pre_paste_delay(),
-//             paste_shortcut_event_delay: active.paste_shortcut_event_delay(),
-//             paste_shortcut: active.paste_shortcut(),
-//             disable_x11_fast_inject: active.disable_x11_fast_inject(),
-//             restore_clipboard: active.preserve_clipboard(),
-//             restore_clipboard_delay: active.restore_clipboard_delay(),
-//             x11_use_xclip_backend: active.x11_use_xclip_backend(),
-//             x11_use_xdotool_backend: active.x11_use_xdotool_backend(),
-//         }
-//     }
-// }
-
-// impl<'a> ClipboardOperationOptionsProvider for ConfigManager<'a> {
-//     fn get_operation_options(&self) -> espanso_clipboard::ClipboardOperationOptions {
-//         let active = self.active();
-//         espanso_clipboard::ClipboardOperationOptions {
-//             use_xclip_backend: active.x11_use_xclip_backend(),
-//         }
-//     }
-// }
-
-// impl<'a> super::engine::dispatch::executor::InjectParamsProvider for ConfigManager<'a> {
-//     fn get(&self) -> super::engine::dispatch::executor::InjectParams {
-//         let active = self.active();
-//         super::engine::dispatch::executor::InjectParams {
-//             disable_x11_fast_inject: active.disable_x11_fast_inject(),
-//             inject_delay: active.inject_delay(),
-//             key_delay: active.key_delay(),
-//             evdev_modifier_delay: active.evdev_modifier_delay(),
-//             x11_use_xdotool_backend: active.x11_use_xdotool_backend(),
-//         }
-//     }
-// }
-
-// impl<'a> espanso_engine::process::MatcherMiddlewareConfigProvider for ConfigManager<'a> {
-//     fn max_history_size(&self) -> usize {
-//         self.default().backspace_limit()
-//     }
-// }
-
-// impl<'a> espanso_engine::process::UndoEnabledProvider for ConfigManager<'a> {
-//     fn is_undo_enabled(&self) -> bool {
-//         // Disable undo_backspace on Wayland for now as it's not stable
-//         if cfg!(feature = "wayland") {
-//             return false;
-//         }
-
-//         // Because we cannot filter out espanso-generated events when using the X11 record injection
-//         // method, we need to disable undo_backspace to avoid looping (espanso picks up its own
-//         // injections, causing the program to misbehave)
-//         if cfg!(target_os = "linux") && self.active().disable_x11_fast_inject() {
-//             return false;
-//         }
-
-//         self.active().undo_backspace()
-//     }
-// }
-
-// impl<'a> espanso_engine::process::EnabledStatusProvider for ConfigManager<'a> {
-//     fn is_config_enabled(&self) -> bool {
-//         self.active().enable()
-//     }
-// }
-
-// impl<'a> crate::gui::modulo::form::ModuloFormUIOptionProvider for ConfigManager<'a> {
-//     fn get_post_form_delay(&self) -> usize {
-//         self.active().post_form_delay()
-//     }
-
-//     fn get_max_form_width(&self) -> usize {
-//         self.active().max_form_width()
-//     }
-
-//     fn get_max_form_height(&self) -> usize {
-//         self.active().max_form_height()
-//     }
-// }
-
-// impl<'a> crate::gui::modulo::search::ModuloSearchUIOptionProvider for ConfigManager<'a> {
-//     fn get_post_search_delay(&self) -> usize {
-//         self.active().post_search_delay()
-//     }
-// }
-
-// impl<'a> espanso_engine::process::AltCodeSynthEnabledProvider for ConfigManager<'a> {
-//     fn is_alt_code_synthesizer_enabled(&self) -> bool {
-//         self.active().emulate_alt_codes()
-//     }
-// }

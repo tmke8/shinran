@@ -39,11 +39,11 @@ impl MatchCache {
     pub fn load(config_store: &ConfigStore, match_store: &MatchStore) -> Self {
         let mut cache = HashMap::new();
 
-        let paths = config_store
+        let all_paths = config_store
             .get_all_match_file_paths()
             .into_iter()
             .collect::<Vec<_>>();
-        let global_set = match_store.query(&paths);
+        let global_set = match_store.collect_matches_and_global_vars(&all_paths);
 
         for m in global_set.matches {
             // We clone the match because we need to own it.

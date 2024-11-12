@@ -17,7 +17,7 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::MatchSet;
+use super::MatchesAndGlobalVars;
 use crate::{
     counter::StructId,
     error::NonFatalErrorSet,
@@ -42,7 +42,7 @@ impl MatchStore {
         let mut loaded_files = HashMap::new();
         let mut non_fatal_error_sets = Vec::new();
 
-        // Because match files can imports other match files,
+        // Because match files can import other match files,
         // we have to load them recursively starting from the
         // top-level ones.
         load_match_files_recursively(&mut loaded_files, paths, &mut non_fatal_error_sets);
@@ -50,10 +50,13 @@ impl MatchStore {
         (Self { loaded_files }, non_fatal_error_sets)
     }
 
-    /// Returns all matches that were defined in the given paths.
+    /// Returns all matches and global vars that were defined in the given paths.
     ///
     /// This function recursively loads all the matches in the given paths and their imports.
-    pub fn query<'store>(&'store self, paths: &[PathBuf]) -> MatchSet<'store> {
+    pub fn collect_matches_and_global_vars<'store>(
+        &'store self,
+        paths: &[PathBuf],
+    ) -> MatchesAndGlobalVars<'store> {
         let mut matches: Vec<&Match> = Vec::new();
         let mut global_vars: Vec<&Variable> = Vec::new();
         let mut visited_paths = HashSet::new();
@@ -70,7 +73,7 @@ impl MatchStore {
             paths,
         );
 
-        MatchSet {
+        MatchesAndGlobalVars {
             matches,
             global_vars,
         }
@@ -406,7 +409,7 @@ mod tests {
             let (match_store, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
             assert_eq!(non_fatal_error_sets.len(), 0);
 
-            let match_set = match_store.query(&[base_file]);
+            let match_set = match_store.collect_matches_and_global_vars(&[base_file]);
 
             assert_eq!(
                 match_set
@@ -502,7 +505,7 @@ mod tests {
             let (match_store, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
             assert_eq!(non_fatal_error_sets.len(), 0);
 
-            let match_set = match_store.query(&[base_file]);
+            let match_set = match_store.collect_matches_and_global_vars(&[base_file]);
 
             assert_eq!(
                 match_set
@@ -593,7 +596,7 @@ mod tests {
                 MatchStore::load(&[base_file.clone(), sub_file.clone()]);
             assert_eq!(non_fatal_error_sets.len(), 0);
 
-            let match_set = match_store.query(&[base_file, sub_file]);
+            let match_set = match_store.collect_matches_and_global_vars(&[base_file, sub_file]);
 
             assert_eq!(
                 match_set
@@ -686,7 +689,7 @@ mod tests {
             let (match_store, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
             assert_eq!(non_fatal_error_sets.len(), 0);
 
-            let match_set = match_store.query(&[base_file, sub_file]);
+            let match_set = match_store.collect_matches_and_global_vars(&[base_file, sub_file]);
 
             assert_eq!(
                 match_set

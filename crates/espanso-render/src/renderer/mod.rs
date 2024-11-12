@@ -78,7 +78,7 @@ impl Renderer<NoOpExtension> {
 }
 
 impl<M: Extension> Renderer<M> {
-    pub fn render(
+    pub fn render_template(
         &self,
         template: &Template,
         context: &Context,
@@ -132,7 +132,7 @@ impl<M: Extension> Renderer<M> {
                     if let Some(sub_template) =
                         get_matching_template(variable, context.templates.as_slice())
                     {
-                        match self.render(sub_template, context, options) {
+                        match self.render_template(sub_template, context, options) {
                             RenderResult::Success(output) => {
                                 scope.insert(&variable.name, ExtensionOutput::Single(output));
                             }
@@ -378,7 +378,7 @@ mod tests {
     #[test]
     fn no_variable_no_styling() {
         let renderer = get_renderer();
-        let res = renderer.render(
+        let res = renderer.render_template(
             &template_for_str("plain body"),
             &Context::default(),
             &RenderOptions::default(),
@@ -389,7 +389,7 @@ mod tests {
     #[test]
     fn no_variable_capitalize() {
         let renderer = get_renderer();
-        let res = renderer.render(
+        let res = renderer.render_template(
             &template_for_str("plain body"),
             &Context::default(),
             &RenderOptions {
@@ -402,7 +402,7 @@ mod tests {
     #[test]
     fn no_variable_capitalize_words() {
         let renderer = get_renderer();
-        let res = renderer.render(
+        let res = renderer.render_template(
             &template_for_str("ordinary least squares, with other.punctuation !Marks"),
             &Context::default(),
             &RenderOptions {
@@ -417,7 +417,7 @@ mod tests {
     #[test]
     fn no_variable_uppercase() {
         let renderer = get_renderer();
-        let res = renderer.render(
+        let res = renderer.render_template(
             &template_for_str("plain body"),
             &Context::default(),
             &RenderOptions {
@@ -431,7 +431,8 @@ mod tests {
     fn basic_variable() {
         let renderer = get_renderer();
         let template = template("hello {{var}}", &[("var", "world")]);
-        let res = renderer.render(&template, &Context::default(), &RenderOptions::default());
+        let res =
+            renderer.render_template(&template, &Context::default(), &RenderOptions::default());
         assert!(matches!(res, RenderResult::Success(str) if str == "hello world"));
     }
 
@@ -453,7 +454,8 @@ mod tests {
             }],
             ..Default::default()
         };
-        let res = renderer.render(&template, &Context::default(), &RenderOptions::default());
+        let res =
+            renderer.render_template(&template, &Context::default(), &RenderOptions::default());
         assert!(matches!(res, RenderResult::Success(str) if str == "hello dict"));
     }
 
@@ -461,7 +463,8 @@ mod tests {
     fn missing_variable() {
         let renderer = get_renderer();
         let template = template_for_str("hello {{var}}");
-        let res = renderer.render(&template, &Context::default(), &RenderOptions::default());
+        let res =
+            renderer.render_template(&template, &Context::default(), &RenderOptions::default());
         assert!(matches!(res, RenderResult::Error(_)));
     }
 
@@ -469,7 +472,7 @@ mod tests {
     fn global_variable() {
         let renderer = get_renderer();
         let template = template("hello {{var}}", &[]);
-        let res = renderer.render(
+        let res = renderer.render_template(
             &template,
             &Context {
                 global_vars: vec![Variable {
@@ -492,7 +495,7 @@ mod tests {
     fn global_dict_variable() {
         let renderer = get_renderer();
         let template = template("hello {{var.nested}}", &[]);
-        let res = renderer.render(
+        let res = renderer.render_template(
             &template,
             &Context {
                 global_vars: vec![Variable {
@@ -535,7 +538,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        let res = renderer.render(
+        let res = renderer.render_template(
             &template,
             &Context {
                 global_vars: vec![Variable {
@@ -558,7 +561,7 @@ mod tests {
     fn nested_global_variable() {
         let renderer = get_renderer();
         let template = template("hello {{var2}}", &[]);
-        let res = renderer.render(
+        let res = renderer.render_template(
             &template,
             &Context {
                 global_vars: vec![
@@ -592,7 +595,7 @@ mod tests {
     fn nested_global_variable_circular_dependency_should_fail() {
         let renderer = get_renderer();
         let template = template("hello {{var}}", &[]);
-        let res = renderer.render(
+        let res = renderer.render_template(
             &template,
             &Context {
                 global_vars: vec![
@@ -635,7 +638,7 @@ mod tests {
     fn global_variable_depends_on() {
         let renderer = get_renderer();
         let template = template("hello {{var}}", &[]);
-        let res = renderer.render(
+        let res = renderer.render_template(
             &template,
             &Context {
                 global_vars: vec![
@@ -679,7 +682,7 @@ mod tests {
             }],
             ..Default::default()
         };
-        let res = renderer.render(
+        let res = renderer.render_template(
             &template,
             &Context {
                 global_vars: vec![Variable {
@@ -715,7 +718,7 @@ mod tests {
             body: "world".to_string(),
             ..Default::default()
         };
-        let res = renderer.render(
+        let res = renderer.render_template(
             &template,
             &Context {
                 templates: vec![nested_template],
@@ -741,7 +744,7 @@ mod tests {
             }],
             ..Default::default()
         };
-        let res = renderer.render(
+        let res = renderer.render_template(
             &template,
             &Context {
                 ..Default::default()
@@ -766,7 +769,8 @@ mod tests {
             }],
             ..Default::default()
         };
-        let res = renderer.render(&template, &Context::default(), &RenderOptions::default());
+        let res =
+            renderer.render_template(&template, &Context::default(), &RenderOptions::default());
         assert!(matches!(res, RenderResult::Aborted));
     }
 
@@ -785,7 +789,8 @@ mod tests {
             }],
             ..Default::default()
         };
-        let res = renderer.render(&template, &Context::default(), &RenderOptions::default());
+        let res =
+            renderer.render_template(&template, &Context::default(), &RenderOptions::default());
         assert!(matches!(res, RenderResult::Error(_)));
     }
 
@@ -824,7 +829,8 @@ mod tests {
             },
         ];
 
-        let res = renderer.render(&template, &Context::default(), &RenderOptions::default());
+        let res =
+            renderer.render_template(&template, &Context::default(), &RenderOptions::default());
         assert!(matches!(res, RenderResult::Success(str) if str == "hello John Snow"));
     }
 
@@ -854,7 +860,8 @@ mod tests {
             },
         ];
 
-        let res = renderer.render(&template, &Context::default(), &RenderOptions::default());
+        let res =
+            renderer.render_template(&template, &Context::default(), &RenderOptions::default());
         assert!(matches!(res, RenderResult::Success(str) if str == "hello {{first}} two"));
     }
 
@@ -883,7 +890,8 @@ mod tests {
             },
         ];
 
-        let res = renderer.render(&template, &Context::default(), &RenderOptions::default());
+        let res =
+            renderer.render_template(&template, &Context::default(), &RenderOptions::default());
         assert!(matches!(res, RenderResult::Success(str) if str == "hello {{first}} two"));
     }
 
@@ -901,7 +909,8 @@ mod tests {
             ..Default::default()
         }];
 
-        let res = renderer.render(&template, &Context::default(), &RenderOptions::default());
+        let res =
+            renderer.render_template(&template, &Context::default(), &RenderOptions::default());
         assert!(matches!(res, RenderResult::Error(_)));
     }
 
@@ -926,7 +935,7 @@ mod tests {
             },
         ];
 
-        let res = renderer.render(
+        let res = renderer.render_template(
             &template,
             &Context {
                 global_vars: vec![Variable {
@@ -970,7 +979,7 @@ mod tests {
             },
         ];
 
-        let res = renderer.render(
+        let res = renderer.render_template(
             &template,
             &Context {
                 global_vars: vec![Variable {
@@ -993,7 +1002,8 @@ mod tests {
     fn variable_escape() {
         let renderer = get_renderer();
         let template = template("hello \\{\\{var\\}\\}", &[("var", "world")]);
-        let res = renderer.render(&template, &Context::default(), &RenderOptions::default());
+        let res =
+            renderer.render_template(&template, &Context::default(), &RenderOptions::default());
         assert!(matches!(res, RenderResult::Success(str) if str == "hello {{var}}"));
     }
 }

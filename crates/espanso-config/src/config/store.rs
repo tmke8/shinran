@@ -36,21 +36,24 @@ pub struct ConfigStore {
 }
 
 impl ConfigStore {
-    pub fn default(&self) -> &ConfigFile {
+    pub fn default_config(&self) -> &ConfigFile {
         &self.default
     }
 
-    // fn active(&self, app: &super::AppProperties) -> Arc<ConfigFile> {
-    //     // Find a custom config that matches or fallback to the default one
-    //     for custom in &self.customs {
-    //         if custom.is_match(app) {
-    //             return Arc::clone(custom);
-    //         }
-    //     }
-    //     Arc::clone(&self.default)
-    // }
+    /// Get the active configuration for the given app.
+    ///
+    /// This will return the *first* custom configuration that matches the app properties.
+    pub fn active_config(&self, app: &super::AppProperties) -> &ConfigFile {
+        // Find a custom config that matches or fallback to the default one
+        for custom in &self.customs {
+            if custom.is_match(app) {
+                return &custom;
+            }
+        }
+        &self.default
+    }
 
-    pub fn configs(&self) -> Vec<&ConfigFile> {
+    pub fn all_configs(&self) -> Vec<&ConfigFile> {
         let mut configs = vec![&self.default];
 
         for custom in &self.customs {
@@ -64,7 +67,7 @@ impl ConfigStore {
     pub fn get_all_match_file_paths(&self) -> HashSet<PathBuf> {
         let mut paths = HashSet::new();
 
-        paths.extend(self.default().match_file_paths().iter().cloned());
+        paths.extend(self.default_config().match_file_paths().iter().cloned());
         for custom in &self.customs {
             paths.extend(custom.match_file_paths().iter().cloned());
         }
@@ -131,6 +134,8 @@ impl ConfigStore {
 
 #[cfg(test)]
 mod tests {
+    use regex::Regex;
+
     use crate::config::parse::ParsedConfig;
 
     use super::*;
@@ -156,24 +161,25 @@ mod tests {
     fn config_store_selects_correctly() {
         let default = new_mock("default");
         let custom1 = new_mock("custom1");
-        let custom2 = new_mock("custom2");
+        let mut custom2 = new_mock("custom2");
+        custom2.filter_class = Some(Regex::new("foo").unwrap());
 
         let store = ConfigStore {
-            default: default,
+            default,
             customs: vec![custom1, custom2],
         };
 
-        assert_eq!(store.default().label(), "default");
-        // assert_eq!(
-        //     store
-        //         .active(&crate::config::AppProperties {
-        //             title: None,
-        //             class: None,
-        //             exec: None,
-        //         })
-        //         .label(),
-        //     "custom2"
-        // );
+        assert_eq!(store.default_config().label(), "default");
+        assert_eq!(
+            store
+                .active_config(&crate::config::AppProperties {
+                    title: None,
+                    class: Some("foo"),
+                    exec: None,
+                })
+                .label(),
+            "custom2"
+        );
     }
 
     #[test]
@@ -183,20 +189,20 @@ mod tests {
         let custom2 = new_mock("custom2");
 
         let store = ConfigStore {
-            default: default,
+            default,
             customs: vec![custom1, custom2],
         };
 
-        assert_eq!(store.default().label(), "default");
-        // assert_eq!(
-        //     store
-        //         .active(&crate::config::AppProperties {
-        //             title: None,
-        //             class: None,
-        //             exec: None,
-        //         })
-        //         .label(),
-        //     "default"
-        // );
+        assert_eq!(store.default_config().label(), "default");
+        assert_eq!(
+            store
+                .active_config(&crate::config::AppProperties {
+                    title: None,
+                    class: None,
+                    exec: None,
+                })
+                .label(),
+            "default"
+        );
     }
 }

@@ -18,7 +18,6 @@
  */
 
 use enum_as_inner::EnumAsInner;
-use ordered_float::OrderedFloat;
 use std::collections::BTreeMap;
 
 use crate::counter::StructId;

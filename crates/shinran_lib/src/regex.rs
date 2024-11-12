@@ -89,35 +89,36 @@ impl RegexMatcher {
         let mut matches = Vec::new();
 
         for index in self.regex_set.matches(trigger) {
-            if let (Some(id), Some(regex)) = (self.ids.get(index), self.regexes.get(index)) {
-                if let Some(captures) = regex.captures(trigger) {
-                    let full_match = captures.get(0).map_or("", |m| m.as_str());
-                    if !full_match.is_empty() {
-                        // Now extract the captured names as variables
-                        let variables: HashMap<String, String> = regex
-                            .capture_names()
-                            .flatten()
-                            .filter_map(|n| {
-                                Some((n.to_string(), captures.name(n)?.as_str().to_string()))
-                            })
-                            .collect();
-
-                        let result = DetectedMatch {
-                            id: *id,
-                            trigger: full_match.to_string(),
-                            left_separator: None,
-                            right_separator: None,
-                            args: variables,
-                        };
-
-                        matches.push(result);
-                    }
-                }
-            } else {
+            let (Some(id), Some(regex)) = (self.ids.get(index), self.regexes.get(index)) else {
                 error!(
                     "received inconsistent index from regex set with index: {}",
                     index
                 );
+                continue;
+            };
+
+            let Some(captures) = regex.captures(trigger) else {
+                continue;
+            };
+
+            let full_match = captures.get(0).map_or("", |m| m.as_str());
+            if !full_match.is_empty() {
+                // Now extract the captured names as variables
+                let variables: HashMap<String, String> = regex
+                    .capture_names()
+                    .flatten()
+                    .filter_map(|n| Some((n.to_string(), captures.name(n)?.as_str().to_string())))
+                    .collect();
+
+                let result = DetectedMatch {
+                    id: *id,
+                    trigger: full_match.to_string(),
+                    left_separator: None,
+                    right_separator: None,
+                    args: variables,
+                };
+
+                matches.push(result);
             }
         }
         matches

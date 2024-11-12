@@ -134,7 +134,7 @@ mod tests {
             let (config_store, match_store, errors) = load(base).unwrap();
 
             assert_eq!(errors.len(), 0);
-            assert_eq!(config_store.default().match_file_paths().len(), 2);
+            assert_eq!(config_store.default_config().match_file_paths().len(), 2);
             // assert_eq!(
             //     config_store
             //         .active(&AppProperties {
@@ -149,7 +149,9 @@ mod tests {
 
             assert_eq!(
                 match_store
-                    .query(config_store.default().match_file_paths())
+                    .collect_matches_and_global_vars(
+                        config_store.default_config().match_file_paths()
+                    )
                     .matches
                     .len(),
                 3
@@ -230,7 +232,7 @@ mod tests {
 
             assert_eq!(errors.len(), 3);
             // It shouldn't have loaded the "config.yml" one because of the YAML error
-            assert_eq!(config_store.configs().len(), 1);
+            assert_eq!(config_store.all_configs().len(), 1);
             // It shouldn't load "base.yml" and "_sub.yml" due to YAML errors
             assert_eq!(match_store.loaded_paths().len(), 1);
         });
@@ -262,7 +264,9 @@ mod tests {
 
             assert_eq!(
                 match_store
-                    .query(config_store.default().match_file_paths())
+                    .collect_matches_and_global_vars(
+                        config_store.default_config().match_file_paths()
+                    )
                     .matches
                     .len(),
                 1
