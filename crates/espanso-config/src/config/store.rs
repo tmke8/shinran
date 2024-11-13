@@ -47,7 +47,7 @@ impl ProfileStore {
         // Find a custom config that matches or fallback to the default one
         for custom in &self.customs {
             if custom.is_match(app) {
-                return &custom;
+                return custom;
             }
         }
         &self.default

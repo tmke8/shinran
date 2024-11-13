@@ -128,6 +128,7 @@ pub const fn rgb_to_u32(r: u8, g: u8, b: u8) -> u32 {
     (r as u32) << 16 | (g as u32) << 8 | b as u32
 }
 
+/// What should happen to the preedit text when focus goes out?
 #[derive(Debug, Clone)]
 #[repr(u32)]
 pub enum IBusEnginePreedit {

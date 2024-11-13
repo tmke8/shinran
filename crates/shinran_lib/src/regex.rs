@@ -134,7 +134,7 @@ impl RegexMatcher {
         for m in matches {
             match Regex::new(&m.regex) {
                 Ok(regex) => {
-                    ids.push(m.id.clone());
+                    ids.push(m.id);
                     good_regexes.push(m.regex);
                     regexes.push(regex);
                 }

@@ -129,92 +129,92 @@ impl<M: Extension> Renderer<M> {
                 if matches!(variable.var_type, VarType::Match) {
                     // Recursive call
                     // Call render recursively
-                    if let Some(sub_template) =
+                    let Some(sub_template) =
                         get_matching_template(variable, context.templates.as_slice())
-                    {
-                        match self.render_template(sub_template, context, options) {
-                            RenderResult::Success(output) => {
-                                scope.insert(&variable.name, ExtensionOutput::Single(output));
-                            }
-                            result => return result,
-                        }
-                    } else {
+                    else {
                         error!("unable to find sub-match: {}", variable.name);
                         return RenderResult::Error(RendererError::MissingSubMatch.into());
+                    };
+                    match self.render_template(sub_template, context, options) {
+                        RenderResult::Success(output) => {
+                            scope.insert(&variable.name, ExtensionOutput::Single(output));
+                        }
+                        result => return result,
                     }
-                } else {
-                    let variable_params = if variable.inject_vars {
-                        match inject_variables_into_params(&variable.params, &scope) {
-                            Ok(augmented_params) => Cow::Owned(augmented_params),
-                            Err(err) => {
-                                error!(
-                                    "unable to inject variables into params of variable '{}': {}",
-                                    variable.name, err
-                                );
+                    continue;
+                };
 
-                                // if variable.var_type == "form" {
-                                //     if let Some(RendererError::MissingVariable(_)) =
-                                //         err.downcast_ref::<RendererError>()
-                                //     {
-                                //         log_new_form_syntax_tip();
-                                //     }
-                                // }
-
-                                return RenderResult::Error(err);
-                            }
-                        }
-                    } else {
-                        Cow::Borrowed(&variable.params)
-                    };
-
-                    let extension_result = match &variable.var_type {
-                        VarType::Date => {
-                            self.date_extension
-                                .calculate(context, &scope, &variable_params)
-                        }
-                        VarType::Echo => {
-                            self.echo_extension
-                                .calculate(context, &scope, &variable_params)
-                        }
-                        VarType::Shell => {
-                            self.shell_extension
-                                .calculate(context, &scope, &variable_params)
-                        }
-                        VarType::Script => {
-                            self.script_extension
-                                .calculate(context, &scope, &variable_params)
-                        }
-                        VarType::Random => {
-                            self.random_extension
-                                .calculate(context, &scope, &variable_params)
-                        }
-                        VarType::Mock => {
-                            self.mock_extension
-                                .calculate(context, &scope, &variable_params)
-                        }
-                        VarType::Global | VarType::Match => {
-                            unreachable!()
-                        }
-                    };
-
-                    match extension_result {
-                        ExtensionResult::Success(output) => {
-                            scope.insert(&variable.name, output);
-                        }
-                        ExtensionResult::Aborted => {
-                            warn!(
-                                "rendering was aborted by extension: {:?}, on var: {}",
-                                variable.var_type, variable.name
+                let variable_params = if variable.inject_vars {
+                    match inject_variables_into_params(&variable.params, &scope) {
+                        Ok(augmented_params) => Cow::Owned(augmented_params),
+                        Err(err) => {
+                            error!(
+                                "unable to inject variables into params of variable '{}': {}",
+                                variable.name, err
                             );
-                            return RenderResult::Aborted;
-                        }
-                        ExtensionResult::Error(err) => {
-                            warn!(
-                                "extension '{:?}' on var: '{}' reported an error: {}",
-                                variable.var_type, variable.name, err
-                            );
+
+                            // if variable.var_type == "form" {
+                            //     if let Some(RendererError::MissingVariable(_)) =
+                            //         err.downcast_ref::<RendererError>()
+                            //     {
+                            //         log_new_form_syntax_tip();
+                            //     }
+                            // }
+
                             return RenderResult::Error(err);
                         }
+                    }
+                } else {
+                    Cow::Borrowed(&variable.params)
+                };
+
+                let extension_result = match &variable.var_type {
+                    VarType::Date => {
+                        self.date_extension
+                            .calculate(context, &scope, &variable_params)
+                    }
+                    VarType::Echo => {
+                        self.echo_extension
+                            .calculate(context, &scope, &variable_params)
+                    }
+                    VarType::Shell => {
+                        self.shell_extension
+                            .calculate(context, &scope, &variable_params)
+                    }
+                    VarType::Script => {
+                        self.script_extension
+                            .calculate(context, &scope, &variable_params)
+                    }
+                    VarType::Random => {
+                        self.random_extension
+                            .calculate(context, &scope, &variable_params)
+                    }
+                    VarType::Mock => {
+                        self.mock_extension
+                            .calculate(context, &scope, &variable_params)
+                    }
+                    VarType::Global | VarType::Match => {
+                        unreachable!()
+                    }
+                };
+
+                match extension_result {
+                    ExtensionResult::Success(output) => {
+                        scope.insert(&variable.name, output);
+                    }
+                    ExtensionResult::Aborted => {
+                        warn!(
+                            "rendering was aborted by extension: {:?}, on var: {}",
+                            variable.var_type, variable.name
+                        );
+                        return RenderResult::Aborted;
+                    }
+                    ExtensionResult::Error(err) => {
+                        warn!(
+                            "extension '{:?}' on var: '{}' reported an error: {}",
+                            variable.var_type, variable.name, err
+                        );
+                        return RenderResult::Error(err);
                     }
                 }
             }

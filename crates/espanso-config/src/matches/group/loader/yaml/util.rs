@@ -54,9 +54,7 @@ fn convert_value(value: YamlValue) -> Result<Value> {
                 ))
             } else if n.is_f64() {
                 Value::Number(Number::Float(
-                    n.as_f64()
-                        .ok_or(ConversionError::InvalidNumberFormat)?
-                        .into(),
+                    n.as_f64().ok_or(ConversionError::InvalidNumberFormat)?,
                 ))
             } else {
                 return Err(ConversionError::InvalidNumberFormat.into());

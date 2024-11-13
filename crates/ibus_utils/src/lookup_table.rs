@@ -92,7 +92,7 @@ impl<'a> IBusLookupTable<'a> {
             return false;
         }
         self.cursor_pos = pos;
-        return true;
+        true
     }
 
     pub fn cursor_up(&mut self) -> bool {
@@ -105,7 +105,7 @@ impl<'a> IBusLookupTable<'a> {
             }
         }
         self.cursor_pos -= 1;
-        return true;
+        true
     }
 
     pub fn cursor_down(&mut self) -> bool {
@@ -118,7 +118,7 @@ impl<'a> IBusLookupTable<'a> {
             }
         }
         self.cursor_pos += 1;
-        return true;
+        true
     }
 
     pub fn clear(&mut self) {

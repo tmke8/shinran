@@ -23,8 +23,7 @@ fn load_config_and_renderer(
     let force_config_path = get_path_override(&cli_overrides, "config_dir", "ESPANSO_CONFIG_DIR");
     let force_package_path =
         get_path_override(&cli_overrides, "package_dir", "ESPANSO_PACKAGE_DIR");
-    let force_runtime_path =
-        get_path_override(&cli_overrides, "runtime_dir", "ESPANSO_RUNTIME_DIR");
+    let force_runtime_path = get_path_override(cli_overrides, "runtime_dir", "ESPANSO_RUNTIME_DIR");
 
     let paths = path::resolve_paths(
         force_config_path.as_deref(),
