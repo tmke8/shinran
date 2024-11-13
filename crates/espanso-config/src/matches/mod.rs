@@ -114,15 +114,16 @@ impl MatchCause {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum WordBoundary {
+    #[default]
     None,
     Left,
     Right,
     Both,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct TriggerCause {
     pub triggers: Vec<String>,
 
@@ -132,19 +133,9 @@ pub struct TriggerCause {
     pub uppercase_style: UpperCasingStyle,
 }
 
-impl Default for TriggerCause {
-    fn default() -> Self {
-        Self {
-            triggers: Vec::new(),
-            word_boundary: WordBoundary::None,
-            propagate_case: false,
-            uppercase_style: UpperCasingStyle::Uppercase,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub enum UpperCasingStyle {
+    #[default]
     Uppercase,
     Capitalize,
     CapitalizeWords,
@@ -162,6 +153,12 @@ pub enum MatchEffect {
     None,
     Text(TextEffect),
     Image(ImageEffect),
+}
+
+impl Default for MatchEffect {
+    fn default() -> Self {
+        Self::None
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
