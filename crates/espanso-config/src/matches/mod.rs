@@ -117,12 +117,19 @@ impl MatchCause {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WordBoundary {
+    None,
+    Left,
+    Right,
+    Both,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TriggerCause {
     pub triggers: Vec<String>,
 
-    pub left_word: bool,
-    pub right_word: bool,
+    pub word_boundary: WordBoundary,
 
     pub propagate_case: bool,
     pub uppercase_style: UpperCasingStyle,
@@ -132,8 +139,7 @@ impl Default for TriggerCause {
     fn default() -> Self {
         Self {
             triggers: Vec::new(),
-            left_word: false,
-            right_word: false,
+            word_boundary: WordBoundary::None,
             propagate_case: false,
             uppercase_style: UpperCasingStyle::Uppercase,
         }

@@ -25,7 +25,7 @@ use crate::{
     matches::{
         group::{path::resolve_imports, LoadedMatchFile},
         ImageEffect, Match, Params, RegexCause, TextFormat, TextInjectMode, UpperCasingStyle,
-        Value, Variable,
+        Value, Variable, WordBoundary,
     },
 };
 use anyhow::{anyhow, bail, Context, Result};
@@ -165,16 +165,17 @@ pub fn try_convert_into_match(
     };
 
     let cause = if let Some(triggers) = triggers {
+        let left_word = yaml_match.left_word.or(yaml_match.word).unwrap_or(false);
+        let right_word = yaml_match.right_word.or(yaml_match.word).unwrap_or(false);
+        let word_boundary = match (left_word, right_word) {
+            (true, true) => WordBoundary::Both,
+            (true, false) => WordBoundary::Left,
+            (false, true) => WordBoundary::Right,
+            (false, false) => WordBoundary::None,
+        };
         MatchCause::Trigger(TriggerCause {
             triggers,
-            left_word: yaml_match
-                .left_word
-                .or(yaml_match.word)
-                .unwrap_or(TriggerCause::default().left_word),
-            right_word: yaml_match
-                .right_word
-                .or(yaml_match.word)
-                .unwrap_or(TriggerCause::default().right_word),
+            word_boundary,
             propagate_case: yaml_match
                 .propagate_case
                 .unwrap_or(TriggerCause::default().propagate_case),
@@ -428,8 +429,7 @@ mod tests {
             Match {
                 cause: MatchCause::Trigger(TriggerCause {
                     triggers: vec!["Hello".to_string()],
-                    left_word: true,
-                    right_word: true,
+                    word_boundary: WordBoundary::Both,
                     ..Default::default()
                 }),
                 effect: MatchEffect::Text(TextEffect {
@@ -455,7 +455,7 @@ mod tests {
             Match {
                 cause: MatchCause::Trigger(TriggerCause {
                     triggers: vec!["Hello".to_string()],
-                    left_word: true,
+                    word_boundary: WordBoundary::Left,
                     ..Default::default()
                 }),
                 effect: MatchEffect::Text(TextEffect {
@@ -481,7 +481,7 @@ mod tests {
             Match {
                 cause: MatchCause::Trigger(TriggerCause {
                     triggers: vec!["Hello".to_string()],
-                    right_word: true,
+                    word_boundary: WordBoundary::Right,
                     ..Default::default()
                 }),
                 effect: MatchEffect::Text(TextEffect {
