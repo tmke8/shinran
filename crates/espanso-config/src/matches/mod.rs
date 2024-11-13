@@ -40,7 +40,7 @@ pub struct Match {
 impl Default for Match {
     fn default() -> Self {
         Self {
-            cause: MatchCause::None,
+            cause: MatchCause::Trigger(TriggerCause::default()),
             effect: MatchEffect::None,
             label: None,
             id: 0,
@@ -81,7 +81,6 @@ impl Match {
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq, EnumAsInner)]
 pub enum MatchCause {
-    None,
     Trigger(TriggerCause),
     Regex(RegexCause),
     // TODO: shortcut
@@ -94,7 +93,6 @@ impl MatchCause {
                 trigger_cause.triggers.first().map(String::as_str)
             }
             MatchCause::Regex(trigger_cause) => Some(trigger_cause.regex.as_str()),
-            MatchCause::None => None,
         }
         // TODO: insert rendering for hotkey/shortcut
     }
@@ -103,7 +101,6 @@ impl MatchCause {
         match &self {
             MatchCause::Trigger(trigger_cause) => format!("triggers: {:?}", trigger_cause.triggers),
             MatchCause::Regex(trigger_cause) => format!("regex: {:?}", trigger_cause.regex),
-            MatchCause::None => "No description available".to_owned(),
         }
         // TODO: insert rendering for hotkey/shortcut
     }

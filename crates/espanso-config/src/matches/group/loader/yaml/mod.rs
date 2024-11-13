@@ -185,7 +185,7 @@ pub fn try_convert_into_match(
         // TODO: add test case
         MatchCause::Regex(RegexCause { regex })
     } else {
-        MatchCause::None
+        bail!("match must have either 'trigger' or 'regex' field; both are missing");
     };
 
     // TODO: test force_mode/force_clipboard
