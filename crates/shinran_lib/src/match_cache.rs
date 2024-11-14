@@ -20,8 +20,8 @@
 use std::collections::HashMap;
 
 use espanso_config::{
-    config::ProfileStore,
-    matches::{store::MatchStore, Match, MatchCause},
+    config::{ProfileFile, ProfileStore},
+    matches::{store::MatchStore, Match},
 };
 
 use crate::engine::DetectedMatch;
@@ -31,39 +31,93 @@ use crate::regex::{RegexMatch, RegexMatcher};
 use super::builtin::BuiltInMatch;
 
 pub struct MatchCache {
-    cache: HashMap<i32, Match>,
+    trigger_default_profile: HashMap<String, usize>,
+    trigger_custom_profiles: Vec<HashMap<String, usize>>,
+    regex_default_profile: HashMap<String, usize>,
+    regex_custom_profiles: Vec<HashMap<String, usize>>,
+    global_var_default_profile: HashMap<String, usize>,
+    global_var_custom_profile: Vec<HashMap<String, usize>>,
 }
 
 impl MatchCache {
     pub fn load(profile_store: &ProfileStore, match_store: &MatchStore) -> Self {
-        let mut cache = HashMap::new();
+        let default_config = profile_store.default_config();
 
-        let all_paths = profile_store
-            .get_all_match_file_paths()
-            .into_iter()
-            .collect::<Vec<_>>();
-        let global_set = match_store.collect_matches_and_global_vars(&all_paths);
+        let (trigger_default_profile, regex_default_profile, global_var_default_profile) =
+            create_profile_cache(default_config, match_store);
 
-        for m in global_set.matches {
-            // We clone the match because we need to own it.
-            // TODO: Investigate if we can avoid cloning the match
-            cache.insert(m.id, m.clone());
+        let mut trigger_custom_profiles: Vec<HashMap<String, usize>> = Vec::new();
+        let mut regex_custom_profiles: Vec<HashMap<String, usize>> = Vec::new();
+        let mut global_var_custom_profile: Vec<HashMap<String, usize>> = Vec::new();
+
+        for profile in profile_store.custom_configs() {
+            let (trigger_map, regex_map, global_var_map) =
+                create_profile_cache(profile, match_store);
+            trigger_custom_profiles.push(trigger_map);
+            regex_custom_profiles.push(regex_map);
+            global_var_custom_profile.push(global_var_map);
         }
 
-        Self { cache }
+        Self {
+            trigger_default_profile,
+            trigger_custom_profiles,
+            regex_default_profile,
+            regex_custom_profiles,
+            global_var_default_profile,
+            global_var_custom_profile,
+        }
     }
 
-    fn ids(&self) -> Vec<i32> {
-        self.cache.keys().copied().collect()
+    // fn ids(&self) -> Vec<i32> {
+    //     self.cache.keys().copied().collect()
+    // }
+
+    // pub fn matches(&self) -> Vec<&Match> {
+    //     self.cache.values().collect()
+    // }
+
+    // pub fn get(&self, id: i32) -> Option<&Match> {
+    //     self.cache.get(&id)
+    // }
+
+    pub fn default_profile_and_matches(&self) -> &HashMap<String, usize> {
+        &self.trigger_default_profile
+    }
+}
+
+fn create_profile_cache(
+    profile: &ProfileFile,
+    match_store: &MatchStore,
+) -> (
+    HashMap<String, usize>,
+    HashMap<String, usize>,
+    HashMap<String, usize>,
+) {
+    let mut trigger_map: HashMap<String, usize> = HashMap::new();
+    let mut regex_map: HashMap<String, usize> = HashMap::new();
+    let mut global_var_map: HashMap<String, usize> = HashMap::new();
+
+    let file_paths = profile.match_file_paths();
+    let collection = match_store.collect_matches_and_global_vars(file_paths);
+
+    for idx in collection.trigger_matches {
+        let (triggers, _) = &match_store.trigger_matches[idx];
+        for trigger in triggers {
+            trigger_map.insert(trigger.clone(), idx);
+        }
     }
 
-    pub fn matches(&self) -> Vec<&Match> {
-        self.cache.values().collect()
+    for idx in collection.regex_matches {
+        let (regex, _) = &match_store.regex_matches[idx];
+        regex_map.insert(regex.clone(), idx);
     }
 
-    pub fn get(&self, id: i32) -> Option<&Match> {
-        self.cache.get(&id)
+    for idx in collection.global_vars {
+        let global_var = &match_store.global_vars[idx];
+        global_var_map.insert(global_var.name.clone(), idx);
     }
+
+    (trigger_map, regex_map, global_var_map)
 }
 
 // impl<'a> espanso_engine::process::MatchInfoProvider for MatchCache<'a> {
@@ -162,26 +216,29 @@ impl CombinedMatchCache {
     }
 
     pub(crate) fn find_matches_from_trigger(&self, trigger: &str) -> Vec<DetectedMatch> {
-        let user_matches: Vec<DetectedMatch> = self
+        let user_matches: Option<DetectedMatch> = self
             .user_match_cache
-            .cache
-            .values()
-            .filter_map(|m| {
-                if let MatchCause::Trigger(trigger_cause) = &m.cause {
-                    if trigger_cause.triggers.iter().any(|t| t == trigger) {
-                        Some(DetectedMatch {
-                            id: m.id,
-                            trigger: trigger.to_string(),
-                            ..Default::default()
-                        })
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            })
-            .collect();
+            .default_profile_and_matches()
+            .get(trigger)
+            .map(|idx| DetectedMatch {
+                id: *idx,
+                trigger: trigger.to_string(),
+                ..Default::default()
+            });
+        // .values()
+        // .filter_map(|idx| {
+        //     let m = self.match_store.trigger_matches[idx];
+        //     if trigger_cause.triggers.iter().any(|t| t == trigger) {
+        //         Some(DetectedMatch {
+        //             id: m.id,
+        //             trigger: trigger.to_string(),
+        //             ..Default::default()
+        //         })
+        //     } else {
+        //         None
+        //     }
+        // })
+        // .collect();
 
         let builtin_matches: Vec<DetectedMatch> = self
             .builtin_match_cache

@@ -40,6 +40,10 @@ impl ProfileStore {
         &self.default
     }
 
+    pub fn custom_configs(&self) -> &[ProfileFile] {
+        &self.customs
+    }
+
     /// Get the active configuration for the given app.
     ///
     /// This will return the *first* custom configuration that matches the app properties.
