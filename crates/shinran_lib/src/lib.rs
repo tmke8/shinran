@@ -20,9 +20,8 @@ fn load_config_and_renderer(
     // See also
     // `initialize_and_spawn()`
     // in `espanso/src/cli/worker/engine/mod.rs`.
-    let force_config_path = get_path_override(&cli_overrides, "config_dir", "ESPANSO_CONFIG_DIR");
-    let force_package_path =
-        get_path_override(&cli_overrides, "package_dir", "ESPANSO_PACKAGE_DIR");
+    let force_config_path = get_path_override(cli_overrides, "config_dir", "ESPANSO_CONFIG_DIR");
+    let force_package_path = get_path_override(cli_overrides, "package_dir", "ESPANSO_PACKAGE_DIR");
     let force_runtime_path = get_path_override(cli_overrides, "runtime_dir", "ESPANSO_RUNTIME_DIR");
 
     let paths = path::resolve_paths(
@@ -49,16 +48,15 @@ fn load_config_and_renderer(
 fn get_regex_matches(
     profile_store: &ProfileStore,
     match_store: &MatchStore,
-) -> Vec<regex::RegexMatch<i32>> {
+) -> Vec<regex::RegexMatch<usize>> {
     let paths = profile_store.get_all_match_file_paths();
     let global_set =
         match_store.collect_matches_and_global_vars(&paths.into_iter().collect::<Vec<_>>());
     let mut regex_matches = Vec::new();
 
-    for m in global_set.matches {
-        if let espanso_config::matches::MatchCause::Regex(cause) = &m.cause {
-            regex_matches.push(regex::RegexMatch::new(m.id, &cause.regex));
-        }
+    for match_idx in global_set.regex_matches {
+        let (regex, _) = &match_store.regex_matches[match_idx];
+        regex_matches.push(regex::RegexMatch::new(match_idx, regex));
     }
     regex_matches
 }

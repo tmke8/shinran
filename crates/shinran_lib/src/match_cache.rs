@@ -21,8 +21,9 @@ use std::collections::HashMap;
 
 use espanso_config::{
     config::{ProfileFile, ProfileStore},
-    matches::{store::MatchStore, Match},
+    matches::store::MatchStore,
 };
+use shinran_types::MatchIdx;
 
 use crate::engine::DetectedMatch;
 // use crate::match_select::MatchSummary;
@@ -145,20 +146,21 @@ fn create_profile_cache(
 
 pub struct CombinedMatchCache {
     pub user_match_cache: MatchCache,
-    builtin_match_cache: HashMap<i32, BuiltInMatch>,
+    builtin_match_cache: HashMap<usize, BuiltInMatch>,
     pub regex_matcher: RegexMatcher,
 }
 
-pub enum MatchVariant<'a> {
-    User(&'a Match),
-    Builtin(&'a BuiltInMatch),
-}
+// pub enum MatchVariant<'a> {
+//     Trigger(&'a TriggerMatch),
+//     Regex(&'a BaseMatch),
+//     Builtin(&'a BuiltInMatch),
+// }
 
 impl CombinedMatchCache {
     pub fn load(
         match_cache: MatchCache,
         builtin_matches: Vec<BuiltInMatch>,
-        regex_matches: Vec<RegexMatch<i32>>,
+        regex_matches: Vec<RegexMatch<usize>>,
     ) -> Self {
         let mut builtin_match_cache = HashMap::new();
 
@@ -175,17 +177,17 @@ impl CombinedMatchCache {
         }
     }
 
-    pub fn get(&self, match_id: i32) -> Option<MatchVariant<'_>> {
-        if let Some(user_match) = self.user_match_cache.cache.get(&match_id) {
-            return Some(MatchVariant::User(user_match));
-        }
+    // pub fn get(&self, match_id: usize) -> Option<MatchVariant<'_>> {
+    //     if let Some(user_match) = self.user_match_cache.cache.get(&match_id) {
+    //         return Some(MatchVariant::User(user_match));
+    //     }
 
-        if let Some(builtin_match) = self.builtin_match_cache.get(&match_id) {
-            return Some(MatchVariant::Builtin(builtin_match));
-        }
+    //     if let Some(builtin_match) = self.builtin_match_cache.get(&match_id) {
+    //         return Some(MatchVariant::Builtin(builtin_match));
+    //     }
 
-        None
-    }
+    //     None
+    // }
 
     // fn get_matches<'a>(&'a self, ids: &[i32]) -> Vec<MatchSummary<'a>> {
     //     ids.iter()
@@ -209,19 +211,19 @@ impl CombinedMatchCache {
     //         .collect()
     // }
 
-    fn get_all_matches_ids(&self) -> Vec<i32> {
-        let mut ids: Vec<i32> = self.builtin_match_cache.keys().copied().collect();
-        ids.extend(self.user_match_cache.ids());
-        ids
-    }
+    // fn get_all_matches_ids(&self) -> Vec<i32> {
+    //     let mut ids: Vec<i32> = self.builtin_match_cache.keys().copied().collect();
+    //     ids.extend(self.user_match_cache.ids());
+    //     ids
+    // }
 
     pub(crate) fn find_matches_from_trigger(&self, trigger: &str) -> Vec<DetectedMatch> {
         let user_matches: Option<DetectedMatch> = self
             .user_match_cache
             .default_profile_and_matches()
             .get(trigger)
-            .map(|idx| DetectedMatch {
-                id: *idx,
+            .map(|&idx| DetectedMatch {
+                id: MatchIdx::Trigger(idx),
                 trigger: trigger.to_string(),
                 ..Default::default()
             });
@@ -246,7 +248,7 @@ impl CombinedMatchCache {
             .filter_map(|m| {
                 if m.triggers.iter().any(|t| t == trigger) {
                     Some(DetectedMatch {
-                        id: m.id,
+                        id: MatchIdx::BuiltIn(m.id),
                         trigger: trigger.to_string(),
                         ..Default::default()
                     })
@@ -256,7 +258,8 @@ impl CombinedMatchCache {
             })
             .collect();
 
-        let mut matches = Vec::with_capacity(user_matches.len() + builtin_matches.len());
+        let mut matches =
+            Vec::with_capacity(user_matches.as_ref().map_or(0, |_| 1) + builtin_matches.len());
         matches.extend(user_matches);
         matches.extend(builtin_matches);
 

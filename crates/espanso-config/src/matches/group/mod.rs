@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 
 use crate::error::NonFatalErrorSet;
 
-use super::{Match, Variable};
+use super::{LoadedMatch, Variable};
 
 pub(crate) mod loader;
 mod path;
@@ -35,7 +35,7 @@ mod path;
 pub struct LoadedMatchFile {
     pub imports: Vec<PathBuf>,
     pub global_vars: Vec<Variable>,
-    pub matches: Vec<Match>,
+    pub matches: Vec<LoadedMatch>,
 }
 
 impl LoadedMatchFile {

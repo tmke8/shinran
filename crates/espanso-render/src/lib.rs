@@ -18,7 +18,7 @@
  */
 
 use enum_as_inner::EnumAsInner;
-use shinran_types::{Params, Variable};
+use shinran_types::{Params, TextEffect, Variable};
 use std::collections::HashMap;
 
 pub mod extension;
@@ -45,7 +45,7 @@ pub enum RenderResult {
 #[derive(Default)]
 pub struct Context {
     pub global_vars: Vec<Variable>,
-    pub templates: Vec<Template>,
+    pub templates: Vec<(Vec<String>, TextEffect)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,13 +69,13 @@ pub enum CasingStyle {
     Uppercase,
 }
 
-/// Template for rendering a match with a `Text` effect.
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct Template {
-    pub triggers: Vec<String>,
-    pub body: String,
-    pub vars: Vec<Variable>,
-}
+// /// Template for rendering a match with a `Text` effect.
+// #[derive(Debug, Clone, PartialEq, Default)]
+// pub struct Template {
+//     pub triggers: Vec<String>,
+//     pub body: String,
+//     pub vars: Vec<Variable>,
+// }
 
 // /// A variable that can be used in a template.
 // #[derive(Debug, Clone, PartialEq)]

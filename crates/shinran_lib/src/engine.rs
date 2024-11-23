@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use shinran_types::MatchIdx;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -14,9 +15,9 @@ pub enum RendererError {
     Aborted,
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Eq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct DetectedMatch {
-    pub id: usize,
+    pub id: MatchIdx,
     pub trigger: String,
     pub left_separator: Option<String>,
     pub right_separator: Option<String>,

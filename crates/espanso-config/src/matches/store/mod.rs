@@ -22,7 +22,7 @@ use std::path::PathBuf;
 use crate::error::NonFatalErrorSet;
 
 mod default;
-pub use default::{MatchStore, TriggerMatch};
+pub use default::MatchStore;
 
 /// The set of matches and global vars associated with one config file.
 ///

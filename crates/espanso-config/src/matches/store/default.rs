@@ -18,11 +18,9 @@
  */
 
 use super::MatchesAndGlobalVars;
-use crate::{
-    error::NonFatalErrorSet,
-    matches::{group::LoadedMatchFile, MatchCause, MatchEffect, UpperCasingStyle, Variable},
-};
+use crate::{error::NonFatalErrorSet, matches::group::LoadedMatchFile};
 use anyhow::Context;
+use shinran_types::{BaseMatch, MatchCause, TriggerMatch, Variable};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -34,25 +32,6 @@ pub struct IndexedMatchFile {
     pub global_vars: Vec<usize>,
     pub trigger_matches: Vec<usize>,
     pub regex_matches: Vec<usize>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct BaseMatch {
-    pub id: i32,
-
-    pub effect: MatchEffect,
-
-    // Metadata
-    pub label: Option<String>,
-    pub search_terms: Vec<String>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct TriggerMatch {
-    pub base_match: BaseMatch,
-
-    pub propagate_case: bool,
-    pub uppercase_style: UpperCasingStyle,
 }
 
 /// The MatchStore contains all matches that we have loaded.
@@ -87,7 +66,7 @@ impl MatchStore {
             let mut global_vars_ids = Vec::new();
             for m in match_file.matches {
                 let base_match = BaseMatch {
-                    id: m.id,
+                    // id: m.id,
                     effect: m.effect,
                     label: m.label,
                     search_terms: m.search_terms,
@@ -137,6 +116,13 @@ impl MatchStore {
         )
     }
 
+    // pub fn get(&self, index: MatchIdx) -> &BaseMatch {
+    //     match index {
+    //         MatchIdx::Trigger(idx) => &self.trigger_matches[idx].1.base_match,
+    //         MatchIdx::Regex(idx) => &self.regex_matches[idx].1,
+    //     }
+    // }
+
     /// Returns all matches and global vars that were defined in the given paths.
     ///
     /// This function recursively loads all the matches in the given paths and their imports.
@@ -167,8 +153,8 @@ impl MatchStore {
     }
 }
 
-fn query_matches_for_paths<'a>(
-    indexed_files: &'a HashMap<PathBuf, IndexedMatchFile>,
+fn query_matches_for_paths(
+    indexed_files: &HashMap<PathBuf, IndexedMatchFile>,
     visited_paths: &mut HashSet<PathBuf>,
     visited_trigger_matches: &mut HashSet<usize>,
     visited_regex_matches: &mut HashSet<usize>,
@@ -205,7 +191,7 @@ fn query_matches_for_paths<'a>(
             }
 
             for var in &file.global_vars {
-                if !visited_global_vars.contains(&var) {
+                if !visited_global_vars.contains(var) {
                     visited_global_vars.insert(*var);
                 }
             }
@@ -248,11 +234,10 @@ fn load_match_files_recursively(
 
 #[cfg(test)]
 mod tests {
+    use shinran_types::{MatchEffect, TextEffect};
+
     use super::*;
-    use crate::{
-        matches::{MatchEffect, TextEffect},
-        util::tests::use_test_directory,
-    };
+    use crate::util::tests::use_test_directory;
     use std::fs::create_dir_all;
 
     fn create_match(trigger: &str, replace: &str) -> (Vec<String>, TriggerMatch) {
@@ -261,7 +246,7 @@ mod tests {
             TriggerMatch {
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
-                        replace: replace.to_string(),
+                        body: replace.to_string(),
                         ..Default::default()
                     }),
                     ..Default::default()
@@ -276,6 +261,13 @@ mod tests {
             .iter()
             .map(|(trigger, replace)| create_match(trigger, replace))
             .collect()
+    }
+
+    fn sort_matches(matches: &mut Vec<(Vec<String>, TriggerMatch)>) {
+        matches.sort_unstable_by(|a, b| {
+            (&a.0, &a.1.base_match.effect.as_text().unwrap().body)
+                .cmp(&(&b.0, &b.1.base_match.effect.as_text().unwrap().body))
+        });
     }
 
     fn create_test_var(name: &str) -> Variable {
@@ -496,28 +488,31 @@ mod tests {
 
             let match_set = match_store.collect_matches_and_global_vars(&[base_file]);
 
-            assert_eq!(
-                match_set
-                    .trigger_matches
-                    .into_iter()
-                    .map(|m| { match_store.trigger_matches[m].clone() })
-                    .collect::<Vec<(Vec<String>, TriggerMatch)>>(),
-                create_matches(&[
-                    ("hello", "world3"),
-                    ("hello", "world2"),
-                    ("foo", "bar"),
-                    ("hello", "world"),
-                ])
-            );
+            let mut matches = match_set
+                .trigger_matches
+                .into_iter()
+                .map(|m| match_store.trigger_matches[m].clone())
+                .collect::<Vec<(Vec<String>, TriggerMatch)>>();
+
+            sort_matches(&mut matches);
 
             assert_eq!(
-                match_set
-                    .global_vars
-                    .into_iter()
-                    .map(|m| { match_store.global_vars[m].clone() })
-                    .collect::<Vec<Variable>>(),
-                create_vars(&["var2", "var1"])
+                matches,
+                create_matches(&[
+                    ("foo", "bar"),
+                    ("hello", "world"),
+                    ("hello", "world2"),
+                    ("hello", "world3"),
+                ])
             );
+            let mut vars = match_set
+                .global_vars
+                .into_iter()
+                .map(|m| match_store.global_vars[m].clone())
+                .collect::<Vec<Variable>>();
+            vars.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+
+            assert_eq!(vars, create_vars(&["var1", "var2"]));
         });
     }
 
@@ -580,32 +575,34 @@ mod tests {
             .unwrap();
 
             let (match_store, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
-            assert_eq!(non_fatal_error_sets.len(), 0);
+            assert_eq!(non_fatal_error_sets, vec![]);
 
             let match_set = match_store.collect_matches_and_global_vars(&[base_file]);
+            let mut matches = match_set
+                .trigger_matches
+                .into_iter()
+                .map(|m| match_store.trigger_matches[m].clone())
+                .collect::<Vec<(Vec<String>, TriggerMatch)>>();
+            sort_matches(&mut matches);
 
             assert_eq!(
-                match_set
-                    .trigger_matches
-                    .into_iter()
-                    .map(|m| { match_store.trigger_matches[m].clone() })
-                    .collect::<Vec<(Vec<String>, TriggerMatch)>>(),
+                matches,
                 create_matches(&[
-                    ("hello", "world3"),
-                    ("hello", "world2"),
                     ("foo", "bar"),
                     ("hello", "world"),
+                    ("hello", "world2"),
+                    ("hello", "world3"),
                 ])
             );
 
-            assert_eq!(
-                match_set
-                    .global_vars
-                    .into_iter()
-                    .map(|m| { match_store.global_vars[m].clone() })
-                    .collect::<Vec<Variable>>(),
-                create_vars(&["var2", "var1"])
-            );
+            let mut vars = match_set
+                .global_vars
+                .into_iter()
+                .map(|m| match_store.global_vars[m].clone())
+                .collect::<Vec<Variable>>();
+            vars.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+
+            assert_eq!(vars, create_vars(&["var1", "var2"]));
         });
     }
 
@@ -663,32 +660,34 @@ mod tests {
 
             let (match_store, non_fatal_error_sets) =
                 MatchStore::load(&[base_file.clone(), sub_file.clone()]);
-            assert_eq!(non_fatal_error_sets.len(), 0);
+            assert_eq!(non_fatal_error_sets, vec![]);
 
             let match_set = match_store.collect_matches_and_global_vars(&[base_file, sub_file]);
+            let mut matches = match_set
+                .trigger_matches
+                .into_iter()
+                .map(|m| match_store.trigger_matches[m].clone())
+                .collect::<Vec<(Vec<String>, TriggerMatch)>>();
+            sort_matches(&mut matches);
 
             assert_eq!(
-                match_set
-                    .trigger_matches
-                    .into_iter()
-                    .map(|m| { match_store.trigger_matches[m].clone() })
-                    .collect::<Vec<(Vec<String>, TriggerMatch)>>(),
+                matches,
                 create_matches(&[
-                    ("hello", "world2"),
                     ("foo", "bar"),
                     ("hello", "world"),
+                    ("hello", "world2"),
                     ("hello", "world3"),
                 ])
             );
 
-            assert_eq!(
-                match_set
-                    .global_vars
-                    .into_iter()
-                    .map(|m| { match_store.global_vars[m].clone() })
-                    .collect::<Vec<Variable>>(),
-                create_vars(&["var1", "var2"])
-            );
+            let mut vars = match_set
+                .global_vars
+                .into_iter()
+                .map(|m| match_store.global_vars[m].clone())
+                .collect::<Vec<Variable>>();
+            vars.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+
+            assert_eq!(vars, create_vars(&["var1", "var2"]));
         });
     }
 
@@ -748,32 +747,34 @@ mod tests {
             .unwrap();
 
             let (match_store, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
-            assert_eq!(non_fatal_error_sets.len(), 0);
+            assert_eq!(non_fatal_error_sets, vec![]);
 
             let match_set = match_store.collect_matches_and_global_vars(&[base_file, sub_file]);
+            let mut matches = match_set
+                .trigger_matches
+                .into_iter()
+                .map(|m| match_store.trigger_matches[m].clone())
+                .collect::<Vec<(Vec<String>, TriggerMatch)>>();
+            sort_matches(&mut matches);
 
             assert_eq!(
-                match_set
-                    .trigger_matches
-                    .into_iter()
-                    .map(|m| { match_store.trigger_matches[m].clone() })
-                    .collect::<Vec<(Vec<String>, TriggerMatch)>>(),
+                matches,
                 create_matches(&[
-                    ("hello", "world3"), // This appears only once, though it appears 2 times
-                    ("hello", "world2"),
                     ("foo", "bar"),
                     ("hello", "world"),
+                    ("hello", "world2"),
+                    ("hello", "world3"), // This appears only once, though it appears 2 times
                 ])
             );
 
-            assert_eq!(
-                match_set
-                    .global_vars
-                    .into_iter()
-                    .map(|m| { match_store.global_vars[m].clone() })
-                    .collect::<Vec<Variable>>(),
-                create_vars(&["var2", "var1"])
-            );
+            let mut vars = match_set
+                .global_vars
+                .into_iter()
+                .map(|m| match_store.global_vars[m].clone())
+                .collect::<Vec<Variable>>();
+            vars.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+
+            assert_eq!(vars, create_vars(&["var1", "var2"]));
         });
     }
 

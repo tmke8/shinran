@@ -1,4 +1,4 @@
-use std::{rc::Rc, time::Duration};
+use std::{iter::zip, rc::Rc, time::Duration};
 
 use calloop::{
     timer::{TimeoutAction, Timer},
@@ -101,8 +101,8 @@ impl<S> InputContext<S> {
         }
         eprintln!("Added key!");
         let mut pressed_num = [0u32; 64];
-        for i in 0..self.pressed.len() {
-            pressed_num[i] = self.pressed[i].into();
+        for (num, code) in zip(pressed_num.iter_mut(), self.pressed) {
+            *num = code.into();
         }
         eprintln!("{:?}", pressed_num);
     }
@@ -114,8 +114,8 @@ impl<S> InputContext<S> {
                 *code = xkb::Keycode::default();
                 eprintln!("Removed key!");
                 let mut pressed_num = [0u32; 64];
-                for i in 0..self.pressed.len() {
-                    pressed_num[i] = self.pressed[i].into();
+                for (num, code) in zip(pressed_num.iter_mut(), self.pressed) {
+                    *num = code.into();
                 }
                 eprintln!("{:?}", pressed_num);
                 return true;

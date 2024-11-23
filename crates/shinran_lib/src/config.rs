@@ -34,7 +34,7 @@ use crate::builtin::is_builtin_match;
 /// This includes the config files in the `config` directory and the match files in the `match` directory.
 pub struct Configuration {
     profile_store: ProfileStore,
-    match_store: MatchStore,
+    pub match_store: MatchStore,
     // app_info_provider: &'a dyn AppInfoProvider,
 }
 

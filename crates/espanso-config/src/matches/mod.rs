@@ -17,14 +17,13 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use enum_as_inner::EnumAsInner;
-use shinran_types::{StructId, Variable};
+use shinran_types::{MatchCause, MatchEffect, StructId, TriggerCause, Variable};
 
 pub(crate) mod group;
 pub mod store;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Match {
+pub struct LoadedMatch {
     pub id: StructId,
 
     pub cause: MatchCause,
@@ -35,7 +34,7 @@ pub struct Match {
     pub search_terms: Vec<String>,
 }
 
-impl Default for Match {
+impl Default for LoadedMatch {
     fn default() -> Self {
         Self {
             cause: MatchCause::Trigger(TriggerCause::default()),
@@ -47,13 +46,13 @@ impl Default for Match {
     }
 }
 
-impl Match {
+impl LoadedMatch {
     // TODO: test
     pub fn description(&self) -> &str {
         if let Some(label) = &self.label {
             label
         } else if let MatchEffect::Text(text_effect) = &self.effect {
-            &text_effect.replace
+            &text_effect.body
         } else if let MatchEffect::Image(_) = &self.effect {
             "Image content"
         } else {
@@ -72,177 +71,5 @@ impl Match {
             .map(String::as_str)
             .chain(self.cause.search_terms())
             .collect()
-    }
-}
-
-// Causes
-
-#[derive(Debug, Clone, Eq, Hash, PartialEq, EnumAsInner)]
-pub enum MatchCause {
-    Trigger(TriggerCause),
-    Regex(RegexCause),
-    // TODO: shortcut
-}
-
-impl MatchCause {
-    pub fn description(&self) -> Option<&str> {
-        match &self {
-            MatchCause::Trigger(trigger_cause) => {
-                trigger_cause.triggers.first().map(String::as_str)
-            }
-            MatchCause::Regex(trigger_cause) => Some(trigger_cause.regex.as_str()),
-        }
-        // TODO: insert rendering for hotkey/shortcut
-    }
-
-    pub fn long_description(&self) -> String {
-        match &self {
-            MatchCause::Trigger(trigger_cause) => format!("triggers: {:?}", trigger_cause.triggers),
-            MatchCause::Regex(trigger_cause) => format!("regex: {:?}", trigger_cause.regex),
-        }
-        // TODO: insert rendering for hotkey/shortcut
-    }
-
-    pub fn search_terms(&self) -> Vec<&str> {
-        if let MatchCause::Trigger(trigger_cause) = &self {
-            trigger_cause.triggers.iter().map(String::as_str).collect()
-        } else {
-            vec![]
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub enum WordBoundary {
-    #[default]
-    None,
-    Left,
-    Right,
-    Both,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
-pub struct TriggerCause {
-    pub triggers: Vec<String>,
-
-    pub word_boundary: WordBoundary,
-
-    pub propagate_case: bool,
-    pub uppercase_style: UpperCasingStyle,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
-pub enum UpperCasingStyle {
-    #[default]
-    Uppercase,
-    Capitalize,
-    CapitalizeWords,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct RegexCause {
-    pub regex: String,
-}
-
-// Effects
-
-#[derive(Debug, Clone, PartialEq, EnumAsInner)]
-pub enum MatchEffect {
-    None,
-    Text(TextEffect),
-    Image(ImageEffect),
-}
-
-impl Default for MatchEffect {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct TextEffect {
-    pub replace: String,
-    pub vars: Vec<Variable>,
-    pub format: TextFormat,
-    pub force_mode: Option<TextInjectMode>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum TextFormat {
-    Plain,
-    Markdown,
-    Html,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum TextInjectMode {
-    Keys,
-    Clipboard,
-}
-
-impl Default for TextEffect {
-    fn default() -> Self {
-        Self {
-            replace: String::new(),
-            vars: Vec::new(),
-            format: TextFormat::Plain,
-            force_mode: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct ImageEffect {
-    pub path: String,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn trigger_cause() -> TriggerCause {
-        TriggerCause {
-            triggers: vec![":greet".to_string()],
-            ..TriggerCause::default()
-        }
-    }
-
-    fn regex_cause() -> RegexCause {
-        RegexCause {
-            regex: ":greet\\d".to_string(),
-        }
-    }
-
-    #[test]
-    fn match_cause_trigger_description() {
-        let trigger = trigger_cause();
-
-        assert_eq!(MatchCause::Trigger(trigger).description(), Some(":greet"));
-    }
-
-    #[test]
-    fn match_cause_regex_description() {
-        let regex = regex_cause();
-        assert_eq!(MatchCause::Regex(regex).description(), Some(":greet\\d"));
-    }
-
-    #[test]
-    fn match_cause_trigger_long_description() {
-        let trigger = trigger_cause();
-
-        assert_eq!(
-            MatchCause::Trigger(trigger).long_description(),
-            r#"triggers: [":greet"]"#
-        );
-    }
-
-    #[test]
-    fn match_cause_regex_long_description() {
-        let regex = regex_cause();
-
-        assert_eq!(
-            MatchCause::Regex(regex).long_description(),
-            r#"regex: ":greet\\d""#
-        );
     }
 }

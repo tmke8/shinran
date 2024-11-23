@@ -24,21 +24,22 @@ use crate::{
     error::{ErrorRecord, NonFatalErrorSet},
     matches::{
         group::{path::resolve_imports, LoadedMatchFile},
-        ImageEffect, Match, RegexCause, TextFormat, TextInjectMode, UpperCasingStyle, Variable,
-        WordBoundary,
+        LoadedMatch,
     },
 };
 use anyhow::{anyhow, bail, Context, Result};
 use lazy_static::lazy_static;
 use parse::YAMLMatchFile;
 use regex::{Captures, Regex};
-use shinran_types::{Params, Value, VarType};
+use shinran_types::{
+    ImageEffect, MatchCause, MatchEffect, Params, RegexCause, TextEffect, TextFormat,
+    TextInjectMode, TriggerCause, UpperCasingStyle, Value, VarType, Variable, WordBoundary,
+};
 
 use self::{
     parse::{YAMLMatch, YAMLVariable},
     util::convert_params,
 };
-use crate::matches::{MatchCause, MatchEffect, TextEffect, TriggerCause};
 
 // use super::Importer;
 
@@ -132,7 +133,7 @@ impl YAMLImporter {
 pub fn try_convert_into_match(
     yaml_match: YAMLMatch,
     use_compatibility_mode: bool,
-) -> Result<(Match, Vec<Warning>)> {
+) -> Result<(LoadedMatch, Vec<Warning>)> {
     let mut warnings = Vec::new();
 
     if yaml_match.uppercase_style.is_some() && yaml_match.propagate_case.is_none() {
@@ -227,7 +228,7 @@ pub fn try_convert_into_match(
         }
 
         MatchEffect::Text(TextEffect {
-            replace,
+            body: replace,
             vars,
             format,
             force_mode,
@@ -278,7 +279,7 @@ pub fn try_convert_into_match(
         }
 
         let vars = vec![Variable {
-            id: next_id(),
+            // id: next_id(),
             name: "form1".to_owned(),
             var_type: VarType::Form,
             params,
@@ -286,7 +287,7 @@ pub fn try_convert_into_match(
         }];
 
         MatchEffect::Text(TextEffect {
-            replace: resolved_replace,
+            body: resolved_replace,
             vars,
             format: TextFormat::Plain,
             force_mode,
@@ -306,7 +307,7 @@ pub fn try_convert_into_match(
     }
 
     Ok((
-        Match {
+        LoadedMatch {
             cause,
             effect,
             label: yaml_match.label,
@@ -331,6 +332,7 @@ pub fn try_convert_into_variable(
         "script" => VarType::Script,
         "shell" => VarType::Shell,
         "mock" => VarType::Mock,
+        "test" => VarType::Mock,
         // "global" => VarType::Global,
         _ => return Err(anyhow!("unknown variable type: {:?}", yaml_var.var_type)),
     };
@@ -339,7 +341,7 @@ pub fn try_convert_into_variable(
             name: yaml_var.name,
             var_type,
             params: convert_params(yaml_var.params)?,
-            id: next_id(),
+            // id: next_id(),
             inject_vars: !use_compatibility_mode && yaml_var.inject_vars.unwrap_or(true),
             depends_on: yaml_var.depends_on,
         },
@@ -349,27 +351,29 @@ pub fn try_convert_into_variable(
 
 #[cfg(test)]
 mod tests {
+    use shinran_types::{MatchCause, TextEffect, TriggerCause};
+
     use super::*;
-    use crate::{matches::Match, util::tests::use_test_directory};
+    use crate::{matches::LoadedMatch, util::tests::use_test_directory};
     use std::{ffi::OsString, fs::create_dir_all};
 
     fn create_match_with_warnings(
         yaml: &str,
         use_compatibility_mode: bool,
-    ) -> Result<(Match, Vec<Warning>)> {
+    ) -> Result<(LoadedMatch, Vec<Warning>)> {
         let yaml_match: YAMLMatch = serde_yaml_ng::from_str(yaml)?;
         let (mut m, warnings) = try_convert_into_match(yaml_match, use_compatibility_mode)?;
 
         // Reset the IDs to correctly compare them
         m.id = 0;
-        if let MatchEffect::Text(e) = &mut m.effect {
-            e.vars.iter_mut().for_each(|v| v.id = 0);
-        }
+        // if let MatchEffect::Text(e) = &mut m.effect {
+        //     e.vars.iter_mut().for_each(|v| v.id = 0);
+        // }
 
         Ok((m, warnings))
     }
 
-    fn create_match(yaml: &str) -> Result<Match> {
+    fn create_match(yaml: &str) -> Result<LoadedMatch> {
         let (m, warnings) = create_match_with_warnings(yaml, false)?;
         assert!(
             warnings.is_empty(),
@@ -388,13 +392,13 @@ mod tests {
         "#
             )
             .unwrap(),
-            Match {
+            LoadedMatch {
                 cause: MatchCause::Trigger(TriggerCause {
                     triggers: vec!["Hello".to_string()],
                     ..Default::default()
                 }),
                 effect: MatchEffect::Text(TextEffect {
-                    replace: "world".to_string(),
+                    body: "world".to_string(),
                     ..Default::default()
                 }),
                 ..Default::default()
@@ -412,13 +416,13 @@ mod tests {
         "#
             )
             .unwrap(),
-            Match {
+            LoadedMatch {
                 cause: MatchCause::Trigger(TriggerCause {
                     triggers: vec!["Hello".to_string(), "john".to_string()],
                     ..Default::default()
                 }),
                 effect: MatchEffect::Text(TextEffect {
-                    replace: "world".to_string(),
+                    body: "world".to_string(),
                     ..Default::default()
                 }),
                 ..Default::default()
@@ -437,14 +441,14 @@ mod tests {
         "#
             )
             .unwrap(),
-            Match {
+            LoadedMatch {
                 cause: MatchCause::Trigger(TriggerCause {
                     triggers: vec!["Hello".to_string()],
                     word_boundary: WordBoundary::Both,
                     ..Default::default()
                 }),
                 effect: MatchEffect::Text(TextEffect {
-                    replace: "world".to_string(),
+                    body: "world".to_string(),
                     ..Default::default()
                 }),
                 ..Default::default()
@@ -463,14 +467,14 @@ mod tests {
         "#
             )
             .unwrap(),
-            Match {
+            LoadedMatch {
                 cause: MatchCause::Trigger(TriggerCause {
                     triggers: vec!["Hello".to_string()],
                     word_boundary: WordBoundary::Left,
                     ..Default::default()
                 }),
                 effect: MatchEffect::Text(TextEffect {
-                    replace: "world".to_string(),
+                    body: "world".to_string(),
                     ..Default::default()
                 }),
                 ..Default::default()
@@ -489,14 +493,14 @@ mod tests {
         "#
             )
             .unwrap(),
-            Match {
+            LoadedMatch {
                 cause: MatchCause::Trigger(TriggerCause {
                     triggers: vec!["Hello".to_string()],
                     word_boundary: WordBoundary::Right,
                     ..Default::default()
                 }),
                 effect: MatchEffect::Text(TextEffect {
-                    replace: "world".to_string(),
+                    body: "world".to_string(),
                     ..Default::default()
                 }),
                 ..Default::default()
@@ -515,14 +519,14 @@ mod tests {
         "#
             )
             .unwrap(),
-            Match {
+            LoadedMatch {
                 cause: MatchCause::Trigger(TriggerCause {
                     triggers: vec!["Hello".to_string()],
                     propagate_case: true,
                     ..Default::default()
                 }),
                 effect: MatchEffect::Text(TextEffect {
-                    replace: "world".to_string(),
+                    body: "world".to_string(),
                     ..Default::default()
                 }),
                 ..Default::default()
@@ -633,15 +637,15 @@ mod tests {
         "#
             )
             .unwrap(),
-            Match {
+            LoadedMatch {
                 cause: MatchCause::Trigger(TriggerCause {
                     triggers: vec!["Hello".to_string()],
                     ..Default::default()
                 }),
                 effect: MatchEffect::Text(TextEffect {
-                    replace: "Hi {{form1.name}}!".to_string(),
+                    body: "Hi {{form1.name}}!".to_string(),
                     vars: vec![Variable {
-                        id: 0,
+                        // id: 0,
                         name: "form1".to_string(),
                         var_type: VarType::Form,
                         params,
@@ -670,15 +674,15 @@ mod tests {
         "#
             )
             .unwrap(),
-            Match {
+            LoadedMatch {
                 cause: MatchCause::Trigger(TriggerCause {
                     triggers: vec!["Hello".to_string()],
                     ..Default::default()
                 }),
                 effect: MatchEffect::Text(TextEffect {
-                    replace: "Hi {{form1.name}}! {{signature}}".to_string(),
+                    body: "Hi {{form1.name}}! {{signature}}".to_string(),
                     vars: vec![Variable {
-                        id: 0,
+                        // id: 0,
                         name: "form1".to_string(),
                         var_type: VarType::Form,
                         params,
@@ -709,15 +713,15 @@ mod tests {
             )
             .unwrap()
             .0,
-            Match {
+            LoadedMatch {
                 cause: MatchCause::Trigger(TriggerCause {
                     triggers: vec!["Hello".to_string()],
                     ..Default::default()
                 }),
                 effect: MatchEffect::Text(TextEffect {
-                    replace: "Hi {{form1.name}}!".to_string(),
+                    body: "Hi {{form1.name}}!".to_string(),
                     vars: vec![Variable {
-                        id: 0,
+                        // id: 0,
                         name: "form1".to_string(),
                         var_type: VarType::Form,
                         params,
@@ -752,13 +756,13 @@ mod tests {
         "#
             )
             .unwrap(),
-            Match {
+            LoadedMatch {
                 cause: MatchCause::Trigger(TriggerCause {
                     triggers: vec!["Hello".to_string()],
                     ..Default::default()
                 }),
                 effect: MatchEffect::Text(TextEffect {
-                    replace: "world".to_string(),
+                    body: "world".to_string(),
                     vars,
                     ..Default::default()
                 }),
@@ -796,13 +800,13 @@ mod tests {
         "#
             )
             .unwrap(),
-            Match {
+            LoadedMatch {
                 cause: MatchCause::Trigger(TriggerCause {
                     triggers: vec!["Hello".to_string()],
                     ..Default::default()
                 }),
                 effect: MatchEffect::Text(TextEffect {
-                    replace: "world".to_string(),
+                    body: "world".to_string(),
                     vars,
                     ..Default::default()
                 }),
@@ -829,13 +833,13 @@ mod tests {
         "#
             )
             .unwrap(),
-            Match {
+            LoadedMatch {
                 cause: MatchCause::Trigger(TriggerCause {
                     triggers: vec!["Hello".to_string()],
                     ..Default::default()
                 }),
                 effect: MatchEffect::Text(TextEffect {
-                    replace: "world".to_string(),
+                    body: "world".to_string(),
                     vars,
                     ..Default::default()
                 }),
@@ -888,7 +892,7 @@ mod tests {
 
             // Reset the ids to compare them correctly
             file.matches.iter_mut().for_each(|m| m.id = 0);
-            file.global_vars.iter_mut().for_each(|v| v.id = 0);
+            // file.global_vars.iter_mut().for_each(|v| v.id = 0);
 
             let vars = vec![Variable {
                 name: "var1".to_string(),
@@ -901,13 +905,13 @@ mod tests {
                 LoadedMatchFile {
                     imports: vec![sub_file],
                     global_vars: vars,
-                    matches: vec![Match {
+                    matches: vec![LoadedMatch {
                         cause: MatchCause::Trigger(TriggerCause {
                             triggers: vec!["hello".to_string()],
                             ..Default::default()
                         }),
                         effect: MatchEffect::Text(TextEffect {
-                            replace: "world".to_string(),
+                            body: "world".to_string(),
                             ..Default::default()
                         }),
                         ..Default::default()

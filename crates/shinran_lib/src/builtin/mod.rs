@@ -27,11 +27,11 @@ use crate::event::EventType;
 mod process;
 // mod search;
 
-const MIN_BUILTIN_MATCH_ID: i32 = 1_000_000_000;
+const MIN_BUILTIN_MATCH_ID: usize = 1_000_000_000;
 
 #[derive(Debug)]
 pub struct BuiltInMatch {
-    pub id: i32,
+    pub id: usize,
     pub label: &'static str,
     pub triggers: Vec<String>,
     pub hotkey: Option<String>,
@@ -71,15 +71,15 @@ pub fn get_builtin_matches() -> Vec<BuiltInMatch> {
     matches
 }
 
-pub fn is_builtin_match(id: i32) -> bool {
+pub fn is_builtin_match(id: usize) -> bool {
     id >= MIN_BUILTIN_MATCH_ID
 }
 
 thread_local! {
-  static CURRENT_BUILTIN_MATCH_ID: Cell<i32> = const { Cell::new(MIN_BUILTIN_MATCH_ID) };
+  static CURRENT_BUILTIN_MATCH_ID: Cell<usize> = const { Cell::new(MIN_BUILTIN_MATCH_ID) };
 }
 
-fn generate_next_builtin_id() -> i32 {
+fn generate_next_builtin_id() -> usize {
     CURRENT_BUILTIN_MATCH_ID.with(|value| {
         let current = value.get();
         value.set(current + 1);
