@@ -23,7 +23,7 @@ use espanso_config::{
     config::{ProfileFile, ProfileStore},
     matches::store::MatchStore,
 };
-use shinran_types::MatchIdx;
+use shinran_types::{MatchIdx, VarRef};
 
 use crate::engine::DetectedMatch;
 // use crate::match_select::MatchSummary;
@@ -36,8 +36,8 @@ pub struct MatchCache {
     trigger_custom_profiles: Vec<HashMap<String, usize>>,
     regex_default_profile: HashMap<String, usize>,
     regex_custom_profiles: Vec<HashMap<String, usize>>,
-    global_var_default_profile: HashMap<String, usize>,
-    global_var_custom_profile: Vec<HashMap<String, usize>>,
+    global_var_default_profile: HashMap<String, VarRef>,
+    global_var_custom_profile: Vec<HashMap<String, VarRef>>,
 }
 
 impl MatchCache {
@@ -49,7 +49,7 @@ impl MatchCache {
 
         let mut trigger_custom_profiles: Vec<HashMap<String, usize>> = Vec::new();
         let mut regex_custom_profiles: Vec<HashMap<String, usize>> = Vec::new();
-        let mut global_var_custom_profile: Vec<HashMap<String, usize>> = Vec::new();
+        let mut global_var_custom_profile: Vec<HashMap<String, VarRef>> = Vec::new();
 
         for profile in profile_store.custom_configs() {
             let (trigger_map, regex_map, global_var_map) =
@@ -92,11 +92,11 @@ fn create_profile_cache(
 ) -> (
     HashMap<String, usize>,
     HashMap<String, usize>,
-    HashMap<String, usize>,
+    HashMap<String, VarRef>,
 ) {
     let mut trigger_map: HashMap<String, usize> = HashMap::new();
     let mut regex_map: HashMap<String, usize> = HashMap::new();
-    let mut global_var_map: HashMap<String, usize> = HashMap::new();
+    let mut global_var_map: HashMap<String, VarRef> = HashMap::new();
 
     let file_paths = profile.match_file_paths();
     let collection = match_store.collect_matches_and_global_vars(file_paths);
@@ -114,7 +114,7 @@ fn create_profile_cache(
     }
 
     for idx in collection.global_vars {
-        let global_var = &match_store.global_vars[idx];
+        let global_var = &match_store.global_vars.get(idx);
         global_var_map.insert(global_var.name.clone(), idx);
     }
 

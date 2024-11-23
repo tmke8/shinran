@@ -23,6 +23,7 @@ use crate::error::NonFatalErrorSet;
 
 mod default;
 pub use default::MatchStore;
+use shinran_types::VarRef;
 
 /// The set of matches and global vars associated with one config file.
 ///
@@ -32,7 +33,7 @@ pub use default::MatchStore;
 pub struct MatchesAndGlobalVars {
     pub trigger_matches: Vec<usize>,
     pub regex_matches: Vec<usize>,
-    pub global_vars: Vec<usize>,
+    pub global_vars: Vec<VarRef>,
 }
 
 pub fn load(paths: &[PathBuf]) -> (MatchStore, Vec<NonFatalErrorSet>) {

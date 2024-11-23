@@ -27,7 +27,7 @@ use espanso_config::matches::store::MatchesAndGlobalVars;
 use espanso_config::{config::ProfileId, matches::store::MatchStore};
 use espanso_render::{CasingStyle, Context, RenderOptions};
 use shinran_types::{
-    BaseMatch, MatchEffect, MatchIdx, Params, TextEffect, UpperCasingStyle, Value, VarType,
+    BaseMatch, MatchEffect, MatchIdx, Params, TextEffect, UpperCasingStyle, Value, VarRef, VarType,
     Variable,
 };
 
@@ -47,7 +47,7 @@ pub struct RendererAdapter {
     /// Map of all templates, indexed by the corresponding match ID.
     template_map: HashMap<usize, (Vec<String>, TextEffect)>,
     /// Map of all global variables, indexed by the corresponding variable ID.
-    global_vars_map: HashMap<usize, Variable>,
+    global_vars_map: HashMap<VarRef, Variable>,
 
     /// Cache for the context objects. We need internal mutability here because we need to
     /// update the cache.
@@ -87,8 +87,8 @@ fn generate_template_map(match_store: &MatchStore) -> HashMap<usize, (Vec<String
 }
 
 // TODO: test
-fn generate_global_vars_map(configuration: &Configuration) -> HashMap<usize, Variable> {
-    let mut global_vars_map: HashMap<usize, Variable> = HashMap::new();
+fn generate_global_vars_map(configuration: &Configuration) -> HashMap<VarRef, Variable> {
+    let mut global_vars_map: HashMap<VarRef, Variable> = HashMap::new();
 
     // Variables are stored in match files, so we need to iterate over all match files recursively.
     // We're using `collect_matches_and_global_vars` here under the hood to do this, even though
@@ -96,7 +96,7 @@ fn generate_global_vars_map(configuration: &Configuration) -> HashMap<usize, Var
     // But on the other hand, we don't want to reimplement the recursive logic here.
     for (_, match_set) in configuration.collect_matches_and_global_vars_from_all_configs() {
         for &var_index in &match_set.global_vars {
-            let var = &configuration.match_store.global_vars[var_index];
+            let var = configuration.match_store.global_vars.get(var_index);
             // TODO: Investigate how to avoid this clone.
             global_vars_map
                 .entry(var_index)
@@ -113,7 +113,7 @@ fn generate_global_vars_map(configuration: &Configuration) -> HashMap<usize, Var
 fn generate_context(
     match_set: MatchesAndGlobalVars,
     template_map: &HashMap<usize, (Vec<String>, TextEffect)>,
-    global_vars_map: &HashMap<usize, Variable>,
+    global_vars_map: &HashMap<VarRef, Variable>,
 ) -> Context {
     let mut templates = Vec::new();
     let mut global_vars = Vec::new();

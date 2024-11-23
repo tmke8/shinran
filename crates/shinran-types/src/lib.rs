@@ -1,6 +1,10 @@
 use enum_as_inner::EnumAsInner;
 use std::collections::HashMap;
 
+mod stores;
+
+pub use stores::{VarRef, VarStore};
+
 pub type StructId = i32;
 
 #[derive(Debug, Clone, PartialEq)]

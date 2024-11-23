@@ -20,7 +20,7 @@
 use super::MatchesAndGlobalVars;
 use crate::{error::NonFatalErrorSet, matches::group::LoadedMatchFile};
 use anyhow::Context;
-use shinran_types::{BaseMatch, MatchCause, TriggerMatch, Variable};
+use shinran_types::{BaseMatch, MatchCause, TriggerMatch, VarRef, VarStore};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -29,7 +29,7 @@ use std::{
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct IndexedMatchFile {
     pub imports: Vec<PathBuf>,
-    pub global_vars: Vec<usize>,
+    pub global_vars: Vec<VarRef>,
     pub trigger_matches: Vec<usize>,
     pub regex_matches: Vec<usize>,
 }
@@ -42,7 +42,7 @@ pub struct MatchStore {
     pub indexed_files: HashMap<PathBuf, IndexedMatchFile>,
     pub trigger_matches: Vec<(Vec<String>, TriggerMatch)>,
     pub regex_matches: Vec<(String, BaseMatch)>,
-    pub global_vars: Vec<Variable>,
+    pub global_vars: VarStore,
 }
 
 impl MatchStore {
@@ -58,7 +58,7 @@ impl MatchStore {
         let mut indexed_files = HashMap::new();
         let mut trigger_matches = Vec::new();
         let mut regex_matches = Vec::new();
-        let mut global_vars = Vec::new();
+        let mut global_vars = VarStore::new();
 
         for (path, match_file) in loaded_files.into_iter() {
             let mut trigger_ids = Vec::new();
@@ -91,8 +91,7 @@ impl MatchStore {
             }
 
             for v in match_file.global_vars {
-                let idx = global_vars.len();
-                global_vars.push(v);
+                let idx = global_vars.add(v);
                 global_vars_ids.push(idx);
             }
 
@@ -158,7 +157,7 @@ fn query_matches_for_paths(
     visited_paths: &mut HashSet<PathBuf>,
     visited_trigger_matches: &mut HashSet<usize>,
     visited_regex_matches: &mut HashSet<usize>,
-    visited_global_vars: &mut HashSet<usize>,
+    visited_global_vars: &mut HashSet<VarRef>,
     paths: &[PathBuf],
 ) {
     for path in paths {
@@ -234,7 +233,7 @@ fn load_match_files_recursively(
 
 #[cfg(test)]
 mod tests {
-    use shinran_types::{MatchEffect, TextEffect};
+    use shinran_types::{MatchEffect, TextEffect, Variable};
 
     use super::*;
     use crate::util::tests::use_test_directory;
@@ -508,7 +507,7 @@ mod tests {
             let mut vars = match_set
                 .global_vars
                 .into_iter()
-                .map(|m| match_store.global_vars[m].clone())
+                .map(|m| match_store.global_vars.get(m).clone())
                 .collect::<Vec<Variable>>();
             vars.sort_unstable_by(|a, b| a.name.cmp(&b.name));
 
@@ -575,7 +574,7 @@ mod tests {
             .unwrap();
 
             let (match_store, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
-            assert_eq!(non_fatal_error_sets, vec![]);
+            assert_eq!(non_fatal_error_sets.len(), 0);
 
             let match_set = match_store.collect_matches_and_global_vars(&[base_file]);
             let mut matches = match_set
@@ -598,7 +597,7 @@ mod tests {
             let mut vars = match_set
                 .global_vars
                 .into_iter()
-                .map(|m| match_store.global_vars[m].clone())
+                .map(|m| match_store.global_vars.get(m).clone())
                 .collect::<Vec<Variable>>();
             vars.sort_unstable_by(|a, b| a.name.cmp(&b.name));
 
@@ -660,7 +659,7 @@ mod tests {
 
             let (match_store, non_fatal_error_sets) =
                 MatchStore::load(&[base_file.clone(), sub_file.clone()]);
-            assert_eq!(non_fatal_error_sets, vec![]);
+            assert_eq!(non_fatal_error_sets.len(), 0);
 
             let match_set = match_store.collect_matches_and_global_vars(&[base_file, sub_file]);
             let mut matches = match_set
@@ -683,7 +682,7 @@ mod tests {
             let mut vars = match_set
                 .global_vars
                 .into_iter()
-                .map(|m| match_store.global_vars[m].clone())
+                .map(|m| match_store.global_vars.get(m).clone())
                 .collect::<Vec<Variable>>();
             vars.sort_unstable_by(|a, b| a.name.cmp(&b.name));
 
@@ -747,7 +746,7 @@ mod tests {
             .unwrap();
 
             let (match_store, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
-            assert_eq!(non_fatal_error_sets, vec![]);
+            assert_eq!(non_fatal_error_sets.len(), 0);
 
             let match_set = match_store.collect_matches_and_global_vars(&[base_file, sub_file]);
             let mut matches = match_set
@@ -770,7 +769,7 @@ mod tests {
             let mut vars = match_set
                 .global_vars
                 .into_iter()
-                .map(|m| match_store.global_vars[m].clone())
+                .map(|m| match_store.global_vars.get(m).clone())
                 .collect::<Vec<Variable>>();
             vars.sort_unstable_by(|a, b| a.name.cmp(&b.name));
 
