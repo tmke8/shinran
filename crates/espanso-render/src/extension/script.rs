@@ -22,8 +22,9 @@ use std::{
     process::Command,
 };
 
-use crate::{Extension, ExtensionOutput, ExtensionResult, Params, Value};
+use crate::{Extension, ExtensionOutput, ExtensionResult};
 use log::{info, warn};
+use shinran_types::{Params, Value};
 use thiserror::Error;
 
 pub struct ScriptExtension {
@@ -179,6 +180,8 @@ pub enum ScriptExtensionError {
 mod tests {
     use std::collections::HashMap;
 
+    use shinran_types::{Params, Value};
+
     use super::*;
     #[cfg(not(target_os = "windows"))]
     use crate::Scope;
@@ -291,6 +294,8 @@ mod tests {
     #[test]
     #[cfg(not(target_os = "windows"))]
     fn exit_error() {
+        use shinran_types::{Params, Value};
+
         let extension = get_extension();
 
         let param = vec![(
@@ -312,6 +317,8 @@ mod tests {
     #[test]
     #[cfg(not(target_os = "windows"))]
     fn ignore_error() {
+        use shinran_types::{Params, Value};
+
         let extension = get_extension();
 
         let param = vec![

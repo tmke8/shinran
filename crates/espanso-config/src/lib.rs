@@ -152,7 +152,7 @@ mod tests {
                     .collect_matches_and_global_vars(
                         config_store.default_config().match_file_paths()
                     )
-                    .matches
+                    .trigger_matches
                     .len(),
                 3
             );
@@ -267,7 +267,7 @@ mod tests {
                     .collect_matches_and_global_vars(
                         config_store.default_config().match_file_paths()
                     )
-                    .matches
+                    .trigger_matches
                     .len(),
                 1
             );

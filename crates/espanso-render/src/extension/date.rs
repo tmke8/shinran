@@ -18,8 +18,9 @@
  */
 
 use chrono::{DateTime, Duration, Local, Locale};
+use shinran_types::{Number, Params, Value};
 
-use crate::{Extension, ExtensionOutput, ExtensionResult, Number, Params, Value};
+use crate::{Extension, ExtensionOutput, ExtensionResult};
 
 // pub trait LocaleProvider {
 //     fn get_system_locale(&self) -> String;
@@ -413,6 +414,7 @@ mod tests {
 
     use super::*;
     use chrono::offset::TimeZone;
+    use shinran_types::{Number, Params, Value};
 
     #[test]
     fn date_formatted_correctly() {

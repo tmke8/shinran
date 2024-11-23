@@ -5,6 +5,8 @@ authors = ["Federico Terzi <federico-terzi@users.noreply.github.com>"]
 edition = "2021"
 
 [dependencies]
+shinran-types = { path = "../shinran-types" }
+
 log.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true

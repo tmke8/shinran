@@ -146,7 +146,8 @@ impl MatchStore {
         let mut visited_regex_matches = HashSet::new();
         let mut visited_global_vars = HashSet::new();
 
-        self.query_matches_for_paths(
+        query_matches_for_paths(
+            &self.indexed_files,
             &mut visited_paths,
             &mut visited_trigger_matches,
             &mut visited_regex_matches,
@@ -161,56 +162,56 @@ impl MatchStore {
         }
     }
 
-    fn query_matches_for_paths<'a>(
-        &self,
-        visited_paths: &mut HashSet<PathBuf>,
-        visited_trigger_matches: &mut HashSet<usize>,
-        visited_regex_matches: &mut HashSet<usize>,
-        visited_global_vars: &mut HashSet<usize>,
-        paths: &[PathBuf],
-    ) {
-        for path in paths {
-            if visited_paths.contains(path) {
-                continue; // Already visited
-            }
-
-            visited_paths.insert(path.clone());
-
-            if let Some(file) = self.indexed_files.get(path) {
-                self.query_matches_for_paths(
-                    visited_paths,
-                    visited_trigger_matches,
-                    visited_regex_matches,
-                    visited_global_vars,
-                    &file.imports,
-                );
-
-                for m in &file.trigger_matches {
-                    if !visited_trigger_matches.contains(m) {
-                        visited_trigger_matches.insert(*m);
-                    }
-                }
-
-                for m in &file.regex_matches {
-                    if !visited_regex_matches.contains(m) {
-                        visited_regex_matches.insert(*m);
-                    }
-                }
-
-                for var in &file.global_vars {
-                    if !visited_global_vars.contains(&var) {
-                        visited_global_vars.insert(*var);
-                    }
-                }
-            }
-        }
-    }
-
     pub fn loaded_paths(&self) -> Vec<PathBuf> {
         self.indexed_files.keys().cloned().collect()
     }
 }
 
+fn query_matches_for_paths<'a>(
+    indexed_files: &'a HashMap<PathBuf, IndexedMatchFile>,
+    visited_paths: &mut HashSet<PathBuf>,
+    visited_trigger_matches: &mut HashSet<usize>,
+    visited_regex_matches: &mut HashSet<usize>,
+    visited_global_vars: &mut HashSet<usize>,
+    paths: &[PathBuf],
+) {
+    for path in paths {
+        if visited_paths.contains(path) {
+            continue; // Already visited
+        }
+
+        visited_paths.insert(path.clone());
+
+        if let Some(file) = indexed_files.get(path) {
+            query_matches_for_paths(
+                indexed_files,
+                visited_paths,
+                visited_trigger_matches,
+                visited_regex_matches,
+                visited_global_vars,
+                &file.imports,
+            );
+
+            for m in &file.trigger_matches {
+                if !visited_trigger_matches.contains(m) {
+                    visited_trigger_matches.insert(*m);
+                }
+            }
+
+            for m in &file.regex_matches {
+                if !visited_regex_matches.contains(m) {
+                    visited_regex_matches.insert(*m);
+                }
+            }
+
+            for var in &file.global_vars {
+                if !visited_global_vars.contains(&var) {
+                    visited_global_vars.insert(*var);
+                }
+            }
+        }
+    }
+}
 /// Load the files in the given paths and their imports recursively.
 ///
 /// This function fills up the `groups` HashMap with the loaded match groups.
@@ -280,7 +281,6 @@ mod tests {
     fn create_test_var(name: &str) -> Variable {
         Variable {
             name: name.to_string(),
-            var_type: "test".to_string(),
             ..Default::default()
         }
     }

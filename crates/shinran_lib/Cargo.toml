@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 espanso-config = { path = "../espanso-config" }
 espanso-render = { path = "../espanso-render" }
+shinran-types = { path = "../shinran-types" }
 
 serde = { version = "1.0.210", features = ["derive"] }
 serde_yaml_ng = "0.10.0"

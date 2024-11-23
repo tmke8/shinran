@@ -21,9 +21,8 @@ use std::convert::TryInto;
 
 use anyhow::Result;
 use serde_yaml_ng::{Mapping, Value as YamlValue};
+use shinran_types::{Number, Params, Value};
 use thiserror::Error;
-
-use crate::matches::{Number, Params, Value};
 
 pub(crate) fn convert_params(m: Mapping) -> Result<Params> {
     let mut params = Params::new();

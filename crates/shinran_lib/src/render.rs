@@ -27,7 +27,8 @@ use espanso_config::config::ProfileId;
 use espanso_config::matches::{
     store::MatchesAndGlobalVars, Match, MatchCause, MatchEffect, UpperCasingStyle,
 };
-use espanso_render::{CasingStyle, Context, RenderOptions, Template, Value, VarType, Variable};
+use espanso_render::{CasingStyle, Context, RenderOptions, Template};
+use shinran_types::{Params, Value, VarType, Variable};
 
 use crate::{
     config::Configuration,
@@ -86,7 +87,7 @@ fn generate_template_map(match_cache: &MatchCache) -> HashMap<i32, Option<Templa
 
 // TODO: test
 fn generate_global_vars_map(configuration: &Configuration) -> HashMap<i32, Variable> {
-    let mut global_vars_map = HashMap::new();
+    let mut global_vars_map: HashMap<i32, Variable> = HashMap::new();
 
     // Variables are stored in match files, so we need to iterate over all match files recursively.
     // We're using `collect_matches_and_global_vars` here under the hood to do this, even though
@@ -95,9 +96,7 @@ fn generate_global_vars_map(configuration: &Configuration) -> HashMap<i32, Varia
     for (_, match_set) in configuration.collect_matches_and_global_vars_from_all_configs() {
         for &var in &match_set.global_vars {
             // TODO: Investigate how to avoid this clone.
-            global_vars_map
-                .entry(var.id)
-                .or_insert_with(|| convert_var(var.clone()));
+            global_vars_map.entry(var).or_insert_with(|| var.clone());
         }
     }
 
@@ -115,7 +114,7 @@ fn generate_context(
     let mut templates = Vec::new();
     let mut global_vars = Vec::new();
 
-    for m in match_set.matches {
+    for m in match_set.trigger_matches {
         if let Some(Some(template)) = template_map.get(&m.id) {
             // TODO: Investigate how to avoid this clone.
             templates.push(template.clone());
@@ -149,74 +148,76 @@ fn convert_to_template(m: &Match) -> Option<Template> {
             // TODO: Investigate how to avoid this clone.
             body: text_effect.replace.clone(),
             // TODO: Investigate how to avoid this clone.
-            vars: convert_vars(text_effect.vars.clone()),
+            vars: text_effect.vars.clone(),
         })
     } else {
         None
     }
 }
 
-fn convert_vars(vars: Vec<espanso_config::matches::Variable>) -> Vec<espanso_render::Variable> {
-    vars.into_iter().map(convert_var).collect()
-}
+// fn convert_vars(vars: Vec<espanso_config::matches::Variable>) -> Vec<espanso_render::Variable> {
+//     vars.into_iter().map(convert_var).collect()
+// }
 
-fn convert_var(var: espanso_config::matches::Variable) -> espanso_render::Variable {
-    let var_type = match &var.var_type[..] {
-        "echo" => VarType::Echo,
-        "date" => VarType::Date,
-        "shell" => VarType::Shell,
-        "script" => VarType::Script,
-        // "global" => VarType::Global,
-        // "match" => VarType::Match,
-        "dummy" => VarType::Echo,
-        "random" => VarType::Random,
-        // "" => VarType::Match,
-        _ => {
-            unreachable!()
-        }
-    };
-    Variable {
-        name: var.name,
-        var_type,
-        params: convert_params(var.params),
-        inject_vars: var.inject_vars,
-        depends_on: var.depends_on,
-    }
-}
+// fn convert_var(var: espanso_config::matches::Variable) -> espanso_render::Variable {
+//     let var_type = match &var.var_type[..] {
+//         "echo" => VarType::Echo,
+//         "date" => VarType::Date,
+//         "shell" => VarType::Shell,
+//         "script" => VarType::Script,
+//         // "global" => VarType::Global,
+//         // "match" => VarType::Match,
+//         "dummy" => VarType::Echo,
+//         "random" => VarType::Random,
+//         // "" => VarType::Match,
+//         _ => {
+//             unreachable!()
+//         }
+//     };
+//     Variable {
+//         name: var.name,
+//         var_type,
+//         params: convert_params(var.params),
+//         inject_vars: var.inject_vars,
+//         depends_on: var.depends_on,
+//     }
+// }
 
-fn convert_params(params: espanso_config::matches::Params) -> espanso_render::Params {
-    let mut new_params = espanso_render::Params::new();
-    for (key, value) in params {
-        new_params.insert(key, convert_value(value));
-    }
-    new_params
-}
+// // The difference between the two `Params` types is that one uses `BTreeMap` and the other uses
+// // `HashMap`.
+// fn convert_params(params: espanso_config::matches::Params) -> espanso_render::Params {
+//     let mut new_params = espanso_render::Params::new();
+//     for (key, value) in params {
+//         new_params.insert(key, convert_value(value));
+//     }
+//     new_params
+// }
 
-// TODO: Investigate whether this is necessary.
-//       The only difference between the two `Value` types is the `Object` variant.
-//       In espano_config, `Object` is a `BTreeMap<String, Value>`, while in espanso_render it is
-//       a `HashMap<String, Value>`.
-fn convert_value(value: espanso_config::matches::Value) -> espanso_render::Value {
-    match value {
-        espanso_config::matches::Value::Null => espanso_render::Value::Null,
-        espanso_config::matches::Value::Bool(v) => espanso_render::Value::Bool(v),
-        espanso_config::matches::Value::Number(n) => match n {
-            espanso_config::matches::Number::Integer(i) => {
-                espanso_render::Value::Number(espanso_render::Number::Integer(i))
-            }
-            espanso_config::matches::Number::Float(f) => {
-                espanso_render::Value::Number(espanso_render::Number::Float(f))
-            }
-        },
-        espanso_config::matches::Value::String(s) => espanso_render::Value::String(s),
-        espanso_config::matches::Value::Array(v) => {
-            espanso_render::Value::Array(v.into_iter().map(convert_value).collect())
-        }
-        espanso_config::matches::Value::Object(params) => {
-            espanso_render::Value::Object(convert_params(params))
-        }
-    }
-}
+// // TODO: Investigate whether this is necessary.
+// //       The only difference between the two `Value` types is the `Object` variant.
+// //       In espano_config, `Object` is a `BTreeMap<String, Value>`, while in espanso_render it is
+// //       a `HashMap<String, Value>`.
+// fn convert_value(value: espanso_config::matches::Value) -> espanso_render::Value {
+//     match value {
+//         espanso_config::matches::Value::Null => espanso_render::Value::Null,
+//         espanso_config::matches::Value::Bool(v) => espanso_render::Value::Bool(v),
+//         espanso_config::matches::Value::Number(n) => match n {
+//             espanso_config::matches::Number::Integer(i) => {
+//                 espanso_render::Value::Number(espanso_render::Number::Integer(i))
+//             }
+//             espanso_config::matches::Number::Float(f) => {
+//                 espanso_render::Value::Number(espanso_render::Number::Float(f))
+//             }
+//         },
+//         espanso_config::matches::Value::String(s) => espanso_render::Value::String(s),
+//         espanso_config::matches::Value::Array(v) => {
+//             espanso_render::Value::Array(v.into_iter().map(convert_value).collect())
+//         }
+//         espanso_config::matches::Value::Object(params) => {
+//             espanso_render::Value::Object(convert_params(params))
+//         }
+//     }
+// }
 
 impl RendererAdapter {
     pub fn render(
@@ -258,7 +259,7 @@ impl RendererAdapter {
         } else {
             let mut augmented = template.clone();
             for (name, value) in trigger_vars {
-                let mut params = espanso_render::Params::new();
+                let mut params = Params::new();
                 params.insert("echo".to_string(), Value::String(value));
                 augmented.vars.insert(
                     0,

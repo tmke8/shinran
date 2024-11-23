@@ -24,12 +24,13 @@ use crate::{
         date::DateExtension, echo::EchoExtension, random::RandomExtension, script::ScriptExtension,
         shell::ShellExtension,
     },
-    CasingStyle, Context, Extension, ExtensionOutput, ExtensionResult, Params, RenderOptions,
-    RenderResult, Scope, Template, Value, VarType, Variable,
+    CasingStyle, Context, Extension, ExtensionOutput, ExtensionResult, RenderOptions, RenderResult,
+    Scope, Template,
 };
 use lazy_static::lazy_static;
 use log::{error, warn};
 use regex::{Captures, Regex};
+use shinran_types::{Params, Value, VarType, Variable};
 use thiserror::Error;
 
 use self::util::{inject_variables_into_params, render_variables};
@@ -193,6 +194,10 @@ impl<M: Extension> Renderer<M> {
                         self.mock_extension
                             .calculate(context, &scope, &variable_params)
                     }
+                    VarType::Form => {
+                        // Do nothing.
+                        return RenderResult::Success("".to_string());
+                    }
                     VarType::Global | VarType::Match => {
                         unreachable!()
                     }
@@ -292,8 +297,10 @@ pub enum RendererError {
 
 #[cfg(test)]
 mod tests {
+
+    use shinran_types::{Params, Variable};
+
     use super::*;
-    use crate::{Params, VarType};
     use std::iter::FromIterator;
 
     struct MockExtension {}
@@ -303,12 +310,7 @@ mod tests {
             "mock"
         }
 
-        fn calculate(
-            &self,
-            _context: &Context,
-            scope: &Scope,
-            params: &crate::Params,
-        ) -> ExtensionResult {
+        fn calculate(&self, _context: &Context, scope: &Scope, params: &Params) -> ExtensionResult {
             if let Some(Value::String(string)) = params.get("echo") {
                 return ExtensionResult::Success(ExtensionOutput::Single(string.clone()));
             }

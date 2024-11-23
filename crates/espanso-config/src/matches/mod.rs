@@ -18,9 +18,7 @@
  */
 
 use enum_as_inner::EnumAsInner;
-use std::collections::BTreeMap;
-
-use crate::counter::StructId;
+use shinran_types::{StructId, Variable};
 
 pub(crate) mod group;
 pub mod store;
@@ -196,48 +194,6 @@ impl Default for TextEffect {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct ImageEffect {
     pub path: String,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Variable {
-    pub id: StructId,
-    pub name: String,
-    pub var_type: String,
-    pub params: Params,
-    pub inject_vars: bool,
-    pub depends_on: Vec<String>,
-}
-
-impl Default for Variable {
-    fn default() -> Self {
-        Self {
-            id: 0,
-            name: String::new(),
-            var_type: String::new(),
-            params: Params::new(),
-            inject_vars: true,
-            depends_on: Vec::new(),
-        }
-    }
-}
-
-pub type Params = BTreeMap<String, Value>;
-
-#[derive(Debug, Clone, PartialEq, EnumAsInner)]
-pub enum Value {
-    Null,
-    Bool(bool),
-    Number(Number),
-    String(String),
-    Array(Vec<Value>),
-    Object(Params),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Number {
-    Integer(i64),
-    // Float(OrderedFloat<f64>),
-    Float(f64),
 }
 
 #[cfg(test)]

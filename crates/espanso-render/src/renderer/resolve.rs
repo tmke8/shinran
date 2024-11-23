@@ -24,8 +24,7 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use log::error;
-
-use crate::Variable;
+use shinran_types::Variable;
 
 use super::RendererError;
 
