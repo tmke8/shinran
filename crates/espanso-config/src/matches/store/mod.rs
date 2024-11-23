@@ -23,7 +23,7 @@ use crate::error::NonFatalErrorSet;
 
 mod default;
 pub use default::MatchStore;
-use shinran_types::VarRef;
+use shinran_types::{TrigMatchRef, VarRef};
 
 /// The set of matches and global vars associated with one config file.
 ///
@@ -31,7 +31,7 @@ use shinran_types::VarRef;
 /// and a list of references to the global variables that were defined in the matches.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchesAndGlobalVars {
-    pub trigger_matches: Vec<usize>,
+    pub trigger_matches: Vec<TrigMatchRef>,
     pub regex_matches: Vec<usize>,
     pub global_vars: Vec<VarRef>,
 }

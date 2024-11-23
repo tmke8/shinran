@@ -20,7 +20,9 @@
 use super::MatchesAndGlobalVars;
 use crate::{error::NonFatalErrorSet, matches::group::LoadedMatchFile};
 use anyhow::Context;
-use shinran_types::{BaseMatch, MatchCause, TriggerMatch, VarRef, VarStore};
+use shinran_types::{
+    BaseMatch, MatchCause, TrigMatchRef, TrigMatchStore, TriggerMatch, VarRef, VarStore,
+};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -30,7 +32,7 @@ use std::{
 pub struct IndexedMatchFile {
     pub imports: Vec<PathBuf>,
     pub global_vars: Vec<VarRef>,
-    pub trigger_matches: Vec<usize>,
+    pub trigger_matches: Vec<TrigMatchRef>,
     pub regex_matches: Vec<usize>,
 }
 
@@ -40,7 +42,7 @@ pub struct IndexedMatchFile {
 /// Then inside the match files, we have a vector of matches and a vector of global variables.
 pub struct MatchStore {
     pub indexed_files: HashMap<PathBuf, IndexedMatchFile>,
-    pub trigger_matches: Vec<(Vec<String>, TriggerMatch)>,
+    pub trigger_matches: TrigMatchStore,
     pub regex_matches: Vec<(String, BaseMatch)>,
     pub global_vars: VarStore,
 }
@@ -56,7 +58,7 @@ impl MatchStore {
         load_match_files_recursively(&mut loaded_files, paths, &mut non_fatal_error_sets);
 
         let mut indexed_files = HashMap::new();
-        let mut trigger_matches = Vec::new();
+        let mut trigger_matches = TrigMatchStore::new();
         let mut regex_matches = Vec::new();
         let mut global_vars = VarStore::new();
 
@@ -73,13 +75,12 @@ impl MatchStore {
                 };
                 match m.cause {
                     MatchCause::Trigger(trigger) => {
-                        let idx = trigger_matches.len();
                         let match_ = TriggerMatch {
                             base_match,
                             propagate_case: trigger.propagate_case,
                             uppercase_style: trigger.uppercase_style,
                         };
-                        trigger_matches.push((trigger.triggers, match_));
+                        let idx = trigger_matches.add(trigger.triggers, match_);
                         trigger_ids.push(idx);
                     }
                     MatchCause::Regex(regex) => {
@@ -155,7 +156,7 @@ impl MatchStore {
 fn query_matches_for_paths(
     indexed_files: &HashMap<PathBuf, IndexedMatchFile>,
     visited_paths: &mut HashSet<PathBuf>,
-    visited_trigger_matches: &mut HashSet<usize>,
+    visited_trigger_matches: &mut HashSet<TrigMatchRef>,
     visited_regex_matches: &mut HashSet<usize>,
     visited_global_vars: &mut HashSet<VarRef>,
     paths: &[PathBuf],
@@ -338,7 +339,7 @@ mod tests {
                 .trigger_matches;
             let base_group: Vec<(Vec<String>, TriggerMatch)> = base_group
                 .iter()
-                .map(|m| match_store.trigger_matches[*m].clone())
+                .map(|&m| match_store.trigger_matches.get(m).clone())
                 .collect();
 
             assert_eq!(base_group, create_matches(&[("hello", "world")]));
@@ -350,7 +351,7 @@ mod tests {
                 .trigger_matches;
             let another_group: Vec<(Vec<String>, TriggerMatch)> = another_group
                 .iter()
-                .map(|m| match_store.trigger_matches[*m].clone())
+                .map(|&m| match_store.trigger_matches.get(m).clone())
                 .collect();
             assert_eq!(
                 another_group,
@@ -364,7 +365,7 @@ mod tests {
                 .trigger_matches;
             let sub_group: Vec<(Vec<String>, TriggerMatch)> = sub_group
                 .iter()
-                .map(|m| match_store.trigger_matches[*m].clone())
+                .map(|&m| match_store.trigger_matches.get(m).clone())
                 .collect();
             assert_eq!(sub_group, create_matches(&[("hello", "world3")]));
         });
@@ -490,7 +491,7 @@ mod tests {
             let mut matches = match_set
                 .trigger_matches
                 .into_iter()
-                .map(|m| match_store.trigger_matches[m].clone())
+                .map(|m| match_store.trigger_matches.get(m).clone())
                 .collect::<Vec<(Vec<String>, TriggerMatch)>>();
 
             sort_matches(&mut matches);
@@ -580,7 +581,7 @@ mod tests {
             let mut matches = match_set
                 .trigger_matches
                 .into_iter()
-                .map(|m| match_store.trigger_matches[m].clone())
+                .map(|m| match_store.trigger_matches.get(m).clone())
                 .collect::<Vec<(Vec<String>, TriggerMatch)>>();
             sort_matches(&mut matches);
 
@@ -665,7 +666,7 @@ mod tests {
             let mut matches = match_set
                 .trigger_matches
                 .into_iter()
-                .map(|m| match_store.trigger_matches[m].clone())
+                .map(|m| match_store.trigger_matches.get(m).clone())
                 .collect::<Vec<(Vec<String>, TriggerMatch)>>();
             sort_matches(&mut matches);
 
@@ -752,7 +753,7 @@ mod tests {
             let mut matches = match_set
                 .trigger_matches
                 .into_iter()
-                .map(|m| match_store.trigger_matches[m].clone())
+                .map(|m| match_store.trigger_matches.get(m).clone())
                 .collect::<Vec<(Vec<String>, TriggerMatch)>>();
             sort_matches(&mut matches);
 

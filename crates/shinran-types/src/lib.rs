@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 mod stores;
 
-pub use stores::{VarRef, VarStore};
+pub use stores::{TrigMatchRef, TrigMatchStore, VarRef, VarStore};
 
 pub type StructId = i32;
 
@@ -66,14 +66,14 @@ pub enum Number {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MatchIdx {
-    Trigger(usize),
+    Trigger(TrigMatchRef),
     Regex(usize),
     BuiltIn(usize),
 }
 
 impl Default for MatchIdx {
     fn default() -> Self {
-        Self::Trigger(0)
+        Self::Trigger(TrigMatchRef::default())
     }
 }
 

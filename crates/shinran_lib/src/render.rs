@@ -27,8 +27,8 @@ use espanso_config::matches::store::MatchesAndGlobalVars;
 use espanso_config::{config::ProfileId, matches::store::MatchStore};
 use espanso_render::{CasingStyle, Context, RenderOptions};
 use shinran_types::{
-    BaseMatch, MatchEffect, MatchIdx, Params, TextEffect, UpperCasingStyle, Value, VarRef, VarType,
-    Variable,
+    BaseMatch, MatchEffect, MatchIdx, Params, TextEffect, TrigMatchRef, UpperCasingStyle, Value,
+    VarRef, VarType, Variable,
 };
 
 use crate::{
@@ -45,7 +45,7 @@ pub struct RendererAdapter {
     configuration: Configuration,
 
     /// Map of all templates, indexed by the corresponding match ID.
-    template_map: HashMap<usize, (Vec<String>, TextEffect)>,
+    template_map: HashMap<TrigMatchRef, (Vec<String>, TextEffect)>,
     /// Map of all global variables, indexed by the corresponding variable ID.
     global_vars_map: HashMap<VarRef, Variable>,
 
@@ -75,12 +75,13 @@ impl RendererAdapter {
 }
 
 // TODO: test
-fn generate_template_map(match_store: &MatchStore) -> HashMap<usize, (Vec<String>, TextEffect)> {
+fn generate_template_map(
+    match_store: &MatchStore,
+) -> HashMap<TrigMatchRef, (Vec<String>, TextEffect)> {
     let mut template_map = HashMap::new();
-    for (idx, (trig, m)) in match_store.trigger_matches.iter().enumerate() {
+    for (idx, (trig, m)) in match_store.trigger_matches.enumerate() {
         let entry = convert_to_template(&m.base_match);
         let Some(entry) = entry else { continue };
-        // TODO: Why are we inserting entries that are `None`?
         template_map.insert(idx, (trig.clone(), entry));
     }
     template_map
@@ -112,7 +113,7 @@ fn generate_global_vars_map(configuration: &Configuration) -> HashMap<VarRef, Va
 /// Analogously, it iterates over the global vars in the match set and finds the corresponding vars.
 fn generate_context(
     match_set: MatchesAndGlobalVars,
-    template_map: &HashMap<usize, (Vec<String>, TextEffect)>,
+    template_map: &HashMap<TrigMatchRef, (Vec<String>, TextEffect)>,
     global_vars_map: &HashMap<VarRef, Variable>,
 ) -> Context {
     let mut templates = Vec::new();
@@ -234,7 +235,7 @@ impl RendererAdapter {
 
         let (effect, propagate_case, preferred_uppercasing_style) = match match_id {
             MatchIdx::Trigger(idx) => {
-                let m = &self.configuration.match_store.trigger_matches[idx].1;
+                let m = &self.configuration.match_store.trigger_matches.get(idx).1;
                 (
                     &m.base_match.effect,
                     m.propagate_case,
