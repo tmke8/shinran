@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 use log::error;
 use regex::{Regex, RegexSet};
-use shinran_types::MatchIdx;
+use shinran_types::{MatchIdx, RegexMatchRef};
 
 use crate::engine::DetectedMatch;
 
@@ -40,8 +40,8 @@ impl<Id> RegexMatch<Id> {
     }
 }
 
-pub struct RegexMatcher {
-    ids: Vec<usize>,
+pub struct RegexMatcher<Id: Copy + Eq + std::hash::Hash = RegexMatchRef> {
+    ids: Vec<Id>,
     // The RegexSet is used to efficiently determine which regexes match
     regex_set: RegexSet,
 
@@ -90,7 +90,7 @@ impl RegexMatcher {
         let mut matches = Vec::new();
 
         for index in self.regex_set.matches(trigger) {
-            let (Some(id), Some(regex)) = (self.ids.get(index), self.regexes.get(index)) else {
+            let (Some(&id), Some(regex)) = (self.ids.get(index), self.regexes.get(index)) else {
                 error!(
                     "received inconsistent index from regex set with index: {}",
                     index
@@ -112,7 +112,7 @@ impl RegexMatcher {
                     .collect();
 
                 let result = DetectedMatch {
-                    id: MatchIdx::Regex(*id),
+                    id: MatchIdx::Regex(id),
                     trigger: full_match.to_string(),
                     left_separator: None,
                     right_separator: None,
@@ -126,8 +126,11 @@ impl RegexMatcher {
     }
 }
 
-impl RegexMatcher {
-    pub fn new(matches: Vec<RegexMatch<usize>>) -> Self {
+impl<Id> RegexMatcher<Id>
+where
+    Id: Copy + Eq + std::hash::Hash,
+{
+    pub fn new(matches: Vec<RegexMatch<Id>>) -> Self {
         let mut ids = Vec::new();
         let mut regexes = Vec::new();
         let mut good_regexes = Vec::new();
@@ -163,7 +166,7 @@ mod tests {
 
     pub(crate) fn get_matches_after_str(
         string: &str,
-        matcher: &RegexMatcher,
+        matcher: &RegexMatcher<usize>,
     ) -> Vec<DetectedMatch> {
         matcher.find_matches(&string)
 
@@ -200,7 +203,7 @@ mod tests {
 
     #[test]
     fn matcher_simple_matches() {
-        let matcher = RegexMatcher::new(vec![
+        let matcher = RegexMatcher::<usize>::new(vec![
             RegexMatch::new(1, "hello"),
             RegexMatch::new(2, "num\\d{1,3}s"),
         ]);
