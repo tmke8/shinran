@@ -68,7 +68,7 @@ pub enum Number {
 pub enum MatchIdx {
     Trigger(TrigMatchRef),
     Regex(usize),
-    BuiltIn(usize),
+    BuiltIn(i32),
 }
 
 impl Default for MatchIdx {

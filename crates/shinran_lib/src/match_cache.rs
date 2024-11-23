@@ -146,7 +146,7 @@ fn create_profile_cache(
 
 pub struct CombinedMatchCache {
     pub user_match_cache: MatchCache,
-    builtin_match_cache: HashMap<usize, BuiltInMatch>,
+    builtin_match_cache: HashMap<i32, BuiltInMatch>,
     pub regex_matcher: RegexMatcher,
 }
 
