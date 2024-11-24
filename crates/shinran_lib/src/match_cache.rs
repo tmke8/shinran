@@ -218,7 +218,7 @@ impl CombinedMatchCache {
     // }
 
     pub(crate) fn find_matches_from_trigger(&self, trigger: &str) -> Vec<DetectedMatch> {
-        let user_matches: Option<DetectedMatch> = self
+        let mut user_matches: Option<DetectedMatch> = self
             .user_match_cache
             .default_profile_and_matches()
             .get(trigger)
@@ -227,20 +227,21 @@ impl CombinedMatchCache {
                 trigger: trigger.to_string(),
                 ..Default::default()
             });
-        // .values()
-        // .filter_map(|idx| {
-        //     let m = self.match_store.trigger_matches[idx];
-        //     if trigger_cause.triggers.iter().any(|t| t == trigger) {
-        //         Some(DetectedMatch {
-        //             id: m.id,
-        //             trigger: trigger.to_string(),
-        //             ..Default::default()
-        //         })
-        //     } else {
-        //         None
-        //     }
-        // })
-        // .collect();
+
+        if user_matches.is_none() {
+            // Try making the trigger lowercase.
+            // However, this is only considered a match if `propagate_case` is set to true.
+            // This needs to be checked during the rendering.
+            user_matches = self
+                .user_match_cache
+                .default_profile_and_matches()
+                .get(&trigger.to_ascii_lowercase())
+                .map(|&idx| DetectedMatch {
+                    id: MatchIdx::Trigger(idx),
+                    trigger: trigger.to_string(),
+                    ..Default::default()
+                });
+        }
 
         let builtin_matches: Vec<DetectedMatch> = self
             .builtin_match_cache

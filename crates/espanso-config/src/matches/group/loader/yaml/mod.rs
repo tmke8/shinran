@@ -351,10 +351,11 @@ pub fn try_convert_into_variable(
 
 #[cfg(test)]
 mod tests {
+    use shinran_helpers::use_test_directory;
     use shinran_types::{MatchCause, TextEffect, TriggerCause};
 
     use super::*;
-    use crate::{matches::LoadedMatch, util::tests::use_test_directory};
+    use crate::matches::LoadedMatch;
     use std::{ffi::OsString, fs::create_dir_all};
 
     fn create_match_with_warnings(

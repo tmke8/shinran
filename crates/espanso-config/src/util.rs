@@ -34,23 +34,6 @@ pub fn is_yaml_empty(yaml: &str) -> bool {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use std::{fs::create_dir_all, path::Path};
-    use tempdir::TempDir;
-
-    pub fn use_test_directory(callback: impl FnOnce(&Path, &Path, &Path)) {
-        let dir = TempDir::new("tempconfig").unwrap();
-        let match_dir = dir.path().join("match");
-        create_dir_all(&match_dir).unwrap();
-
-        let config_dir = dir.path().join("config");
-        create_dir_all(&config_dir).unwrap();
-
-        callback(
-            &dunce::canonicalize(dir.path()).unwrap(),
-            &dunce::canonicalize(match_dir).unwrap(),
-            &dunce::canonicalize(config_dir).unwrap(),
-        );
-    }
 
     #[test]
     fn is_yaml_empty_document_empty() {

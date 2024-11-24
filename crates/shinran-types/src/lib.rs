@@ -19,7 +19,7 @@ pub enum VarType {
     /// For nested matches: https://espanso.org/docs/matches/basics/#nested-matches
     Match,
     /// For global variables: https://espanso.org/docs/matches/basics/#global-variables
-    Global,
+    Unresolved,
 }
 
 #[derive(Debug, Clone, PartialEq)]

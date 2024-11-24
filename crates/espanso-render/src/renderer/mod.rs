@@ -66,12 +66,12 @@ impl Extension for NoOpExtension {
 }
 
 impl Renderer<NoOpExtension> {
-    pub fn new(config_path: &Path, home_path: &Path, packages_path: &Path) -> Self {
+    pub fn new(base_path: &Path, home_path: &Path, packages_path: &Path) -> Self {
         Self {
             date_extension: DateExtension::new(),
             echo_extension: EchoExtension::new(),
-            shell_extension: ShellExtension::new(config_path),
-            script_extension: ScriptExtension::new(config_path, home_path, packages_path),
+            shell_extension: ShellExtension::new(base_path),
+            script_extension: ScriptExtension::new(base_path, home_path, packages_path),
             random_extension: RandomExtension::new(),
             mock_extension: NoOpExtension,
         }
@@ -86,11 +86,11 @@ impl<M: Extension> Renderer<M> {
         options: &RenderOptions,
     ) -> RenderResult {
         let body = if VAR_REGEX.is_match(&template.body) {
-            // Convert "global" variable type aliases when needed
+            // Resolve unresolved variables with global variables, if necessary
             let local_variables: Vec<&Variable> = if template
                 .vars
                 .iter()
-                .any(|var| matches!(var.var_type, VarType::Global))
+                .any(|var| matches!(var.var_type, VarType::Unresolved))
             {
                 let global_vars: HashMap<&str, &Variable> = context
                     .global_vars
@@ -101,7 +101,8 @@ impl<M: Extension> Renderer<M> {
                     .vars
                     .iter()
                     .filter_map(|var| {
-                        if matches!(var.var_type, VarType::Global) {
+                        if matches!(var.var_type, VarType::Unresolved) {
+                            // Try to resolve it with a global variable.
                             global_vars.get(&*var.name).copied()
                         } else {
                             Some(var)
@@ -127,9 +128,11 @@ impl<M: Extension> Renderer<M> {
             // Compute the variable outputs
             let mut scope = Scope::new();
             for variable in variables {
+                println!("variable: {:?}", variable);
                 if matches!(variable.var_type, VarType::Match) {
                     // Recursive call
                     // Call render recursively
+                    println!("templates: {:?}", context.templates.as_slice());
                     let Some(sub_template) =
                         get_matching_template(variable, context.templates.as_slice())
                     else {
@@ -198,7 +201,7 @@ impl<M: Extension> Renderer<M> {
                         // Do nothing.
                         return RenderResult::Success("".to_string());
                     }
-                    VarType::Global | VarType::Match => {
+                    VarType::Unresolved | VarType::Match => {
                         unreachable!()
                     }
                 };
@@ -537,7 +540,7 @@ mod tests {
                 },
                 Variable {
                     name: "var".to_string(),
-                    var_type: VarType::Global,
+                    var_type: VarType::Unresolved,
                     ..Default::default()
                 },
             ],
@@ -925,7 +928,7 @@ mod tests {
         template.vars = vec![
             Variable {
                 name: "var".to_string(),
-                var_type: VarType::Global,
+                var_type: VarType::Unresolved,
                 ..Default::default()
             },
             Variable {

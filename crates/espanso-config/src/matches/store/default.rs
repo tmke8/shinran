@@ -234,10 +234,10 @@ fn load_match_files_recursively(
 
 #[cfg(test)]
 mod tests {
+    use shinran_helpers::use_test_directory;
     use shinran_types::{MatchEffect, TextEffect, Variable};
 
     use super::*;
-    use crate::util::tests::use_test_directory;
     use std::fs::create_dir_all;
 
     fn create_match(trigger: &str, replace: &str) -> (Vec<String>, TriggerMatch) {

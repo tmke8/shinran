@@ -35,9 +35,9 @@ pub struct ScriptExtension {
 
 #[allow(clippy::new_without_default)]
 impl ScriptExtension {
-    pub fn new(config_path: &Path, home_path: &Path, packages_path: &Path) -> Self {
+    pub fn new(base_path: &Path, home_path: &Path, packages_path: &Path) -> Self {
         Self {
-            config_path: config_path.to_owned(),
+            config_path: base_path.to_owned(),
             home_path: home_path.to_owned(),
             packages_path: packages_path.to_owned(),
         }

@@ -235,7 +235,15 @@ impl RendererAdapter {
 
         let (effect, propagate_case, preferred_uppercasing_style) = match match_id {
             MatchIdx::Trigger(idx) => {
-                let m = &self.configuration.match_store.trigger_matches.get(idx).1;
+                let (expected_triggers, m) =
+                    &self.configuration.match_store.trigger_matches.get(idx);
+                if let Some(trigger) = trigger {
+                    // If we are not propagating case, we have to make sure that the trigger matches
+                    // one of the expected triggers exactly.
+                    if !m.propagate_case && !expected_triggers.iter().any(|t| t == trigger) {
+                        return Err(RendererError::NotFound.into());
+                    }
+                }
                 (
                     &m.base_match.effect,
                     m.propagate_case,
@@ -257,10 +265,7 @@ impl RendererAdapter {
             return Err(RendererError::NotFound.into());
         };
 
-        // TODO: We should use `combined_cache.get()` here to also get the built-in matches.
-        // let raw_match = self.combined_cache.user_match_cache.get(match_id);
-        // let propagate_case = raw_match.is_some_and(is_propagate_case);
-        // let preferred_uppercasing_style = raw_match.and_then(extract_uppercasing_style);
+        if !propagate_case {}
 
         let options = RenderOptions {
             casing_style: if !propagate_case {

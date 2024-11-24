@@ -72,9 +72,9 @@ pub struct ConfigLoadResult {
     pub match_store: MatchStore,
 }
 
-pub fn load_config(config_path: &Path) -> Result<ConfigLoadResult> {
+pub fn load_config(base_path: &Path) -> Result<ConfigLoadResult> {
     let (profile_store, match_store, non_fatal_errors) =
-        espanso_config::load(config_path).context("unable to load config")?;
+        espanso_config::load(base_path).context("unable to load config")?;
 
     // TODO: add an option to avoid dumping the errors in the logs
     if !non_fatal_errors.is_empty() {

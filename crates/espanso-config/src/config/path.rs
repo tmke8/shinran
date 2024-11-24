@@ -84,8 +84,9 @@ pub fn calculate_paths<'a>(
 
 #[cfg(test)]
 pub mod tests {
+    use shinran_helpers::use_test_directory;
+
     use super::*;
-    use crate::util::tests::use_test_directory;
     use std::fs::create_dir_all;
 
     #[test]

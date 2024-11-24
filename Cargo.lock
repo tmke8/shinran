@@ -594,6 +594,7 @@ dependencies = [
  "serde",
  "serde_yaml_ng",
  "shinran-types",
+ "shinran_helpers",
  "tempdir",
  "tempfile",
  "thiserror",
@@ -1496,6 +1497,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "shinran_helpers"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "tempdir",
+]
+
+[[package]]
 name = "shinran_ibus"
 version = "0.1.0"
 dependencies = [
@@ -1520,6 +1529,7 @@ dependencies = [
  "serde",
  "serde_yaml_ng",
  "shinran-types",
+ "shinran_helpers",
  "thiserror",
  "time",
  "unicode-segmentation",

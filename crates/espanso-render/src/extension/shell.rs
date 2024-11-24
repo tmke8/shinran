@@ -199,9 +199,9 @@ pub struct ShellExtension {
 
 #[allow(clippy::new_without_default)]
 impl ShellExtension {
-    pub fn new(config_path: &Path) -> Self {
+    pub fn new(base_path: &Path) -> Self {
         Self {
-            config_path: config_path.to_owned(),
+            config_path: base_path.to_owned(),
         }
     }
 }
