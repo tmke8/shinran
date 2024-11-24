@@ -21,19 +21,19 @@ use std::path::PathBuf;
 
 use crate::error::NonFatalErrorSet;
 
-use super::{Match, Variable};
-
 mod default;
 pub use default::MatchStore;
+use shinran_types::{TrigMatchRef, VarRef};
 
 /// The set of matches and global vars associated with one config file.
 ///
 /// This struct contains a list of references to the matches that matched the query
 /// and a list of references to the global variables that were defined in the matches.
 #[derive(Debug, Clone, PartialEq)]
-pub struct MatchesAndGlobalVars<'store> {
-    pub matches: Vec<&'store Match>,
-    pub global_vars: Vec<&'store Variable>,
+pub struct MatchesAndGlobalVars {
+    pub trigger_matches: Vec<TrigMatchRef>,
+    pub regex_matches: Vec<usize>,
+    pub global_vars: Vec<VarRef>,
 }
 
 pub fn load(paths: &[PathBuf]) -> (MatchStore, Vec<NonFatalErrorSet>) {

@@ -17,7 +17,8 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{Extension, ExtensionOutput, ExtensionResult, Params, Value};
+use crate::{Extension, ExtensionOutput, ExtensionResult};
+use shinran_types::{Params, Value};
 use thiserror::Error;
 
 pub struct EchoExtension {
@@ -67,6 +68,8 @@ pub enum EchoExtensionError {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+
+    use shinran_types::Params;
 
     use super::*;
 

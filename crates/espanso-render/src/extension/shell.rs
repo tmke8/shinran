@@ -18,6 +18,7 @@
  */
 
 use lazy_static::lazy_static;
+use shinran_types::{Params, Value};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -25,7 +26,7 @@ use std::{
 };
 
 use super::exec_util::{determine_default_macos_shell, MacShell};
-use crate::{Extension, ExtensionOutput, ExtensionResult, Params, Value};
+use crate::{Extension, ExtensionOutput, ExtensionResult};
 use log::{debug, error, info};
 use thiserror::Error;
 
@@ -198,9 +199,9 @@ pub struct ShellExtension {
 
 #[allow(clippy::new_without_default)]
 impl ShellExtension {
-    pub fn new(config_path: &Path) -> Self {
+    pub fn new(base_path: &Path) -> Self {
         Self {
-            config_path: config_path.to_owned(),
+            config_path: base_path.to_owned(),
         }
     }
 }
@@ -314,6 +315,9 @@ pub enum ShellExtensionError {
 
 #[cfg(test)]
 mod tests {
+
+    use shinran_types::{Params, Value};
+
     use super::*;
     use crate::Scope;
 
@@ -441,6 +445,8 @@ mod tests {
     #[test]
     #[cfg(not(target_os = "windows"))]
     fn exit_error() {
+        use shinran_types::{Params, Value};
+
         let extension = ShellExtension::new(&PathBuf::new());
 
         let param = vec![("cmd".to_string(), Value::String("exit 1".to_string()))]

@@ -73,8 +73,9 @@ pub enum ConfigError {
 
 #[cfg(test)]
 mod tests {
+    use shinran_helpers::use_test_directory;
+
     use super::*;
-    use crate::util::tests::use_test_directory;
     // use config::AppProperties;
 
     #[test]
@@ -152,7 +153,7 @@ mod tests {
                     .collect_matches_and_global_vars(
                         config_store.default_config().match_file_paths()
                     )
-                    .matches
+                    .trigger_matches
                     .len(),
                 3
             );
@@ -267,7 +268,7 @@ mod tests {
                     .collect_matches_and_global_vars(
                         config_store.default_config().match_file_paths()
                     )
-                    .matches
+                    .trigger_matches
                     .len(),
                 1
             );

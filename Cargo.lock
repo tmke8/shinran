@@ -593,6 +593,8 @@ dependencies = [
  "regex",
  "serde",
  "serde_yaml_ng",
+ "shinran-types",
+ "shinran_helpers",
  "tempdir",
  "tempfile",
  "thiserror",
@@ -610,6 +612,7 @@ dependencies = [
  "log",
  "rand 0.8.5",
  "regex",
+ "shinran-types",
  "sys-locale",
  "thiserror",
 ]
@@ -1487,6 +1490,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "shinran-types"
+version = "0.1.0"
+dependencies = [
+ "enum-as-inner",
+]
+
+[[package]]
+name = "shinran_helpers"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "tempdir",
+]
+
+[[package]]
 name = "shinran_ibus"
 version = "0.1.0"
 dependencies = [
@@ -1510,6 +1528,8 @@ dependencies = [
  "regex",
  "serde",
  "serde_yaml_ng",
+ "shinran-types",
+ "shinran_helpers",
  "thiserror",
  "time",
  "unicode-segmentation",

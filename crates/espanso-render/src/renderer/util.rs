@@ -17,10 +17,11 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{renderer::RendererError, ExtensionOutput, Params, Scope, Value};
+use crate::{renderer::RendererError, ExtensionOutput, Scope};
 use anyhow::Result;
 use log::error;
 use regex::Captures;
+use shinran_types::{Params, Value};
 
 use super::VAR_REGEX;
 use std::collections::HashSet;
@@ -147,6 +148,9 @@ fn inject_variables_into_value(value: &mut Value, scope: &Scope) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+
+    use shinran_types::{Params, Value};
+
     use super::*;
     use std::{collections::HashMap, iter::FromIterator};
 

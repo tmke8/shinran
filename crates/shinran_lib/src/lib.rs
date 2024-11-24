@@ -20,9 +20,8 @@ fn load_config_and_renderer(
     // See also
     // `initialize_and_spawn()`
     // in `espanso/src/cli/worker/engine/mod.rs`.
-    let force_config_path = get_path_override(&cli_overrides, "config_dir", "ESPANSO_CONFIG_DIR");
-    let force_package_path =
-        get_path_override(&cli_overrides, "package_dir", "ESPANSO_PACKAGE_DIR");
+    let force_config_path = get_path_override(cli_overrides, "config_dir", "ESPANSO_CONFIG_DIR");
+    let force_package_path = get_path_override(cli_overrides, "package_dir", "ESPANSO_PACKAGE_DIR");
     let force_runtime_path = get_path_override(cli_overrides, "runtime_dir", "ESPANSO_RUNTIME_DIR");
 
     let paths = path::resolve_paths(
@@ -39,9 +38,9 @@ fn load_config_and_renderer(
     let match_store = config_result.match_store;
 
     let home_path = dirs::home_dir().expect("unable to obtain home dir path");
-    let config_path = &paths.config;
+    let base_path = &paths.config;
     let packages_path = &paths.packages;
-    let renderer = espanso_render::Renderer::new(config_path, &home_path, packages_path);
+    let renderer = espanso_render::Renderer::new(base_path, &home_path, packages_path);
 
     (renderer, profile_store, match_store)
 }
@@ -49,16 +48,15 @@ fn load_config_and_renderer(
 fn get_regex_matches(
     profile_store: &ProfileStore,
     match_store: &MatchStore,
-) -> Vec<regex::RegexMatch<i32>> {
+) -> Vec<regex::RegexMatch<usize>> {
     let paths = profile_store.get_all_match_file_paths();
     let global_set =
         match_store.collect_matches_and_global_vars(&paths.into_iter().collect::<Vec<_>>());
     let mut regex_matches = Vec::new();
 
-    for m in global_set.matches {
-        if let espanso_config::matches::MatchCause::Regex(cause) = &m.cause {
-            regex_matches.push(regex::RegexMatch::new(m.id, &cause.regex));
-        }
+    for match_idx in global_set.regex_matches {
+        let (regex, _) = &match_store.regex_matches[match_idx];
+        regex_matches.push(regex::RegexMatch::new(match_idx, regex));
     }
     regex_matches
 }
@@ -139,15 +137,260 @@ fn get_path_override(
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
+    use shinran_helpers::use_test_directory;
+
     use super::*;
+
+    fn make_backend(
+        match_definition: &str,
+        base_path: &Path,
+        match_dir: &Path,
+        config_dir: &Path,
+    ) -> Backend {
+        let base_file = match_dir.join("base.yml");
+        std::fs::write(&base_file, match_definition).unwrap();
+
+        let default_file = config_dir.join("default.yml");
+        std::fs::write(&default_file, "").unwrap();
+
+        let mut cli_overrides = HashMap::new();
+        cli_overrides.insert(
+            "config_dir".to_string(),
+            base_path.to_str().unwrap().to_string(),
+        );
+        Backend::new(&cli_overrides).unwrap()
+    }
+
+    #[test]
+    fn test_hello_world() {
+        use_test_directory(|base_path, match_dir, config_dir| {
+            let match_definition = r#"
+                    matches:
+                      - trigger: "hello"
+                        replace: "world"
+            "#;
+            let backend = make_backend(match_definition, base_path, match_dir, config_dir);
+            let result = backend.check_trigger("hello").unwrap().unwrap();
+            assert_eq!(result, "world");
+        });
+    }
+
+    #[test]
+    fn test_regex() {
+        use_test_directory(|base_path, match_dir, config_dir| {
+            let match_definition = r#"
+                matches:
+                - regex: "greet\\((?P<person>.*)\\)"
+                  replace: "Hi {{person}}!"
+            "#;
+            let backend = make_backend(match_definition, base_path, match_dir, config_dir);
+            let result = backend.check_trigger("greet(Bob)").unwrap().unwrap();
+            assert_eq!(result, "Hi Bob!");
+        });
+    }
 
     #[test]
     fn test_date() {
-        let cli_overrides = HashMap::new();
-        let backend = Backend::new(&cli_overrides).unwrap();
-        // let trigger = "date";
-        let trigger = "greet(Bob)";
-        let result = backend.check_trigger(trigger).unwrap().unwrap();
-        println!("{result}");
+        use_test_directory(|base_path, match_dir, config_dir| {
+            let match_definition = r#"
+                matches:
+                - trigger: "now"
+                  replace: "It's {{mytime}}"
+                  vars:
+                    - name: mytime
+                      type: date
+                      params:
+                        format: "%H:%M"
+            "#;
+            let backend = make_backend(match_definition, base_path, match_dir, config_dir);
+            backend.check_trigger("now").unwrap().unwrap();
+            // assert_eq!(result, "It's 14:45");
+        });
+    }
+
+    #[test]
+    fn test_global_vars() {
+        use_test_directory(|base_path, match_dir, config_dir| {
+            let match_definition = r#"
+                global_vars:
+                  - name: myname
+                    type: echo
+                    params:
+                      echo: Jon
+
+                matches:
+                  - trigger: ":hello"
+                    replace: "hello {{myname}}"
+            "#;
+            let backend = make_backend(match_definition, base_path, match_dir, config_dir);
+            let result = backend.check_trigger(":hello").unwrap().unwrap();
+            assert_eq!(result, "hello Jon");
+        });
+    }
+
+    #[test]
+    fn test_global_inside_local_vars() {
+        use_test_directory(|base_path, match_dir, config_dir| {
+            let match_definition = r#"
+                global_vars:
+                  - name: firstname
+                    type: echo
+                    params:
+                      echo: Jon
+                  - name: lastname
+                    type: echo
+                    params:
+                      echo: Snow
+
+                matches:
+                  - trigger: ":hello"
+                    replace: "hello {{fullname}}"
+                    vars:
+                      - name: fullname
+                        type: echo
+                        params:
+                          echo: "{{firstname}} {{lastname}}"
+            "#;
+            let backend = make_backend(match_definition, base_path, match_dir, config_dir);
+            let result = backend.check_trigger(":hello").unwrap().unwrap();
+            assert_eq!(result, "hello Jon Snow");
+        });
+    }
+
+    #[test]
+    fn test_nested_matches() {
+        use_test_directory(|base_path, match_dir, config_dir| {
+            let match_definition = r#"
+                matches:
+                - trigger: :one
+                  replace: nested
+
+                - trigger: :nested
+                  replace: This is a {{output}} match
+                  vars:
+                    - name: output
+                      type: match
+                      params:
+                        trigger: :one
+            "#;
+            let backend = make_backend(match_definition, base_path, match_dir, config_dir);
+            let result = backend.check_trigger(":nested").unwrap().unwrap();
+            assert_eq!(result, "This is a nested match");
+        });
+    }
+
+    #[test]
+    fn test_nested_regex_matches() {
+        use_test_directory(|base_path, match_dir, config_dir| {
+            let match_definition = r#"
+                matches:
+                - trigger: :one
+                  replace: nested
+
+                - regex: ":greet\\d"
+                  replace: This is a {{output}} match
+                  vars:
+                    - name: output
+                      type: match
+                      params:
+                        trigger: :one
+            "#;
+            let backend = make_backend(match_definition, base_path, match_dir, config_dir);
+            let result = backend.check_trigger(":greet2").unwrap().unwrap();
+            assert_eq!(result, "This is a nested match");
+        });
+    }
+
+    #[test]
+    fn test_nested_regex_matches2() {
+        use_test_directory(|base_path, match_dir, config_dir| {
+            let match_definition = r#"
+                matches:
+                - regex: :one
+                  replace: nested
+
+                - trigger: ":nested"
+                  replace: This is a {{output}} match
+                  vars:
+                  - name: output
+                    type: match
+                    params:
+                      trigger: :one
+            "#;
+            let backend = make_backend(match_definition, base_path, match_dir, config_dir);
+            // TODO: Figure out whether this should be an error or not.
+            backend.check_trigger(":nested").unwrap_err();
+        });
+    }
+
+    #[test]
+    fn test_unicode() {
+        use_test_directory(|base_path, match_dir, config_dir| {
+            let match_definition = r#"
+                matches:
+                - trigger: :euro
+                  replace: "\u20ac"
+            "#;
+            let backend = make_backend(match_definition, base_path, match_dir, config_dir);
+            let result = backend.check_trigger(":euro").unwrap().unwrap();
+            assert_eq!(result, "€");
+            let result = backend.check_trigger(":Euro").unwrap_err();
+            assert_eq!(result.to_string(), "match not found");
+        });
+    }
+
+    #[test]
+    fn test_case_propagation() {
+        use_test_directory(|base_path, match_dir, config_dir| {
+            let match_definition = r#"
+                matches:
+                - trigger: alh
+                  replace: although
+                  propagate_case: true
+            "#;
+            let backend = make_backend(match_definition, base_path, match_dir, config_dir);
+            let result = backend.check_trigger("alh").unwrap().unwrap();
+            assert_eq!(result, "although");
+            let result = backend.check_trigger("Alh").unwrap().unwrap();
+            assert_eq!(result, "Although");
+            let result = backend.check_trigger("ALH").unwrap().unwrap();
+            assert_eq!(result, "ALTHOUGH");
+        });
+    }
+
+    #[test]
+    fn test_case_propagation_advanced() {
+        use_test_directory(|base_path, match_dir, config_dir| {
+            let match_definition = r#"
+                matches:
+                - trigger: ;ols
+                  replace: ordinary least squares
+                  uppercase_style: capitalize_words
+                  propagate_case: true
+            "#;
+            let backend = make_backend(match_definition, base_path, match_dir, config_dir);
+            let result = backend.check_trigger(";ols").unwrap().unwrap();
+            assert_eq!(result, "ordinary least squares");
+            let result = backend.check_trigger(";Ols").unwrap().unwrap();
+            assert_eq!(result, "Ordinary Least Squares");
+        });
+    }
+
+    #[test]
+    fn test_case_multiple_triggers() {
+        use_test_directory(|base_path, match_dir, config_dir| {
+            let match_definition = r#"
+            matches:
+            - triggers: [hello, hi]
+              replace: world
+        "#;
+            let backend = make_backend(match_definition, base_path, match_dir, config_dir);
+            let result = backend.check_trigger("hello").unwrap().unwrap();
+            assert_eq!(result, "world");
+            let result = backend.check_trigger("hi").unwrap().unwrap();
+            assert_eq!(result, "world");
+        });
     }
 }

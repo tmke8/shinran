@@ -68,8 +68,9 @@ pub enum LoadError {
 
 #[cfg(test)]
 mod tests {
+    use shinran_helpers::use_test_directory;
+
     use super::*;
-    use crate::util::tests::use_test_directory;
 
     #[test]
     fn load_group_invalid_format() {

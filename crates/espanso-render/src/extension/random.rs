@@ -17,8 +17,9 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{Extension, ExtensionOutput, ExtensionResult, Params, Value};
+use crate::{Extension, ExtensionOutput, ExtensionResult};
 use rand::seq::SliceRandom;
+use shinran_types::{Params, Value};
 use thiserror::Error;
 
 pub struct RandomExtension {}
@@ -71,6 +72,8 @@ pub enum RandomExtensionError {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+
+    use shinran_types::{Params, Value};
 
     use super::*;
 

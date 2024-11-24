@@ -18,6 +18,7 @@
  */
 
 use enum_as_inner::EnumAsInner;
+use shinran_types::{Params, TextEffect, Variable};
 use std::collections::HashMap;
 
 pub mod extension;
@@ -44,7 +45,7 @@ pub enum RenderResult {
 #[derive(Default)]
 pub struct Context {
     pub global_vars: Vec<Variable>,
-    pub templates: Vec<Template>,
+    pub templates: Vec<(Vec<String>, TextEffect)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,67 +69,52 @@ pub enum CasingStyle {
     Uppercase,
 }
 
-/// Template for rendering a match with a `Text` effect.
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct Template {
-    pub triggers: Vec<String>,
-    pub body: String,
-    pub vars: Vec<Variable>,
-}
+// /// Template for rendering a match with a `Text` effect.
+// #[derive(Debug, Clone, PartialEq, Default)]
+// pub struct Template {
+//     pub triggers: Vec<String>,
+//     pub body: String,
+//     pub vars: Vec<Variable>,
+// }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum VarType {
-    Date,
-    Mock,
-    Shell,
-    Script,
-    Random,
-    Echo,
-    // TODO: Investigate whether these two are actually used.
-    Match,
-    Global,
-}
+// /// A variable that can be used in a template.
+// #[derive(Debug, Clone, PartialEq)]
+// pub struct Variable {
+//     pub name: String,
+//     pub var_type: VarType,
+//     pub inject_vars: bool,
+//     pub params: Params,
+//     // Name of the variables this variable depends on
+//     pub depends_on: Vec<String>,
+// }
 
-/// A variable that can be used in a template.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Variable {
-    pub name: String,
-    pub var_type: VarType,
-    pub inject_vars: bool,
-    pub params: Params,
-    // Name of the variables this variable depends on
-    pub depends_on: Vec<String>,
-}
+// impl Default for Variable {
+//     fn default() -> Self {
+//         Self {
+//             name: String::new(),
+//             var_type: VarType::Global,
+//             inject_vars: true,
+//             params: Params::new(),
+//             depends_on: Vec::new(),
+//         }
+//     }
+// }
 
-impl Default for Variable {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            var_type: VarType::Global,
-            inject_vars: true,
-            params: Params::new(),
-            depends_on: Vec::new(),
-        }
-    }
-}
+// #[derive(Debug, Clone, PartialEq, EnumAsInner)]
+// pub enum Value {
+//     Null,
+//     Bool(bool),
+//     Number(Number),
+//     String(String),
+//     Array(Vec<Value>),
+//     Object(HashMap<String, Value>),
+// }
 
-pub type Params = HashMap<String, Value>;
-
-#[derive(Debug, Clone, PartialEq, EnumAsInner)]
-pub enum Value {
-    Null,
-    Bool(bool),
-    Number(Number),
-    String(String),
-    Array(Vec<Value>),
-    Object(HashMap<String, Value>),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Number {
-    Integer(i64),
-    Float(f64),
-}
+// #[derive(Debug, Clone, PartialEq)]
+// pub enum Number {
+//     Integer(i64),
+//     Float(f64),
+// }
 
 pub trait Extension {
     fn name(&self) -> &str;

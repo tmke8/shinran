@@ -21,6 +21,7 @@ use std::collections::HashMap;
 
 use log::error;
 use regex::{Regex, RegexSet};
+use shinran_types::MatchIdx;
 
 use crate::engine::DetectedMatch;
 
@@ -40,7 +41,7 @@ impl<Id> RegexMatch<Id> {
 }
 
 pub struct RegexMatcher {
-    ids: Vec<i32>,
+    ids: Vec<usize>,
     // The RegexSet is used to efficiently determine which regexes match
     regex_set: RegexSet,
 
@@ -111,7 +112,7 @@ impl RegexMatcher {
                     .collect();
 
                 let result = DetectedMatch {
-                    id: *id,
+                    id: MatchIdx::Regex(*id),
                     trigger: full_match.to_string(),
                     left_separator: None,
                     right_separator: None,
@@ -126,7 +127,7 @@ impl RegexMatcher {
 }
 
 impl RegexMatcher {
-    pub fn new(matches: Vec<RegexMatch<i32>>) -> Self {
+    pub fn new(matches: Vec<RegexMatch<usize>>) -> Self {
         let mut ids = Vec::new();
         let mut regexes = Vec::new();
         let mut good_regexes = Vec::new();
@@ -156,6 +157,8 @@ impl RegexMatcher {
 
 #[cfg(test)]
 mod tests {
+    use shinran_types::MatchIdx;
+
     use super::*;
 
     pub(crate) fn get_matches_after_str(
@@ -180,14 +183,14 @@ mod tests {
         // matches
     }
 
-    fn match_result(id: i32, trigger: &str, vars: &[(&str, &str)]) -> DetectedMatch {
+    fn match_result(id: usize, trigger: &str, vars: &[(&str, &str)]) -> DetectedMatch {
         let args: HashMap<String, String> = vars
             .iter()
             .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
             .collect();
 
         DetectedMatch {
-            id,
+            id: MatchIdx::Regex(id),
             trigger: trigger.to_string(),
             left_separator: None,
             right_separator: None,

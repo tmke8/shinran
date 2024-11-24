@@ -24,12 +24,13 @@ use crate::{
         date::DateExtension, echo::EchoExtension, random::RandomExtension, script::ScriptExtension,
         shell::ShellExtension,
     },
-    CasingStyle, Context, Extension, ExtensionOutput, ExtensionResult, Params, RenderOptions,
-    RenderResult, Scope, Template, Value, VarType, Variable,
+    CasingStyle, Context, Extension, ExtensionOutput, ExtensionResult, RenderOptions, RenderResult,
+    Scope,
 };
 use lazy_static::lazy_static;
 use log::{error, warn};
 use regex::{Captures, Regex};
+use shinran_types::{Params, TextEffect, Value, VarType, Variable};
 use thiserror::Error;
 
 use self::util::{inject_variables_into_params, render_variables};
@@ -65,12 +66,12 @@ impl Extension for NoOpExtension {
 }
 
 impl Renderer<NoOpExtension> {
-    pub fn new(config_path: &Path, home_path: &Path, packages_path: &Path) -> Self {
+    pub fn new(base_path: &Path, home_path: &Path, packages_path: &Path) -> Self {
         Self {
             date_extension: DateExtension::new(),
             echo_extension: EchoExtension::new(),
-            shell_extension: ShellExtension::new(config_path),
-            script_extension: ScriptExtension::new(config_path, home_path, packages_path),
+            shell_extension: ShellExtension::new(base_path),
+            script_extension: ScriptExtension::new(base_path, home_path, packages_path),
             random_extension: RandomExtension::new(),
             mock_extension: NoOpExtension,
         }
@@ -80,16 +81,16 @@ impl Renderer<NoOpExtension> {
 impl<M: Extension> Renderer<M> {
     pub fn render_template(
         &self,
-        template: &Template,
+        template: &TextEffect,
         context: &Context,
         options: &RenderOptions,
     ) -> RenderResult {
         let body = if VAR_REGEX.is_match(&template.body) {
-            // Convert "global" variable type aliases when needed
+            // Resolve unresolved variables with global variables, if necessary
             let local_variables: Vec<&Variable> = if template
                 .vars
                 .iter()
-                .any(|var| matches!(var.var_type, VarType::Global))
+                .any(|var| matches!(var.var_type, VarType::Unresolved))
             {
                 let global_vars: HashMap<&str, &Variable> = context
                     .global_vars
@@ -100,7 +101,8 @@ impl<M: Extension> Renderer<M> {
                     .vars
                     .iter()
                     .filter_map(|var| {
-                        if matches!(var.var_type, VarType::Global) {
+                        if matches!(var.var_type, VarType::Unresolved) {
+                            // Try to resolve it with a global variable.
                             global_vars.get(&*var.name).copied()
                         } else {
                             Some(var)
@@ -193,7 +195,11 @@ impl<M: Extension> Renderer<M> {
                         self.mock_extension
                             .calculate(context, &scope, &variable_params)
                     }
-                    VarType::Global | VarType::Match => {
+                    VarType::Form => {
+                        // Do nothing.
+                        return RenderResult::Success("".to_string());
+                    }
+                    VarType::Unresolved | VarType::Match => {
                         unreachable!()
                     }
                 };
@@ -265,14 +271,15 @@ impl<M: Extension> Renderer<M> {
 
 fn get_matching_template<'a>(
     variable: &Variable,
-    templates: &'a [Template],
-) -> Option<&'a Template> {
+    templates: &'a [(Vec<String>, TextEffect)],
+) -> Option<&'a TextEffect> {
     // Find matching template
     let trigger = variable.params.get("trigger")?;
     if let Value::String(trigger) = trigger {
         templates
             .iter()
-            .find(|template| template.triggers.contains(trigger))
+            .find(|&entry| entry.0.contains(trigger))
+            .map(|entry| &entry.1)
     } else {
         None
     }
@@ -292,8 +299,10 @@ pub enum RendererError {
 
 #[cfg(test)]
 mod tests {
+
+    use shinran_types::{Params, TextFormat, Variable};
+
     use super::*;
-    use crate::{Params, VarType};
     use std::iter::FromIterator;
 
     struct MockExtension {}
@@ -303,12 +312,7 @@ mod tests {
             "mock"
         }
 
-        fn calculate(
-            &self,
-            _context: &Context,
-            scope: &Scope,
-            params: &crate::Params,
-        ) -> ExtensionResult {
+        fn calculate(&self, _context: &Context, scope: &Scope, params: &Params) -> ExtensionResult {
             if let Some(Value::String(string)) = params.get("echo") {
                 return ExtensionResult::Success(ExtensionOutput::Single(string.clone()));
             }
@@ -348,15 +352,16 @@ mod tests {
         }
     }
 
-    pub fn template_for_str(str: &str) -> Template {
-        Template {
-            triggers: vec!["id".to_string()],
+    pub fn template_for_str(str: &str) -> TextEffect {
+        TextEffect {
             body: str.to_string(),
             vars: Vec::new(),
+            format: TextFormat::Plain,
+            force_mode: None,
         }
     }
 
-    pub fn template(body: &str, vars: &[(&str, &str)]) -> Template {
+    pub fn template(body: &str, vars: &[(&str, &str)]) -> TextEffect {
         let vars = vars
             .iter()
             .map(|(name, value)| Variable {
@@ -368,10 +373,11 @@ mod tests {
                 ..Default::default()
             })
             .collect();
-        Template {
-            triggers: vec!["id".to_string()],
+        TextEffect {
             body: body.to_string(),
             vars,
+            format: TextFormat::Plain,
+            force_mode: None,
         }
     }
 
@@ -439,7 +445,7 @@ mod tests {
     #[test]
     fn dict_variable_variable() {
         let renderer = get_renderer();
-        let template = Template {
+        let template = TextEffect {
             body: "hello {{var.nested}}".to_string(),
             vars: vec![Variable {
                 name: "var".to_string(),
@@ -519,7 +525,7 @@ mod tests {
     #[test]
     fn global_variable_explicit_ordering() {
         let renderer = get_renderer();
-        let template = Template {
+        let template = TextEffect {
             body: "hello {{var}} {{local}}".to_string(),
             vars: vec![
                 Variable {
@@ -532,7 +538,7 @@ mod tests {
                 },
                 Variable {
                     name: "var".to_string(),
-                    var_type: VarType::Global,
+                    var_type: VarType::Unresolved,
                     ..Default::default()
                 },
             ],
@@ -554,7 +560,12 @@ mod tests {
             },
             &RenderOptions::default(),
         );
-        assert!(matches!(res, RenderResult::Success(str) if str == "hello Bob Bob"));
+        match res {
+            RenderResult::Success(str) => {
+                assert_eq!(str, "hello Bob Bob");
+            }
+            _ => panic!("unexpected result: {res:?}"),
+        }
     }
 
     #[test]
@@ -669,7 +680,7 @@ mod tests {
     #[test]
     fn local_variable_explicit_ordering() {
         let renderer = get_renderer();
-        let template = Template {
+        let template = TextEffect {
             body: "hello {{var}}".to_string(),
             vars: vec![Variable {
                 name: "var".to_string(),
@@ -701,7 +712,7 @@ mod tests {
     #[test]
     fn nested_match() {
         let renderer = get_renderer();
-        let template = Template {
+        let template = TextEffect {
             body: "hello {{var}}".to_string(),
             vars: vec![Variable {
                 name: "var".to_string(),
@@ -713,15 +724,14 @@ mod tests {
             }],
             ..Default::default()
         };
-        let nested_template = Template {
-            triggers: vec!["nested".to_string()],
+        let nested_template = TextEffect {
             body: "world".to_string(),
             ..Default::default()
         };
         let res = renderer.render_template(
             &template,
             &Context {
-                templates: vec![nested_template],
+                templates: vec![(vec!["nested".to_string()], nested_template)],
                 ..Default::default()
             },
             &RenderOptions::default(),
@@ -732,7 +742,7 @@ mod tests {
     #[test]
     fn missing_nested_match() {
         let renderer = get_renderer();
-        let template = Template {
+        let template = TextEffect {
             body: "hello {{var}}".to_string(),
             vars: vec![Variable {
                 name: "var".to_string(),
@@ -757,7 +767,7 @@ mod tests {
     #[test]
     fn extension_aborting_propagates() {
         let renderer = get_renderer();
-        let template = Template {
+        let template = TextEffect {
             body: "hello {{var}}".to_string(),
             vars: vec![Variable {
                 name: "var".to_string(),
@@ -777,7 +787,7 @@ mod tests {
     #[test]
     fn extension_error_propagates() {
         let renderer = get_renderer();
-        let template = Template {
+        let template = TextEffect {
             body: "hello {{var}}".to_string(),
             vars: vec![Variable {
                 name: "var".to_string(),
@@ -921,7 +931,7 @@ mod tests {
         template.vars = vec![
             Variable {
                 name: "var".to_string(),
-                var_type: VarType::Global,
+                var_type: VarType::Unresolved,
                 ..Default::default()
             },
             Variable {

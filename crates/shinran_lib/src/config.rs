@@ -17,8 +17,6 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashSet;
-
 use espanso_config::{
     config::{ProfileFile, ProfileStore},
     matches::store::{MatchStore, MatchesAndGlobalVars},
@@ -36,7 +34,7 @@ use crate::builtin::is_builtin_match;
 /// This includes the config files in the `config` directory and the match files in the `match` directory.
 pub struct Configuration {
     profile_store: ProfileStore,
-    match_store: MatchStore,
+    pub match_store: MatchStore,
     // app_info_provider: &'a dyn AppInfoProvider,
 }
 
@@ -92,27 +90,27 @@ impl Configuration {
         )
     }
 
-    pub fn filter_active(&self, matches_ids: &[i32]) -> Vec<i32> {
-        let ids_set: HashSet<i32> = matches_ids.iter().copied().collect::<HashSet<_>>();
-        let (_, match_set) = self.active_profile_and_matches();
+    // pub fn filter_active(&self, matches_ids: &[i32]) -> Vec<i32> {
+    //     let ids_set: HashSet<i32> = matches_ids.iter().copied().collect::<HashSet<_>>();
+    //     let (_, match_set) = self.active_profile_and_matches();
 
-        let active_user_defined_matches: Vec<i32> = match_set
-            .matches
-            .iter()
-            .filter(|m| ids_set.contains(&m.id))
-            .map(|m| m.id)
-            .collect();
+    //     let active_user_defined_matches: Vec<i32> = match_set
+    //         .trigger_matches
+    //         .iter()
+    //         .filter(|m| ids_set.contains(&m.id))
+    //         .map(|m| m.id)
+    //         .collect();
 
-        let builtin_matches: Vec<i32> = matches_ids
-            .iter()
-            .filter(|id| is_builtin_match(**id))
-            .copied()
-            .collect();
+    //     let builtin_matches: Vec<i32> = matches_ids
+    //         .iter()
+    //         .filter(|id| is_builtin_match(**id))
+    //         .copied()
+    //         .collect();
 
-        let mut output = active_user_defined_matches;
-        output.extend(builtin_matches);
-        output
-    }
+    //     let mut output = active_user_defined_matches;
+    //     output.extend(builtin_matches);
+    //     output
+    // }
 
     /// Get all the configs and their match sets.
     pub fn collect_matches_and_global_vars_from_all_configs(
