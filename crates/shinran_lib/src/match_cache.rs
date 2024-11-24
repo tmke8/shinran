@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use espanso_config::{
     config::{ProfileFile, ProfileStore},
     matches::store::MatchStore,
+    ProfileRef,
 };
 use shinran_types::{MatchIdx, RegexMatchRef, TrigMatchRef, VarRef};
 
@@ -32,70 +33,46 @@ use crate::regex::{RegexMatch, RegexMatcher};
 use super::builtin::BuiltInMatch;
 
 pub struct MatchCache {
-    trigger_default_profile: HashMap<String, TrigMatchRef>,
-    trigger_custom_profiles: Vec<HashMap<String, TrigMatchRef>>,
-    regex_default_profile: HashMap<String, RegexMatchRef>,
-    regex_custom_profiles: Vec<HashMap<String, RegexMatchRef>>,
-    global_var_default_profile: HashMap<String, VarRef>,
-    global_var_custom_profile: Vec<HashMap<String, VarRef>>,
+    trigger_profiles: HashMap<ProfileRef, HashMap<String, TrigMatchRef>>,
+    // TODO: Generate these `RegexMatcher`s.
+    regex_profiles: HashMap<ProfileRef, RegexMatcher>,
+    global_var_profiles: HashMap<ProfileRef, HashMap<String, VarRef>>,
 }
 
 impl MatchCache {
     pub fn load(profile_store: &ProfileStore, match_store: &MatchStore) -> Self {
-        let default_config = profile_store.default_config();
+        let mut trigger_profiles: HashMap<ProfileRef, HashMap<String, TrigMatchRef>> =
+            HashMap::new();
+        let mut global_var_profiles: HashMap<ProfileRef, HashMap<String, VarRef>> = HashMap::new();
 
-        let (trigger_default_profile, regex_default_profile, global_var_default_profile) =
-            create_profile_cache(default_config, match_store);
-
-        let mut trigger_custom_profiles: Vec<HashMap<String, TrigMatchRef>> = Vec::new();
-        let mut regex_custom_profiles: Vec<HashMap<String, RegexMatchRef>> = Vec::new();
-        let mut global_var_custom_profile: Vec<HashMap<String, VarRef>> = Vec::new();
-
-        for profile in profile_store.custom_configs() {
-            let (trigger_map, regex_map, global_var_map) =
-                create_profile_cache(profile, match_store);
-            trigger_custom_profiles.push(trigger_map);
-            regex_custom_profiles.push(regex_map);
-            global_var_custom_profile.push(global_var_map);
+        for profile_ref in profile_store.all_configs() {
+            let profile = profile_store.get(profile_ref);
+            let (trigger_map, global_var_map) = create_profile_cache(profile, match_store);
+            trigger_profiles.insert(profile_ref, trigger_map);
+            global_var_profiles.insert(profile_ref, global_var_map);
         }
 
         Self {
-            trigger_default_profile,
-            trigger_custom_profiles,
-            regex_default_profile,
-            regex_custom_profiles,
-            global_var_default_profile,
-            global_var_custom_profile,
+            trigger_profiles,
+            regex_profiles: HashMap::new(),
+            global_var_profiles,
         }
     }
 
-    pub fn default_matches(&self) -> &HashMap<String, TrigMatchRef> {
-        &self.trigger_default_profile
+    pub fn matches(&self, profile_ref: ProfileRef) -> &HashMap<String, TrigMatchRef> {
+        &self.trigger_profiles[&profile_ref]
     }
 
-    pub fn profile_matches(&self, profile_id: usize) -> &HashMap<String, TrigMatchRef> {
-        &self.trigger_custom_profiles[profile_id]
-    }
-
-    pub fn default_global_vars(&self) -> &HashMap<String, VarRef> {
-        &self.global_var_default_profile
-    }
-
-    pub fn profile_global_vars(&self, profile_id: usize) -> &HashMap<String, VarRef> {
-        &self.global_var_custom_profile[profile_id]
+    pub fn global_vars(&self, profile_ref: ProfileRef) -> &HashMap<String, VarRef> {
+        &self.global_var_profiles[&profile_ref]
     }
 }
 
 fn create_profile_cache(
     profile: &ProfileFile,
     match_store: &MatchStore,
-) -> (
-    HashMap<String, TrigMatchRef>,
-    HashMap<String, RegexMatchRef>,
-    HashMap<String, VarRef>,
-) {
+) -> (HashMap<String, TrigMatchRef>, HashMap<String, VarRef>) {
     let mut trigger_map: HashMap<String, TrigMatchRef> = HashMap::new();
-    let mut regex_map: HashMap<String, RegexMatchRef> = HashMap::new();
     let mut global_var_map: HashMap<String, VarRef> = HashMap::new();
 
     let file_paths = profile.match_file_paths();
@@ -108,17 +85,12 @@ fn create_profile_cache(
         }
     }
 
-    for idx in collection.regex_matches {
-        let (regex, _) = &match_store.regex_matches.get(idx);
-        regex_map.insert(regex.clone(), idx);
-    }
-
     for idx in collection.global_vars {
         let global_var = &match_store.global_vars.get(idx);
         global_var_map.insert(global_var.name.clone(), idx);
     }
 
-    (trigger_map, regex_map, global_var_map)
+    (trigger_map, global_var_map)
 }
 
 // impl<'a> espanso_engine::process::MatchInfoProvider for MatchCache<'a> {
@@ -217,10 +189,14 @@ impl CombinedMatchCache {
     //     ids
     // }
 
-    pub(crate) fn find_matches_from_trigger(&self, trigger: &str) -> Vec<DetectedMatch> {
+    pub(crate) fn find_matches_from_trigger(
+        &self,
+        trigger: &str,
+        active_profile: ProfileRef,
+    ) -> Vec<DetectedMatch> {
         let mut user_matches: Option<DetectedMatch> = self
             .user_match_cache
-            .default_matches()
+            .matches(active_profile)
             .get(trigger)
             .map(|&idx| DetectedMatch {
                 id: MatchIdx::Trigger(idx),
@@ -234,7 +210,7 @@ impl CombinedMatchCache {
             // This needs to be checked during the rendering.
             user_matches = self
                 .user_match_cache
-                .default_matches()
+                .matches(active_profile)
                 .get(&trigger.to_ascii_lowercase())
                 .map(|&idx| DetectedMatch {
                     id: MatchIdx::Trigger(idx),

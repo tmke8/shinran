@@ -47,17 +47,14 @@ fn load_config_and_renderer(
 }
 
 fn get_regex_matches(
-    profile_store: &ProfileStore,
+    _: &ProfileStore,
     match_store: &MatchStore,
 ) -> Vec<regex::RegexMatch<RegexMatchRef>> {
-    let paths = profile_store.get_all_match_file_paths();
-    let global_set =
-        match_store.collect_matches_and_global_vars(&paths.into_iter().collect::<Vec<_>>());
     let mut regex_matches = Vec::new();
 
-    for match_idx in global_set.regex_matches {
-        let (regex, _) = &match_store.regex_matches.get(match_idx);
-        regex_matches.push(regex::RegexMatch::new(match_idx, regex));
+    // TODO: This should take into account the current profile.
+    for (match_idx, (regex, _)) in match_store.regex_matches.enumerate() {
+        regex_matches.push(regex::RegexMatch::new(match_idx, regex.clone()));
     }
     regex_matches
 }
@@ -86,7 +83,10 @@ impl Backend {
     }
 
     pub fn check_trigger(&self, trigger: &str) -> anyhow::Result<Option<String>> {
-        let matches = self.adapter.find_matches_from_trigger(trigger);
+        let active_profile = self.adapter.configuration.active_profile();
+        let matches = self
+            .adapter
+            .find_matches_from_trigger(trigger, active_profile);
         let match_ = if let Some(match_) = matches.into_iter().next() {
             match_
         } else {
@@ -98,7 +98,7 @@ impl Backend {
             }
         };
         self.adapter
-            .render(match_.id, Some(trigger), match_.args)
+            .render(match_.id, Some(trigger), match_.args, active_profile)
             .map(|body| Some(cursor::process_cursor_hint(body).0))
     }
 }

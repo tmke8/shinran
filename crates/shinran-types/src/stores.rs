@@ -117,4 +117,12 @@ impl RegexMatchStore {
     pub fn get(&self, ref_: RegexMatchRef) -> &(String, BaseMatch) {
         &self.matches[ref_.idx]
     }
+
+    #[inline]
+    pub fn enumerate(&self) -> impl Iterator<Item = (RegexMatchRef, &(String, BaseMatch))> {
+        self.matches
+            .iter()
+            .enumerate()
+            .map(|(idx, elem)| (RegexMatchRef { idx }, elem))
+    }
 }

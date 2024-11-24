@@ -26,54 +26,53 @@ use log::{debug, error};
 use std::path::PathBuf;
 use std::{collections::HashSet, path::Path};
 
+#[repr(transparent)]
 pub struct ProfileStore {
-    /// The `default.yml` file in the `config` directory.
-    default: ProfileFile,
-    /// All the other `.yml` files in the `config` directory.
-    /// These files may specify one or more of `filter_title`, `filter_class`, `filter_exec`.
-    /// We can think of these also as profiles.
-    customs: Vec<ProfileFile>,
+    profiles: Vec<ProfileFile>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[repr(transparent)]
+pub struct ProfileRef {
+    idx: usize,
 }
 
 impl ProfileStore {
-    pub fn default_config(&self) -> &ProfileFile {
-        &self.default
+    #[inline]
+    pub fn default_config(&self) -> ProfileRef {
+        ProfileRef { idx: 0 }
     }
 
-    pub fn custom_configs(&self) -> &[ProfileFile] {
-        &self.customs
+    #[inline]
+    pub fn get(&self, ref_: ProfileRef) -> &ProfileFile {
+        &self.profiles[ref_.idx]
     }
 
     /// Get the active configuration for the given app.
     ///
     /// This will return the *first* custom configuration that matches the app properties.
-    pub fn active_config(&self, app: &super::AppProperties) -> &ProfileFile {
+    pub fn active_config(&self, app: &super::AppProperties) -> ProfileRef {
         // Find a custom config that matches or fallback to the default one
-        for custom in &self.customs {
+        for (idx, custom) in self.profiles[1..].iter().enumerate() {
             if custom.is_match(app) {
-                return custom;
+                return ProfileRef { idx: idx + 1 };
             }
         }
-        &self.default
+        self.default_config()
     }
 
-    pub fn all_configs(&self) -> Vec<&ProfileFile> {
-        let mut configs = vec![&self.default];
-
-        for custom in &self.customs {
-            configs.push(custom);
-        }
-
-        configs
+    pub fn all_configs(&self) -> Vec<ProfileRef> {
+        (0..self.profiles.len())
+            .map(|idx| ProfileRef { idx })
+            .collect()
     }
 
     // TODO: test
     pub fn get_all_match_file_paths(&self) -> HashSet<PathBuf> {
         let mut paths = HashSet::new();
 
-        paths.extend(self.default_config().match_file_paths().iter().cloned());
-        for custom in &self.customs {
-            paths.extend(custom.match_file_paths().iter().cloned());
+        for profile in &self.profiles {
+            paths.extend(profile.match_file_paths().iter().cloned());
         }
 
         paths
@@ -97,7 +96,7 @@ impl ProfileStore {
         debug!("loaded default config at path: {:?}", default_file);
 
         // Then the others
-        let mut customs: Vec<ProfileFile> = Vec::new();
+        let mut profiles: Vec<ProfileFile> = vec![default];
         for entry in std::fs::read_dir(config_dir).map_err(ConfigStoreError::IOError)? {
             let config_file = entry?.path();
             let Some(extension) = config_file.extension() else {
@@ -109,9 +108,9 @@ impl ProfileStore {
                 && config_file != default_file
                 && YAMLImporter::is_supported(extension)
             {
-                match ProfileFile::load_from_path(&config_file, Some(&default)) {
+                match ProfileFile::load_from_path(&config_file, Some(&profiles[0])) {
                     Ok(config) => {
-                        customs.push(config);
+                        profiles.push(config);
                         debug!("loaded config at path: {:?}", config_file);
                     }
                     Err(err) => {
@@ -125,7 +124,7 @@ impl ProfileStore {
             }
         }
 
-        Ok((Self { default, customs }, non_fatal_errors))
+        Ok((Self { profiles }, non_fatal_errors))
     }
 
     // pub fn from_configs(
@@ -169,18 +168,17 @@ mod tests {
         custom2.filter_class = Some(Regex::new("foo").unwrap());
 
         let store = ProfileStore {
-            default,
-            customs: vec![custom1, custom2],
+            profiles: vec![default, custom1, custom2],
         };
 
-        assert_eq!(store.default_config().label(), "default");
+        assert_eq!(store.get(store.default_config()).label(), "default");
         assert_eq!(
             store
-                .active_config(&crate::config::AppProperties {
+                .get(store.active_config(&crate::config::AppProperties {
                     title: None,
                     class: Some("foo"),
                     exec: None,
-                })
+                }))
                 .label(),
             "custom2"
         );
@@ -193,18 +191,17 @@ mod tests {
         let custom2 = new_mock("custom2");
 
         let store = ProfileStore {
-            default,
-            customs: vec![custom1, custom2],
+            profiles: vec![default, custom1, custom2],
         };
 
-        assert_eq!(store.default_config().label(), "default");
+        assert_eq!(store.get(store.default_config()).label(), "default");
         assert_eq!(
             store
-                .active_config(&crate::config::AppProperties {
+                .get(store.active_config(&crate::config::AppProperties {
                     title: None,
                     class: None,
                     exec: None,
-                })
+                }))
                 .label(),
             "default"
         );

@@ -31,6 +31,8 @@ mod util;
 use config::store::ProfileStore;
 use matches::store::MatchStore;
 
+pub use config::store::ProfileRef;
+
 type LoadableConfig = (ProfileStore, MatchStore, Vec<error::NonFatalErrorSet>);
 
 pub fn load(base_path: &Path) -> Result<LoadableConfig> {
@@ -73,6 +75,7 @@ pub enum ConfigError {
 
 #[cfg(test)]
 mod tests {
+    use config::AppProperties;
     use shinran_helpers::use_test_directory;
 
     use super::*;
@@ -135,43 +138,51 @@ mod tests {
             let (config_store, match_store, errors) = load(base).unwrap();
 
             assert_eq!(errors.len(), 0);
-            assert_eq!(config_store.default_config().match_file_paths().len(), 2);
-            // assert_eq!(
-            //     config_store
-            //         .active(&AppProperties {
-            //             title: Some("Google Chrome"),
-            //             class: None,
-            //             exec: None,
-            //         })
-            //         .match_paths()
-            //         .len(),
-            //     1
-            // );
+            assert_eq!(
+                config_store
+                    .get(config_store.default_config())
+                    .match_file_paths()
+                    .len(),
+                2
+            );
+            assert_eq!(
+                config_store
+                    .get(config_store.active_config(&AppProperties {
+                        title: Some("Google Chrome"),
+                        class: None,
+                        exec: None,
+                    }))
+                    .match_file_paths()
+                    .len(),
+                1
+            );
 
             assert_eq!(
                 match_store
                     .collect_matches_and_global_vars(
-                        config_store.default_config().match_file_paths()
+                        config_store
+                            .get(config_store.default_config())
+                            .match_file_paths()
                     )
                     .trigger_matches
                     .len(),
                 3
             );
-            // assert_eq!(
-            //     match_store
-            //         .query(
-            //             config_store
-            //                 .active(&AppProperties {
-            //                     title: Some("Chrome"),
-            //                     class: None,
-            //                     exec: None,
-            //                 })
-            //                 .match_paths()
-            //         )
-            //         .matches
-            //         .len(),
-            //     2
-            // );
+            assert_eq!(
+                match_store
+                    .collect_matches_and_global_vars(
+                        config_store
+                            .get(config_store.active_config(&AppProperties {
+                                title: Some("Chrome"),
+                                class: None,
+                                exec: None,
+                            }))
+                            .match_file_paths()
+                    )
+                    .trigger_matches
+                    .len(),
+                2
+            );
         });
     }
 
@@ -266,7 +277,9 @@ mod tests {
             assert_eq!(
                 match_store
                     .collect_matches_and_global_vars(
-                        config_store.default_config().match_file_paths()
+                        config_store
+                            .get(config_store.default_config())
+                            .match_file_paths()
                     )
                     .trigger_matches
                     .len(),

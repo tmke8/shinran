@@ -17,10 +17,7 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use espanso_config::{
-    config::{ProfileFile, ProfileStore},
-    matches::store::{MatchStore, MatchesAndGlobalVars},
-};
+use espanso_config::{config::ProfileStore, matches::store::MatchStore, ProfileRef};
 
 use crate::builtin::is_builtin_match;
 // use espanso_info::{AppInfo, AppInfoProvider};
@@ -52,24 +49,24 @@ impl Configuration {
     }
 
     #[inline]
-    pub fn default_profile(&self) -> &ProfileFile {
+    pub fn default_profile(&self) -> ProfileRef {
         self.profile_store.default_config()
     }
 
-    pub fn default_profile_and_matches(&self) -> (&ProfileFile, MatchesAndGlobalVars) {
-        let config = self.default_profile();
-        let match_paths = config.match_file_paths();
-        (
-            config,
-            self.match_store
-                .collect_matches_and_global_vars(match_paths),
-        )
-    }
+    // pub fn default_profile_and_matches(&self) -> (&ProfileFile, MatchesAndGlobalVars) {
+    //     let config = self.default_profile();
+    //     let match_paths = config.match_file_paths();
+    //     (
+    //         config,
+    //         self.match_store
+    //             .collect_matches_and_global_vars(match_paths),
+    //     )
+    // }
 
     /// Get the active configuration file according to the current app.
     ///
     /// This functionality is not implemented yet.
-    pub fn active_profile(&self) -> &ProfileFile {
+    pub fn active_profile(&self) -> ProfileRef {
         // let current_app = self.app_info_provider.get_info();
         // let info = to_app_properties(&current_app);
         let info = espanso_config::config::AppProperties {
@@ -80,15 +77,15 @@ impl Configuration {
         self.profile_store.active_config(&info)
     }
 
-    pub fn active_profile_and_matches(&self) -> (&ProfileFile, MatchesAndGlobalVars) {
-        let profile = self.active_profile();
-        let match_paths = profile.match_file_paths();
-        (
-            profile,
-            self.match_store
-                .collect_matches_and_global_vars(match_paths),
-        )
-    }
+    // pub fn active_profile_and_matches(&self) -> (&ProfileFile, MatchesAndGlobalVars) {
+    //     let profile = self.active_profile();
+    //     let match_paths = profile.match_file_paths();
+    //     (
+    //         profile,
+    //         self.match_store
+    //             .collect_matches_and_global_vars(match_paths),
+    //     )
+    // }
 
     // pub fn filter_active(&self, matches_ids: &[i32]) -> Vec<i32> {
     //     let ids_set: HashSet<i32> = matches_ids.iter().copied().collect::<HashSet<_>>();

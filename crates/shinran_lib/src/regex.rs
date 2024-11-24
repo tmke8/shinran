@@ -32,11 +32,8 @@ pub struct RegexMatch<Id> {
 }
 
 impl<Id> RegexMatch<Id> {
-    pub fn new(id: Id, regex: &str) -> Self {
-        Self {
-            id,
-            regex: regex.to_string(),
-        }
+    pub fn new(id: Id, regex: String) -> Self {
+        Self { id, regex }
     }
 }
 
@@ -201,8 +198,8 @@ mod tests {
     #[test]
     fn matcher_simple_matches() {
         let matcher = RegexMatcher::new(vec![
-            RegexMatch::new(unsafe { RegexMatchRef::new(1) }, "hello"),
-            RegexMatch::new(unsafe { RegexMatchRef::new(2) }, "num\\d{1,3}s"),
+            RegexMatch::new(unsafe { RegexMatchRef::new(1) }, "hello".to_string()),
+            RegexMatch::new(unsafe { RegexMatchRef::new(2) }, "num\\d{1,3}s".to_string()),
         ]);
         assert_eq!(get_matches_after_str("hi", &matcher), vec![]);
         assert_eq!(
@@ -227,10 +224,13 @@ mod tests {
     #[test]
     fn matcher_with_variables() {
         let matcher = RegexMatcher::new(vec![
-            RegexMatch::new(unsafe { RegexMatchRef::new(1) }, "hello\\((?P<name>.*?)\\)"),
+            RegexMatch::new(
+                unsafe { RegexMatchRef::new(1) },
+                "hello\\((?P<name>.*?)\\)".to_string(),
+            ),
             RegexMatch::new(
                 unsafe { RegexMatchRef::new(2) },
-                "multi\\((?P<name1>.*?),(?P<name2>.*?)\\)",
+                "multi\\((?P<name1>.*?),(?P<name2>.*?)\\)".to_string(),
             ),
         ]);
         assert_eq!(get_matches_after_str("hi", &matcher), vec![]);
@@ -252,10 +252,13 @@ mod tests {
     #[test]
     fn matcher_max_buffer_size() {
         let matcher = RegexMatcher::new(vec![
-            RegexMatch::new(unsafe { RegexMatchRef::new(1) }, "hello\\((?P<name>.*?)\\)"),
+            RegexMatch::new(
+                unsafe { RegexMatchRef::new(1) },
+                "hello\\((?P<name>.*?)\\)".to_string(),
+            ),
             RegexMatch::new(
                 unsafe { RegexMatchRef::new(2) },
-                "multi\\((?P<name1>.*?),(?P<name2>.*?)\\)",
+                "multi\\((?P<name1>.*?),(?P<name2>.*?)\\)".to_string(),
             ),
         ]);
         assert_eq!(

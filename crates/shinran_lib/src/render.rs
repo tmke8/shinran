@@ -23,6 +23,7 @@ use std::collections::HashMap;
 
 // pub mod extension;
 
+use espanso_config::ProfileRef;
 use espanso_render::{CasingStyle, Context, RenderOptions};
 use shinran_types::{MatchEffect, MatchIdx, Params, UpperCasingStyle, Value, VarType, Variable};
 
@@ -37,7 +38,7 @@ pub struct RendererAdapter {
     renderer: espanso_render::Renderer,
     combined_cache: match_cache::CombinedMatchCache,
     /// Configuration of the shinran instance.
-    configuration: Configuration,
+    pub configuration: Configuration,
 }
 
 impl RendererAdapter {
@@ -60,6 +61,7 @@ impl RendererAdapter {
         match_id: MatchIdx,
         trigger: Option<&str>,
         trigger_vars: HashMap<String, String>,
+        active_profile: ProfileRef,
     ) -> anyhow::Result<String> {
         // let Some(Some(template)) = self.template_map.get(&match_id) else {
         //     // Found no template for the given match ID.
@@ -146,9 +148,12 @@ impl RendererAdapter {
 
         let context = Context {
             matches: &self.configuration.match_store.trigger_matches,
-            matches_map: self.combined_cache.user_match_cache.default_matches(),
+            matches_map: self.combined_cache.user_match_cache.matches(active_profile),
             global_vars: &self.configuration.match_store.global_vars,
-            global_vars_map: self.combined_cache.user_match_cache.default_global_vars(),
+            global_vars_map: self
+                .combined_cache
+                .user_match_cache
+                .global_vars(active_profile),
         };
 
         match self.renderer.render_template(template, context, &options) {
@@ -161,8 +166,13 @@ impl RendererAdapter {
     }
 
     #[inline]
-    pub fn find_matches_from_trigger(&self, trigger: &str) -> Vec<crate::engine::DetectedMatch> {
-        self.combined_cache.find_matches_from_trigger(trigger)
+    pub fn find_matches_from_trigger(
+        &self,
+        trigger: &str,
+        active_profile: ProfileRef,
+    ) -> Vec<crate::engine::DetectedMatch> {
+        self.combined_cache
+            .find_matches_from_trigger(trigger, active_profile)
     }
 
     #[inline]
