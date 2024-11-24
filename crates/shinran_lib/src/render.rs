@@ -17,19 +17,14 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, sync::RwLock};
+use std::collections::HashMap;
 
 // use thiserror::Error;
 
 // pub mod extension;
 
-use espanso_config::config::ProfileId;
-use espanso_config::matches::store::MatchesAndGlobalVars;
 use espanso_render::{CasingStyle, Context, RenderOptions};
-use shinran_types::{
-    BaseMatch, MatchEffect, MatchIdx, Params, TextEffect, TrigMatchStore, UpperCasingStyle, Value,
-    VarStore, VarType, Variable,
-};
+use shinran_types::{MatchEffect, MatchIdx, Params, UpperCasingStyle, Value, VarType, Variable};
 
 use crate::{
     config::Configuration,
@@ -43,10 +38,6 @@ pub struct RendererAdapter {
     combined_cache: match_cache::CombinedMatchCache,
     /// Configuration of the shinran instance.
     configuration: Configuration,
-
-    /// Cache for the context objects. We need internal mutability here because we need to
-    /// update the cache.
-    context_cache: RwLock<HashMap<ProfileId, Context>>,
 }
 
 impl RendererAdapter {
@@ -59,50 +50,7 @@ impl RendererAdapter {
             renderer,
             configuration,
             combined_cache,
-            context_cache: RwLock::new(HashMap::new()),
         }
-    }
-}
-
-/// Iterates over the matches in the match set and finds the corresponding templates.
-///
-/// Analogously, it iterates over the global vars in the match set and finds the corresponding vars.
-fn generate_context(
-    match_set: MatchesAndGlobalVars,
-    template_map: &TrigMatchStore,
-    global_vars_map: &VarStore,
-) -> Context {
-    let mut templates = Vec::new();
-    let mut global_vars = Vec::new();
-
-    for match_idx in match_set.trigger_matches {
-        let (triggers, m) = template_map.get(match_idx);
-        if let Some(template) = convert_to_template(&m.base_match) {
-            // TODO: Investigate how to avoid this clone.
-            templates.push((triggers.clone(), template));
-        }
-    }
-
-    for var_id in match_set.global_vars {
-        let var = global_vars_map.get(var_id);
-        // TODO: Investigate how to avoid this clone.
-        global_vars.push(var.clone());
-    }
-
-    Context {
-        global_vars,
-        templates,
-    }
-}
-
-// This function does little more than clone some fields of the given match.
-// TODO: Remove this function.
-fn convert_to_template(m: &BaseMatch) -> Option<TextEffect> {
-    if let MatchEffect::Text(text_effect) = &m.effect {
-        // TODO: Investigate how to avoid this clone.
-        Some(text_effect.clone())
-    } else {
-        None
     }
 }
 
@@ -117,17 +65,6 @@ impl RendererAdapter {
         //     // Found no template for the given match ID.
         //     return Err(RendererError::NotFound.into());
         // };
-
-        let (profile, match_set) = self.configuration.default_profile_and_matches();
-
-        let mut context_cache = self.context_cache.write().unwrap();
-        let context = context_cache.entry(profile.id()).or_insert_with(|| {
-            generate_context(
-                match_set,
-                &self.configuration.match_store.trigger_matches,
-                &self.configuration.match_store.global_vars,
-            )
-        });
 
         let (effect, propagate_case, preferred_uppercasing_style) = match match_id {
             MatchIdx::Trigger(idx) => {
@@ -205,6 +142,13 @@ impl RendererAdapter {
             augmented
         } else {
             text_effect
+        };
+
+        let context = Context {
+            matches: &self.configuration.match_store.trigger_matches,
+            matches_map: self.combined_cache.user_match_cache.default_matches(),
+            global_vars: &self.configuration.match_store.global_vars,
+            global_vars_map: self.combined_cache.user_match_cache.default_global_vars(),
         };
 
         match self.renderer.render_template(template, context, &options) {

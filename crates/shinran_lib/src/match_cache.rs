@@ -69,20 +69,20 @@ impl MatchCache {
         }
     }
 
-    // fn ids(&self) -> Vec<i32> {
-    //     self.cache.keys().copied().collect()
-    // }
-
-    // pub fn matches(&self) -> Vec<&Match> {
-    //     self.cache.values().collect()
-    // }
-
-    // pub fn get(&self, id: i32) -> Option<&Match> {
-    //     self.cache.get(&id)
-    // }
-
-    pub fn default_profile_and_matches(&self) -> &HashMap<String, TrigMatchRef> {
+    pub fn default_matches(&self) -> &HashMap<String, TrigMatchRef> {
         &self.trigger_default_profile
+    }
+
+    pub fn profile_matches(&self, profile_id: usize) -> &HashMap<String, TrigMatchRef> {
+        &self.trigger_custom_profiles[profile_id]
+    }
+
+    pub fn default_global_vars(&self) -> &HashMap<String, VarRef> {
+        &self.global_var_default_profile
+    }
+
+    pub fn profile_global_vars(&self, profile_id: usize) -> &HashMap<String, VarRef> {
+        &self.global_var_custom_profile[profile_id]
     }
 }
 
@@ -220,7 +220,7 @@ impl CombinedMatchCache {
     pub(crate) fn find_matches_from_trigger(&self, trigger: &str) -> Vec<DetectedMatch> {
         let mut user_matches: Option<DetectedMatch> = self
             .user_match_cache
-            .default_profile_and_matches()
+            .default_matches()
             .get(trigger)
             .map(|&idx| DetectedMatch {
                 id: MatchIdx::Trigger(idx),
@@ -234,7 +234,7 @@ impl CombinedMatchCache {
             // This needs to be checked during the rendering.
             user_matches = self
                 .user_match_cache
-                .default_profile_and_matches()
+                .default_matches()
                 .get(&trigger.to_ascii_lowercase())
                 .map(|&idx| DetectedMatch {
                     id: MatchIdx::Trigger(idx),

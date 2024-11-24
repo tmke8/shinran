@@ -1,5 +1,6 @@
 use crate::{BaseMatch, TriggerMatch, Variable};
 
+#[derive(Debug)]
 #[repr(transparent)]
 pub struct VarStore {
     vars: Vec<Variable>,
@@ -28,8 +29,14 @@ impl VarStore {
     pub fn get(&self, ref_: VarRef) -> &Variable {
         &self.vars[ref_.idx]
     }
+
+    #[inline]
+    pub fn as_slice(&self) -> &[Variable] {
+        &self.vars
+    }
 }
 
+#[derive(Debug)]
 #[repr(transparent)]
 pub struct TrigMatchStore {
     matches: Vec<(Vec<String>, TriggerMatch)>,

@@ -18,7 +18,7 @@
  */
 
 use enum_as_inner::EnumAsInner;
-use shinran_types::{Params, TextEffect, Variable};
+use shinran_types::{Params, TrigMatchRef, TrigMatchStore, VarRef, VarStore};
 use std::collections::HashMap;
 
 pub mod extension;
@@ -42,10 +42,38 @@ pub enum RenderResult {
     Error(anyhow::Error),
 }
 
-#[derive(Default)]
-pub struct Context {
-    pub global_vars: Vec<Variable>,
-    pub templates: Vec<(Vec<String>, TextEffect)>,
+#[derive(Debug, Clone, Copy)]
+pub struct Context<'a> {
+    pub matches: &'a TrigMatchStore,
+    pub matches_map: &'a HashMap<String, TrigMatchRef>,
+    pub global_vars: &'a VarStore,
+    pub global_vars_map: &'a HashMap<String, VarRef>,
+}
+
+static DEFAULT_CONTEXT: std::sync::LazyLock<(
+    TrigMatchStore,
+    HashMap<String, TrigMatchRef>,
+    VarStore,
+    HashMap<String, VarRef>,
+)> = std::sync::LazyLock::new(|| {
+    (
+        TrigMatchStore::new(),
+        HashMap::new(),
+        VarStore::new(),
+        HashMap::new(),
+    )
+});
+
+impl Default for Context<'static> {
+    fn default() -> Self {
+        let values = &*DEFAULT_CONTEXT;
+        Self {
+            matches: &values.0,
+            matches_map: &values.1,
+            global_vars: &values.2,
+            global_vars_map: &values.3,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

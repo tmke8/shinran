@@ -37,7 +37,7 @@ struct Node<'a> {
 pub(crate) fn resolve_evaluation_order<'a>(
     body: &'a str,
     local_vars: &'a [&'a Variable],
-    global_vars: &'a [&'a Variable],
+    global_vars: &'a [Variable],
 ) -> Result<Vec<&'a Variable>> {
     let node_map = generate_nodes(body, local_vars, global_vars);
 
@@ -70,7 +70,7 @@ pub(crate) fn resolve_evaluation_order<'a>(
 fn generate_nodes<'a>(
     body: &'a str,
     local_vars: &'a [&'a Variable],
-    global_vars: &'a [&'a Variable],
+    global_vars: &'a [Variable],
 ) -> HashMap<&'a str, Node<'a>> {
     let mut local_vars_nodes = Vec::new();
     for (index, var) in local_vars.iter().enumerate() {
