@@ -23,7 +23,7 @@ use espanso_config::{
     config::{ProfileFile, ProfileStore},
     matches::store::MatchStore,
 };
-use shinran_types::{MatchIdx, TrigMatchRef, VarRef};
+use shinran_types::{MatchIdx, RegexMatchRef, TrigMatchRef, VarRef};
 
 use crate::engine::DetectedMatch;
 // use crate::match_select::MatchSummary;
@@ -34,8 +34,8 @@ use super::builtin::BuiltInMatch;
 pub struct MatchCache {
     trigger_default_profile: HashMap<String, TrigMatchRef>,
     trigger_custom_profiles: Vec<HashMap<String, TrigMatchRef>>,
-    regex_default_profile: HashMap<String, usize>,
-    regex_custom_profiles: Vec<HashMap<String, usize>>,
+    regex_default_profile: HashMap<String, RegexMatchRef>,
+    regex_custom_profiles: Vec<HashMap<String, RegexMatchRef>>,
     global_var_default_profile: HashMap<String, VarRef>,
     global_var_custom_profile: Vec<HashMap<String, VarRef>>,
 }
@@ -48,7 +48,7 @@ impl MatchCache {
             create_profile_cache(default_config, match_store);
 
         let mut trigger_custom_profiles: Vec<HashMap<String, TrigMatchRef>> = Vec::new();
-        let mut regex_custom_profiles: Vec<HashMap<String, usize>> = Vec::new();
+        let mut regex_custom_profiles: Vec<HashMap<String, RegexMatchRef>> = Vec::new();
         let mut global_var_custom_profile: Vec<HashMap<String, VarRef>> = Vec::new();
 
         for profile in profile_store.custom_configs() {
@@ -91,11 +91,11 @@ fn create_profile_cache(
     match_store: &MatchStore,
 ) -> (
     HashMap<String, TrigMatchRef>,
-    HashMap<String, usize>,
+    HashMap<String, RegexMatchRef>,
     HashMap<String, VarRef>,
 ) {
     let mut trigger_map: HashMap<String, TrigMatchRef> = HashMap::new();
-    let mut regex_map: HashMap<String, usize> = HashMap::new();
+    let mut regex_map: HashMap<String, RegexMatchRef> = HashMap::new();
     let mut global_var_map: HashMap<String, VarRef> = HashMap::new();
 
     let file_paths = profile.match_file_paths();
@@ -109,7 +109,7 @@ fn create_profile_cache(
     }
 
     for idx in collection.regex_matches {
-        let (regex, _) = &match_store.regex_matches[idx];
+        let (regex, _) = &match_store.regex_matches.get(idx);
         regex_map.insert(regex.clone(), idx);
     }
 
@@ -160,7 +160,7 @@ impl CombinedMatchCache {
     pub fn load(
         match_cache: MatchCache,
         builtin_matches: Vec<BuiltInMatch>,
-        regex_matches: Vec<RegexMatch<usize>>,
+        regex_matches: Vec<RegexMatch<RegexMatchRef>>,
     ) -> Self {
         let mut builtin_match_cache = HashMap::new();
 

@@ -21,7 +21,8 @@ use super::MatchesAndGlobalVars;
 use crate::{error::NonFatalErrorSet, matches::group::LoadedMatchFile};
 use anyhow::Context;
 use shinran_types::{
-    BaseMatch, MatchCause, TrigMatchRef, TrigMatchStore, TriggerMatch, VarRef, VarStore,
+    BaseMatch, MatchCause, RegexMatchRef, RegexMatchStore, TrigMatchRef, TrigMatchStore,
+    TriggerMatch, VarRef, VarStore,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -33,7 +34,7 @@ pub struct IndexedMatchFile {
     pub imports: Vec<PathBuf>,
     pub global_vars: Vec<VarRef>,
     pub trigger_matches: Vec<TrigMatchRef>,
-    pub regex_matches: Vec<usize>,
+    pub regex_matches: Vec<RegexMatchRef>,
 }
 
 /// The MatchStore contains all matches that we have loaded.
@@ -43,7 +44,7 @@ pub struct IndexedMatchFile {
 pub struct MatchStore {
     pub indexed_files: HashMap<PathBuf, IndexedMatchFile>,
     pub trigger_matches: TrigMatchStore,
-    pub regex_matches: Vec<(String, BaseMatch)>,
+    pub regex_matches: RegexMatchStore,
     pub global_vars: VarStore,
 }
 
@@ -59,7 +60,7 @@ impl MatchStore {
 
         let mut indexed_files = HashMap::new();
         let mut trigger_matches = TrigMatchStore::new();
-        let mut regex_matches = Vec::new();
+        let mut regex_matches = RegexMatchStore::new();
         let mut global_vars = VarStore::new();
 
         for (path, match_file) in loaded_files.into_iter() {
@@ -84,8 +85,7 @@ impl MatchStore {
                         trigger_ids.push(idx);
                     }
                     MatchCause::Regex(regex) => {
-                        let idx = regex_matches.len();
-                        regex_matches.push((regex.regex, base_match));
+                        let idx = regex_matches.add(regex.regex, base_match);
                         regex_ids.push(idx);
                     }
                 }
@@ -157,7 +157,7 @@ fn query_matches_for_paths(
     indexed_files: &HashMap<PathBuf, IndexedMatchFile>,
     visited_paths: &mut HashSet<PathBuf>,
     visited_trigger_matches: &mut HashSet<TrigMatchRef>,
-    visited_regex_matches: &mut HashSet<usize>,
+    visited_regex_matches: &mut HashSet<RegexMatchRef>,
     visited_global_vars: &mut HashSet<VarRef>,
     paths: &[PathBuf],
 ) {

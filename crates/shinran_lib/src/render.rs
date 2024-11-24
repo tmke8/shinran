@@ -251,7 +251,13 @@ impl RendererAdapter {
                 )
             }
             MatchIdx::Regex(idx) => (
-                &self.configuration.match_store.regex_matches[idx].1.effect,
+                &self
+                    .configuration
+                    .match_store
+                    .regex_matches
+                    .get(idx)
+                    .1
+                    .effect,
                 false,
                 None,
             ),

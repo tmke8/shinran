@@ -1,4 +1,4 @@
-use crate::{TriggerMatch, Variable};
+use crate::{BaseMatch, TriggerMatch, Variable};
 
 #[repr(transparent)]
 pub struct VarStore {
@@ -67,5 +67,47 @@ impl TrigMatchStore {
             .iter()
             .enumerate()
             .map(|(idx, elem)| (TrigMatchRef { idx }, elem))
+    }
+}
+
+#[repr(transparent)]
+pub struct RegexMatchStore {
+    matches: Vec<(String, BaseMatch)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[repr(transparent)]
+pub struct RegexMatchRef {
+    idx: usize,
+}
+
+impl RegexMatchRef {
+    /// Construct a new regex match reference.
+    ///
+    /// This function is unsafe, because there is no guarantee that the index actually
+    /// points to an existing regex match.
+    pub unsafe fn new(idx: usize) -> Self {
+        RegexMatchRef { idx }
+    }
+}
+
+impl RegexMatchStore {
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            matches: Vec::new(),
+        }
+    }
+
+    #[inline]
+    pub fn add(&mut self, regex: String, m: BaseMatch) -> RegexMatchRef {
+        let idx = self.matches.len();
+        self.matches.push((regex, m));
+        RegexMatchRef { idx }
+    }
+
+    #[inline]
+    pub fn get(&self, ref_: RegexMatchRef) -> &(String, BaseMatch) {
+        &self.matches[ref_.idx]
     }
 }

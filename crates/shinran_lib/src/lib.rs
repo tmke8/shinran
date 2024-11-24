@@ -2,6 +2,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use espanso_config::{config::ProfileStore, matches::store::MatchStore};
 use log::info;
+use shinran_types::RegexMatchRef;
 
 mod builtin;
 mod config;
@@ -48,14 +49,14 @@ fn load_config_and_renderer(
 fn get_regex_matches(
     profile_store: &ProfileStore,
     match_store: &MatchStore,
-) -> Vec<regex::RegexMatch<usize>> {
+) -> Vec<regex::RegexMatch<RegexMatchRef>> {
     let paths = profile_store.get_all_match_file_paths();
     let global_set =
         match_store.collect_matches_and_global_vars(&paths.into_iter().collect::<Vec<_>>());
     let mut regex_matches = Vec::new();
 
     for match_idx in global_set.regex_matches {
-        let (regex, _) = &match_store.regex_matches[match_idx];
+        let (regex, _) = &match_store.regex_matches.get(match_idx);
         regex_matches.push(regex::RegexMatch::new(match_idx, regex));
     }
     regex_matches
