@@ -60,7 +60,7 @@ impl Extension for NoOpExtension {
         "NoOp"
     }
 
-    fn calculate(&self, _context: &Context, _scope: &Scope, _params: &Params) -> ExtensionResult {
+    fn calculate(&self, _scope: &Scope, _params: &Params) -> ExtensionResult {
         ExtensionResult::Aborted
     }
 }
@@ -172,30 +172,12 @@ impl<M: Extension> Renderer<M> {
                 };
 
                 let extension_result = match &variable.var_type {
-                    VarType::Date => {
-                        self.date_extension
-                            .calculate(context, &scope, &variable_params)
-                    }
-                    VarType::Echo => {
-                        self.echo_extension
-                            .calculate(context, &scope, &variable_params)
-                    }
-                    VarType::Shell => {
-                        self.shell_extension
-                            .calculate(context, &scope, &variable_params)
-                    }
-                    VarType::Script => {
-                        self.script_extension
-                            .calculate(context, &scope, &variable_params)
-                    }
-                    VarType::Random => {
-                        self.random_extension
-                            .calculate(context, &scope, &variable_params)
-                    }
-                    VarType::Mock => {
-                        self.mock_extension
-                            .calculate(context, &scope, &variable_params)
-                    }
+                    VarType::Date => self.date_extension.calculate(&scope, &variable_params),
+                    VarType::Echo => self.echo_extension.calculate(&scope, &variable_params),
+                    VarType::Shell => self.shell_extension.calculate(&scope, &variable_params),
+                    VarType::Script => self.script_extension.calculate(&scope, &variable_params),
+                    VarType::Random => self.random_extension.calculate(&scope, &variable_params),
+                    VarType::Mock => self.mock_extension.calculate(&scope, &variable_params),
                     VarType::Form => {
                         // Do nothing.
                         return RenderResult::Success("".to_string());
@@ -313,7 +295,7 @@ mod tests {
             "mock"
         }
 
-        fn calculate(&self, _context: &Context, scope: &Scope, params: &Params) -> ExtensionResult {
+        fn calculate(&self, scope: &Scope, params: &Params) -> ExtensionResult {
             if let Some(Value::String(string)) = params.get("echo") {
                 return ExtensionResult::Success(ExtensionOutput::Single(string.clone()));
             }

@@ -211,12 +211,7 @@ impl Extension for ShellExtension {
         "shell"
     }
 
-    fn calculate(
-        &self,
-        _: &crate::Context,
-        scope: &crate::Scope,
-        params: &Params,
-    ) -> crate::ExtensionResult {
+    fn calculate(&self, scope: &crate::Scope, params: &Params) -> crate::ExtensionResult {
         if let Some(Value::String(cmd)) = params.get("cmd") {
             let shell = if let Some(Value::String(shell_param)) = params.get("shell") {
                 if let Some(shell) = Shell::from_string(shell_param) {
@@ -337,7 +332,7 @@ mod tests {
         if cfg!(target_os = "windows") {
             assert_eq!(
                 extension
-                    .calculate(&crate::Context::default(), &HashMap::default(), &param)
+                    .calculate(&HashMap::default(), &param)
                     .into_success()
                     .unwrap(),
                 ExtensionOutput::Single("hello world\r\n".to_string())
@@ -345,7 +340,7 @@ mod tests {
         } else {
             assert_eq!(
                 extension
-                    .calculate(&crate::Context::default(), &HashMap::default(), &param)
+                    .calculate(&HashMap::default(), &param)
                     .into_success()
                     .unwrap(),
                 ExtensionOutput::Single("hello world\n".to_string())
@@ -366,7 +361,7 @@ mod tests {
 
         assert_eq!(
             extension
-                .calculate(&crate::Context::default(), &HashMap::default(), &param)
+                .calculate(&HashMap::default(), &param)
                 .into_success()
                 .unwrap(),
             ExtensionOutput::Single("hello world".to_string())
@@ -386,7 +381,7 @@ mod tests {
         .collect::<Params>();
         assert_eq!(
             extension
-                .calculate(&crate::Context::default(), &HashMap::default(), &param)
+                .calculate(&HashMap::default(), &param)
                 .into_success()
                 .unwrap(),
             ExtensionOutput::Single("hello world".to_string())
@@ -418,10 +413,7 @@ mod tests {
         let mut scope = Scope::new();
         scope.insert("var1", ExtensionOutput::Single("hello world".to_string()));
         assert_eq!(
-            extension
-                .calculate(&crate::Context::default(), &scope, &param)
-                .into_success()
-                .unwrap(),
+            extension.calculate(&scope, &param).into_success().unwrap(),
             ExtensionOutput::Single("hello world".to_string())
         );
     }
@@ -437,7 +429,7 @@ mod tests {
         .into_iter()
         .collect::<Params>();
         assert!(matches!(
-            extension.calculate(&crate::Context::default(), &HashMap::default(), &param),
+            extension.calculate(&HashMap::default(), &param),
             ExtensionResult::Error(_)
         ));
     }
@@ -453,7 +445,7 @@ mod tests {
             .into_iter()
             .collect::<Params>();
         assert!(matches!(
-            extension.calculate(&crate::Context::default(), &HashMap::default(), &param),
+            extension.calculate(&HashMap::default(), &param),
             ExtensionResult::Error(_)
         ));
     }

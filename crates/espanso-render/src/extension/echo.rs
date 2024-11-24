@@ -45,12 +45,7 @@ impl Extension for EchoExtension {
         self.alias.as_str()
     }
 
-    fn calculate(
-        &self,
-        _: &crate::Context,
-        _: &crate::Scope,
-        params: &Params,
-    ) -> crate::ExtensionResult {
+    fn calculate(&self, _: &crate::Scope, params: &Params) -> crate::ExtensionResult {
         if let Some(Value::String(echo)) = params.get("echo") {
             ExtensionResult::Success(ExtensionOutput::Single(echo.clone()))
         } else {
@@ -82,7 +77,7 @@ mod tests {
             .collect::<Params>();
         assert_eq!(
             extension
-                .calculate(&crate::Context::default(), &HashMap::default(), &param)
+                .calculate(&HashMap::default(), &param)
                 .into_success()
                 .unwrap(),
             ExtensionOutput::Single("test".to_string())
@@ -95,7 +90,7 @@ mod tests {
 
         let param = Params::new();
         assert!(matches!(
-            extension.calculate(&crate::Context::default(), &HashMap::default(), &param),
+            extension.calculate(&HashMap::default(), &param),
             ExtensionResult::Error(_)
         ));
     }

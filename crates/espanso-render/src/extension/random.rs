@@ -36,12 +36,7 @@ impl Extension for RandomExtension {
         "random"
     }
 
-    fn calculate(
-        &self,
-        _: &crate::Context,
-        _: &crate::Scope,
-        params: &Params,
-    ) -> crate::ExtensionResult {
+    fn calculate(&self, _: &crate::Scope, params: &Params) -> crate::ExtensionResult {
         if let Some(Value::Array(choices)) = params.get("choices") {
             let choices: Vec<String> = choices
                 .iter()
@@ -93,7 +88,7 @@ mod tests {
         .collect::<Params>();
         assert!(matches!(
           extension
-            .calculate(&crate::Context::default(), &HashMap::default(), &param)
+            .calculate(&HashMap::default(), &param)
             .into_success()
             .unwrap(),
           ExtensionOutput::Single(result) if ["first", "second", "third"].contains(&result.as_str())
@@ -106,7 +101,7 @@ mod tests {
 
         let param = Params::new();
         assert!(matches!(
-            extension.calculate(&crate::Context::default(), &HashMap::default(), &param),
+            extension.calculate(&HashMap::default(), &param),
             ExtensionResult::Error(_)
         ));
     }

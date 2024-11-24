@@ -42,12 +42,7 @@ impl Extension for DateExtension {
         "date"
     }
 
-    fn calculate(
-        &self,
-        _: &crate::Context,
-        _: &crate::Scope,
-        params: &Params,
-    ) -> crate::ExtensionResult {
+    fn calculate(&self, _: &crate::Scope, params: &Params) -> crate::ExtensionResult {
         let mut now = self.get_date();
 
         // Compute the given offset
@@ -427,7 +422,7 @@ mod tests {
             .collect::<Params>();
         assert_eq!(
             extension
-                .calculate(&crate::Context::default(), &HashMap::default(), &param)
+                .calculate(&HashMap::default(), &param)
                 .into_success()
                 .unwrap(),
             ExtensionOutput::Single("09:10:11".to_string())
@@ -449,7 +444,7 @@ mod tests {
         .collect::<Params>();
         assert_eq!(
             extension
-                .calculate(&crate::Context::default(), &HashMap::default(), &param)
+                .calculate(&HashMap::default(), &param)
                 .into_success()
                 .unwrap(),
             ExtensionOutput::Single("10:10:11".to_string())
@@ -470,7 +465,7 @@ mod tests {
         .collect::<Params>();
         assert_eq!(
             extension
-                .calculate(&crate::Context::default(), &HashMap::default(), &param)
+                .calculate(&HashMap::default(), &param)
                 .into_success()
                 .unwrap(),
             ExtensionOutput::Single("martedì".to_string())
@@ -491,7 +486,7 @@ mod tests {
         .collect::<Params>();
         assert_eq!(
             extension
-                .calculate(&crate::Context::default(), &HashMap::default(), &param)
+                .calculate(&HashMap::default(), &param)
                 .into_success()
                 .unwrap(),
             ExtensionOutput::Single("Tuesday".to_string())
@@ -512,7 +507,7 @@ mod tests {
         .collect::<Params>();
         assert_eq!(
             extension
-                .calculate(&crate::Context::default(), &HashMap::default(), &param)
+                .calculate(&HashMap::default(), &param)
                 .into_success()
                 .unwrap(),
             ExtensionOutput::Single("martedì".to_string())
