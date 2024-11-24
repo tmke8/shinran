@@ -24,7 +24,6 @@ pub enum VarType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Variable {
-    // pub id: StructId,
     pub name: String,
     pub var_type: VarType,
     pub params: Params,
@@ -35,7 +34,6 @@ pub struct Variable {
 impl Default for Variable {
     fn default() -> Self {
         Self {
-            // id: 0,
             name: String::new(),
             var_type: VarType::Mock,
             params: Params::new(),

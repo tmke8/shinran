@@ -128,11 +128,9 @@ impl<M: Extension> Renderer<M> {
             // Compute the variable outputs
             let mut scope = Scope::new();
             for variable in variables {
-                println!("variable: {:?}", variable);
                 if matches!(variable.var_type, VarType::Match) {
                     // Recursive call
                     // Call render recursively
-                    println!("templates: {:?}", context.templates.as_slice());
                     let Some(sub_template) =
                         get_matching_template(variable, context.templates.as_slice())
                     else {
@@ -562,7 +560,12 @@ mod tests {
             },
             &RenderOptions::default(),
         );
-        assert!(matches!(res, RenderResult::Success(str) if str == "hello Bob Bob"));
+        match res {
+            RenderResult::Success(str) => {
+                assert_eq!(str, "hello Bob Bob");
+            }
+            _ => panic!("unexpected result: {res:?}"),
+        }
     }
 
     #[test]

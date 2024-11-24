@@ -17,15 +17,13 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use shinran_types::{MatchCause, MatchEffect, StructId, TriggerCause, Variable};
+use shinran_types::{MatchCause, MatchEffect, TriggerCause, Variable};
 
 pub(crate) mod group;
 pub mod store;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoadedMatch {
-    pub id: StructId,
-
     pub cause: MatchCause,
     pub effect: MatchEffect,
 
@@ -40,7 +38,6 @@ impl Default for LoadedMatch {
             cause: MatchCause::Trigger(TriggerCause::default()),
             effect: MatchEffect::None,
             label: None,
-            id: 0,
             search_terms: vec![],
         }
     }

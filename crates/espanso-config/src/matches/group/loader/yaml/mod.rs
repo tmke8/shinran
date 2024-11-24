@@ -311,7 +311,6 @@ pub fn try_convert_into_match(
             cause,
             effect,
             label: yaml_match.label,
-            id: next_id(),
             search_terms: yaml_match.search_terms.unwrap_or_default(),
         },
         warnings,
@@ -333,7 +332,6 @@ pub fn try_convert_into_variable(
         "shell" => VarType::Shell,
         "mock" => VarType::Mock,
         "test" => VarType::Mock,
-        // "global" => VarType::Global,
         _ => return Err(anyhow!("unknown variable type: {:?}", yaml_var.var_type)),
     };
     Ok((
@@ -341,7 +339,6 @@ pub fn try_convert_into_variable(
             name: yaml_var.name,
             var_type,
             params: convert_params(yaml_var.params)?,
-            // id: next_id(),
             inject_vars: !use_compatibility_mode && yaml_var.inject_vars.unwrap_or(true),
             depends_on: yaml_var.depends_on,
         },
@@ -363,13 +360,7 @@ mod tests {
         use_compatibility_mode: bool,
     ) -> Result<(LoadedMatch, Vec<Warning>)> {
         let yaml_match: YAMLMatch = serde_yaml_ng::from_str(yaml)?;
-        let (mut m, warnings) = try_convert_into_match(yaml_match, use_compatibility_mode)?;
-
-        // Reset the IDs to correctly compare them
-        m.id = 0;
-        // if let MatchEffect::Text(e) = &mut m.effect {
-        //     e.vars.iter_mut().for_each(|v| v.id = 0);
-        // }
+        let (m, warnings) = try_convert_into_match(yaml_match, use_compatibility_mode)?;
 
         Ok((m, warnings))
     }
@@ -887,13 +878,9 @@ mod tests {
             std::fs::write(&sub_file, "").unwrap();
 
             let importer = YAMLImporter::new();
-            let (mut file, non_fatal_error_set) = importer.load_file(&base_file).unwrap();
+            let (file, non_fatal_error_set) = importer.load_file(&base_file).unwrap();
             // The invalid import path should be reported as error
             assert_eq!(non_fatal_error_set.unwrap().errors.len(), 1);
-
-            // Reset the ids to compare them correctly
-            file.matches.iter_mut().for_each(|m| m.id = 0);
-            // file.global_vars.iter_mut().for_each(|v| v.id = 0);
 
             let vars = vec![Variable {
                 name: "var1".to_string(),
