@@ -7,7 +7,7 @@ pub use stores::{TrigMatchRef, TrigMatchStore, VarRef, VarStore};
 
 pub type StructId = i32;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum VarType {
     Date,
     Mock,
@@ -18,7 +18,7 @@ pub enum VarType {
     Form,
     /// For nested matches: https://espanso.org/docs/matches/basics/#nested-matches
     Match,
-    /// For global variables: https://espanso.org/docs/matches/basics/#global-variables
+    #[default]
     Unresolved,
 }
 
@@ -35,7 +35,7 @@ impl Default for Variable {
     fn default() -> Self {
         Self {
             name: String::new(),
-            var_type: VarType::Mock,
+            var_type: VarType::Unresolved,
             params: Params::new(),
             inject_vars: true,
             depends_on: Vec::new(),

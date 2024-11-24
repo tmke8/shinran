@@ -732,6 +732,7 @@ mod tests {
         params.insert("param1".to_string(), Value::Bool(true));
         let vars = vec![Variable {
             name: "var1".to_string(),
+            var_type: VarType::Mock,
             params,
             ..Default::default()
         }];
@@ -768,11 +769,13 @@ mod tests {
         let vars = vec![
             Variable {
                 name: "var1".to_string(),
+                var_type: VarType::Mock,
                 depends_on: vec!["test".to_owned()],
                 ..Default::default()
             },
             Variable {
                 name: "var2".to_string(),
+                var_type: VarType::Mock,
                 inject_vars: false,
                 ..Default::default()
             },
@@ -784,10 +787,10 @@ mod tests {
         replace: "world"
         vars:
           - name: var1
-            type: mock
+            type: test
             depends_on: ["test"]
           - name: var2
-            type: "mock"
+            type: "test"
             inject_vars: false
         "#
             )
@@ -811,6 +814,7 @@ mod tests {
     fn vars_no_params_maps_correctly() {
         let vars = vec![Variable {
             name: "var1".to_string(),
+            var_type: VarType::Mock,
             params: Params::new(),
             ..Default::default()
         }];
@@ -821,7 +825,7 @@ mod tests {
         replace: "world"
         vars:
           - name: var1
-            type: mock
+            type: test
         "#
             )
             .unwrap(),
@@ -884,6 +888,7 @@ mod tests {
 
             let vars = vec![Variable {
                 name: "var1".to_string(),
+                var_type: VarType::Mock,
                 params: Params::new(),
                 ..Default::default()
             }];

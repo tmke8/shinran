@@ -86,7 +86,8 @@ impl<M: Extension> Renderer<M> {
         options: &RenderOptions,
     ) -> RenderResult {
         let body = if VAR_REGEX.is_match(&template.body) {
-            // Resolve unresolved variables with global variables, if necessary
+            // Resolve unresolved variables with global variables, if necessary.
+            // TODO: Find out whether this code can actually ever be triggered.
             let local_variables: Vec<&Variable> = if template
                 .vars
                 .iter()

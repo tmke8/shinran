@@ -235,7 +235,7 @@ fn load_match_files_recursively(
 #[cfg(test)]
 mod tests {
     use shinran_helpers::use_test_directory;
-    use shinran_types::{MatchEffect, TextEffect, Variable};
+    use shinran_types::{MatchEffect, TextEffect, VarType, Variable};
 
     use super::*;
     use std::fs::create_dir_all;
@@ -273,6 +273,7 @@ mod tests {
     fn create_test_var(name: &str) -> Variable {
         Variable {
             name: name.to_string(),
+            var_type: VarType::Mock,
             ..Default::default()
         }
     }
