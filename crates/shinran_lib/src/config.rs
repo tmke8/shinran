@@ -112,19 +112,19 @@ impl Configuration {
     //     output
     // }
 
-    /// Get all the configs and their match sets.
-    pub fn collect_matches_and_global_vars_from_all_configs(
-        &self,
-    ) -> Vec<(&ProfileFile, MatchesAndGlobalVars)> {
-        self.profile_store
-            .all_configs()
-            .into_iter()
-            .map(|config| {
-                let match_set = self
-                    .match_store
-                    .collect_matches_and_global_vars(config.match_file_paths());
-                (config, match_set)
-            })
-            .collect()
-    }
+    // /// Get all the configs and their match sets.
+    // pub fn collect_matches_and_global_vars_from_all_configs(
+    //     &self,
+    // ) -> Vec<(&ProfileFile, MatchesAndGlobalVars)> {
+    //     self.profile_store
+    //         .all_configs()
+    //         .into_iter()
+    //         .map(|config| {
+    //             let match_set = self
+    //                 .match_store
+    //                 .collect_matches_and_global_vars(config.match_file_paths());
+    //             (config, match_set)
+    //         })
+    //         .collect()
+    // }
 }

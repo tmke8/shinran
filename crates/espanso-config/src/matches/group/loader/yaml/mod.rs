@@ -20,7 +20,6 @@
 use std::ffi::OsStr;
 
 use crate::{
-    counter::next_id,
     error::{ErrorRecord, NonFatalErrorSet},
     matches::{
         group::{path::resolve_imports, LoadedMatchFile},
