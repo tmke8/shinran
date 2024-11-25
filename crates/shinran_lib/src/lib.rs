@@ -1,8 +1,9 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use log::{error, info};
+use nucleo_matcher::pattern;
 use shinran_config::{config::ProfileStore, matches::store::MatchStore};
-use shinran_types::RegexMatchRef;
+use shinran_types::{RegexMatchRef, TrigMatchRef};
 
 mod builtin;
 mod config;
@@ -66,6 +67,7 @@ fn get_regex_matches(
 
 pub struct Backend<'store> {
     adapter: render::RendererAdapter<'store>,
+    fuzzy_matcher: Arc<async_std::sync::Mutex<nucleo_matcher::Matcher>>,
 }
 
 impl<'store> Backend<'store> {
@@ -79,7 +81,12 @@ impl<'store> Backend<'store> {
         let combined_cache =
             match_cache::CombinedMatchCache::load(match_cache, builtin_matches, regex_matches);
         let adapter = render::RendererAdapter::new(combined_cache, configuration, &stores.renderer);
-        Ok(Backend { adapter })
+
+        let matcher = nucleo_matcher::Matcher::new(nucleo_matcher::Config::DEFAULT);
+        Ok(Backend {
+            adapter,
+            fuzzy_matcher: Arc::new(async_std::sync::Mutex::new(matcher)),
+        })
     }
 
     pub fn check_trigger(&self, trigger: &str) -> anyhow::Result<Option<String>> {
@@ -101,6 +108,41 @@ impl<'store> Backend<'store> {
             .render(match_.id, Some(trigger), match_.args, active_profile)
             .map(|body| Some(cursor::process_cursor_hint(body).0))
     }
+
+    pub async fn fuzzy_match(&self, trigger: &str) -> Vec<(TriggerAndRef<'store>, u16)> {
+        let active_profile = self.adapter.configuration.active_profile();
+        let user_matches = self
+            .adapter
+            .combined_cache
+            .user_match_cache
+            .matches(active_profile);
+
+        let atom = get_simple_atom(trigger);
+        let mut matcher = self.fuzzy_matcher.lock().await;
+        atom.match_list(
+            user_matches.iter().map(|(&k, &v)| TriggerAndRef(k, v)),
+            &mut matcher,
+        )
+    }
+}
+
+pub struct TriggerAndRef<'a>(pub &'a str, pub TrigMatchRef);
+
+impl AsRef<str> for TriggerAndRef<'_> {
+    fn as_ref(&self) -> &str {
+        self.0
+    }
+}
+
+fn get_simple_atom(trigger: &str) -> pattern::Atom {
+    let escape_whitespace = false;
+    pattern::Atom::new(
+        trigger,
+        pattern::CaseMatching::Ignore,
+        pattern::Normalization::Smart,
+        pattern::AtomKind::Fuzzy,
+        escape_whitespace,
+    )
 }
 
 fn get_path_override(
@@ -136,6 +178,17 @@ mod tests {
     use shinran_helpers::use_test_directory;
 
     use super::*;
+
+    #[test]
+    fn test_match_list() {
+        let atom = get_simple_atom("helo r");
+        let mut matcher = nucleo_matcher::Matcher::new(nucleo_matcher::Config::DEFAULT);
+        let result = atom.match_list(
+            vec!["hello", "world", "hello world", "world hello"],
+            &mut matcher,
+        );
+        assert_eq!(result, vec![("hello world", 139)]);
+    }
 
     fn make_stores(
         match_definition: &str,
