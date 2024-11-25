@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use async_std::task::sleep;
+use async_std::task::{self, sleep};
 use event_listener::Event;
 use ibus_utils::{
     ibus_constants, Attribute, IBusAttribute, IBusEnginePreedit, IBusText, Underline,
@@ -67,11 +67,14 @@ impl ShinranEngine {
         )
         .await?;
 
-        let candidates = self.backend.fuzzy_match(&self.text);
+        let backend = self.backend.clone();
+        let trigger = self.text.clone();
+        let handle = task::spawn(async move { backend.fuzzy_match(&trigger).await });
+        let candidates = handle.await;
         if !candidates.is_empty() {
             let mut table = ibus_utils::IBusLookupTable::default();
             for (candidate, _) in candidates.into_iter().take(5) {
-                table.append_candidate(candidate);
+                table.append_candidate(candidate.0);
             }
 
             ShinranEngine::update_lookup_table(ctxt, table.into(), true).await?;
