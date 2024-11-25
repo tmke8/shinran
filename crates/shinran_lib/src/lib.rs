@@ -1,4 +1,8 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use log::{error, info};
 use nucleo_matcher::pattern;
@@ -67,7 +71,7 @@ fn get_regex_matches(
 
 pub struct Backend<'store> {
     adapter: render::RendererAdapter<'store>,
-    fuzzy_matcher: Arc<async_std::sync::Mutex<nucleo_matcher::Matcher>>,
+    fuzzy_matcher: Arc<Mutex<nucleo_matcher::Matcher>>,
 }
 
 impl<'store> Backend<'store> {
@@ -85,7 +89,7 @@ impl<'store> Backend<'store> {
         let matcher = nucleo_matcher::Matcher::new(nucleo_matcher::Config::DEFAULT);
         Ok(Backend {
             adapter,
-            fuzzy_matcher: Arc::new(async_std::sync::Mutex::new(matcher)),
+            fuzzy_matcher: Arc::new(Mutex::new(matcher)),
         })
     }
 
@@ -109,7 +113,7 @@ impl<'store> Backend<'store> {
             .map(|body| Some(cursor::process_cursor_hint(body).0))
     }
 
-    pub async fn fuzzy_match(&self, trigger: &str) -> Vec<(TriggerAndRef<'store>, u16)> {
+    pub fn fuzzy_match(&self, trigger: &str) -> Vec<(TriggerAndRef<'store>, u16)> {
         let active_profile = self.adapter.configuration.active_profile();
         let user_matches = self
             .adapter
@@ -118,7 +122,7 @@ impl<'store> Backend<'store> {
             .matches(active_profile);
 
         let atom = get_simple_atom(trigger);
-        let mut matcher = self.fuzzy_matcher.lock().await;
+        let mut matcher = self.fuzzy_matcher.lock().unwrap();
         atom.match_list(
             user_matches.iter().map(|(&k, &v)| TriggerAndRef(k, v)),
             &mut matcher,

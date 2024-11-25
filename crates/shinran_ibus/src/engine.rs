@@ -67,10 +67,13 @@ impl ShinranEngine {
         )
         .await?;
 
+        // Spawn a task to fetch the candidates in the background.
         let backend = self.backend.clone();
+        // TODO: Investigate whether this can be done without cloning the text.
         let trigger = self.text.clone();
-        let handle = task::spawn(async move { backend.fuzzy_match(&trigger).await });
-        let candidates = handle.await;
+        // `fuzzy_match` is a long-running CPU-bound operation, so we use `spawn_blocking`.
+        let candidates = task::spawn_blocking(move || backend.fuzzy_match(&trigger)).await;
+
         if !candidates.is_empty() {
             let mut table = ibus_utils::IBusLookupTable::default();
             for (candidate, _) in candidates.into_iter().take(5) {
