@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
+  <interface name='org.freedesktop.IBus.Factory'>
+    <method name='CreateEngine'>
+      <arg direction='in'  type='s' name='name' />
+      <arg direction='out' type='o' />
+    </method>
+  </interface>
+</node>

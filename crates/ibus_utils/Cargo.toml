@@ -1,0 +1,9 @@
+[package]
+name = "ibus_utils"
+version = "0.1.0"
+edition.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+zbus = "4.1.2"

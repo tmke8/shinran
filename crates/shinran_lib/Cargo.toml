@@ -1,0 +1,22 @@
+[package]
+name = "shinran_lib"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+shinran_config = { path = "../shinran_config" }
+shinran_render = { path = "../shinran_render" }
+shinran_types = { path = "../shinran_types" }
+
+serde = { version = "1.0.210", features = ["derive"] }
+serde_yaml_ng = "0.10.0"
+time = { version = "0.3.36", features = ["formatting", "local-offset"] }
+dirs = "3.0.1"
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+regex.workspace = true
+unicode-segmentation = "1.12.0"
+
+[dev-dependencies]
+shinran_helpers = { path = "../shinran_helpers" }
