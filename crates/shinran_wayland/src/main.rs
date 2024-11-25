@@ -8,6 +8,7 @@ use std::{collections::HashMap, os::unix::io::AsFd, rc::Rc, sync::LazyLock, time
 
 use calloop::{timer::Timer, Dispatcher, EventLoop, LoopHandle};
 use calloop_wayland_source::WaylandSource;
+use log::{debug, error, info};
 use slotmap::{new_key_type, SlotMap};
 use wayland_client::{
     delegate_noop,
@@ -40,13 +41,16 @@ mod input_context;
 
 use input_context::{InputContext, RepeatTimer};
 
+// TODO: Replace with a `OnceLock` when we want to actually parse CLI arguments.
 static STORES: LazyLock<Stores> = LazyLock::new(|| {
-    // TODO: Replace with a `OnceLock` when we want to actually parse CLI arguments.
     let cli_overrides = HashMap::new();
     load_config_and_renderer(&cli_overrides)
 });
 
 fn main() {
+    // Set up the logger.
+    env_logger::init();
+
     // Set up the backend.
     let backend = Backend::new(&STORES).unwrap();
 
@@ -76,11 +80,11 @@ fn main() {
 
     // Block until the server has received our `display.get_registry` request.
     event_queue.roundtrip(&mut state).unwrap();
-    eprintln!("Round trip complete.");
+    info!("Round trip complete.");
 
     // All the globals should be initialized now, so we can start initializing the protocols.
     init_protocols(&mut state, &qh, Rc::new(backend));
-    eprintln!("Protocols initialized.");
+    info!("Protocols initialized.");
 
     // Insert the `event_queue` into the calloop's event loop.
     WaylandSource::new(conn, event_queue)
@@ -91,7 +95,7 @@ fn main() {
     while state.running {
         event_loop.dispatch(None, &mut state).unwrap();
     }
-    eprintln!("Shutting down...");
+    info!("Shutting down...");
     // Wait a bit to see if there are any pending requests.
     event_loop
         .dispatch(Duration::from_millis(200), &mut state)
@@ -235,7 +239,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                 const SCANCODE_OFFSET: u32 = 8;
                 let keycode = xkb::Keycode::new(key + SCANCODE_OFFSET);
 
-                eprintln!("Key {} was {:?}.", key + SCANCODE_OFFSET, key_state);
+                debug!("Key {} was {:?}.", key + SCANCODE_OFFSET, key_state);
                 let input_context = state.get_context(*seat_index);
                 if input_context.xkb_state.is_none() {
                     return;
@@ -265,7 +269,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                             return;
                         }
                         None => {
-                            eprintln!("Shutting down.");
+                            info!("Shutting down.");
                             state.running = false;
                             return;
                         }
@@ -278,7 +282,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                     {
                         let repeating = input_context.repeat_timer.as_mut().unwrap();
                         // Update the timer to repeat the new key.
-                        eprintln!("Update repeat timer for {}", key + SCANCODE_OFFSET);
+                        debug!("Update repeat timer for {}", key + SCANCODE_OFFSET);
                         repeating.keycode = keycode;
                         let repeat_delay = input_context.repeat_delay.unwrap();
                         repeating.timestamp = time + repeat_delay.as_millis() as u32;
@@ -304,7 +308,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                         .as_ref()
                         .map_or(false, |t| t.keycode == keycode)
                 {
-                    eprintln!("Delete repeat timer for {}", key + 8);
+                    debug!("Delete repeat timer for {}", key + SCANCODE_OFFSET);
                     input_context.release_if_pressed(keycode);
                     // Turn off the repeat timer.
                     let registration = input_context.repeat_timer.as_ref().unwrap().registration;
@@ -319,7 +323,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                     match input_context.handle_key(keycode) {
                         Some(handled_key) => handled_key,
                         None => {
-                            eprintln!("Shutting down.");
+                            info!("Shutting down.");
                             state.running = false;
                             true
                         }
@@ -359,7 +363,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                         timestamp: time + repeat_delay.as_millis() as u32,
                         keycode,
                     });
-                    eprintln!("Repeat timer set for {}", key + 8);
+                    debug!("Repeat timer set for {}", key + SCANCODE_OFFSET);
                     return;
                 }
 
@@ -382,7 +386,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
 
                 if !handled {
                     // If we didn't handle the key, send it to the virtual keyboard.
-                    eprintln!("Forwarded key {}", key + 8);
+                    debug!("Forwarded key {}", key + SCANCODE_OFFSET);
                     input_context
                         .virtual_keyboard
                         .key(time, key, key_state.into());
@@ -432,12 +436,12 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                     panic!("Failed to create xkb keymap from fd");
                 });
                 if input_context.xkb_keymap.is_none() {
-                    println!("Failed to compile keymap.");
+                    error!("Failed to compile keymap.");
                     return;
                 }
                 let xkb_state = xkb::State::new(input_context.xkb_keymap.as_ref().unwrap());
                 if xkb_state.get_raw_ptr().is_null() {
-                    println!("Failed to create xkb state.");
+                    error!("Failed to create xkb state.");
                 }
                 input_context.xkb_state = Some(xkb_state);
             }
@@ -445,7 +449,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, SeatIndex> for State {
                 let input_context = state.get_context(*seat_index);
                 input_context.repeat_rate = Some(Duration::from_millis(rate as u64));
                 input_context.repeat_delay = Some(Duration::from_millis(delay as u64));
-                eprintln!("Repeat rate: {} ms, delay: {} ms.", rate, delay);
+                debug!("Repeat rate: {} ms, delay: {} ms.", rate, delay);
             }
             _ => unreachable!("Unknown event."),
         }
@@ -536,7 +540,7 @@ impl Dispatch<WlSeat, u32> for State {
     ) {
         match event {
             wl_seat::Event::Name { name } => {
-                eprintln!("Seat name: {}.", name);
+                info!("Seat name: {}.", name);
                 // Find the context with the given seat id and set the name.
                 if let Some(context) = state.contexts.values_mut().find(|c| c.seat_id == *seat_id) {
                     context.seat_name = Some(name);
@@ -545,7 +549,7 @@ impl Dispatch<WlSeat, u32> for State {
             wl_seat::Event::Capabilities {
                 capabilities: WEnum::Value(capabilities),
             } => {
-                eprintln!("Seat capabilities: {:?}.", capabilities);
+                info!("Seat capabilities: {:?}.", capabilities);
             }
             _ => todo!(),
         }

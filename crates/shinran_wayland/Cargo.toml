@@ -14,3 +14,8 @@ xkbcommon = { version = "0.7.0", features = ["wayland"] }
 calloop = "0.14.1"
 calloop-wayland-source = "0.4.0"
 slotmap = "1.0.7"
+log = { version = "0.4", features = [
+    "max_level_debug",
+    "release_max_level_info",
+] }
+env_logger = "0.11.5"

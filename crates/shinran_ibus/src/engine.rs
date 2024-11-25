@@ -11,6 +11,7 @@ use event_listener::Event;
 use ibus_utils::{
     ibus_constants, Attribute, IBusAttribute, IBusEnginePreedit, IBusText, Underline,
 };
+use log::{debug, info};
 use xkeysym::Keysym;
 use zbus::{fdo, interface, object_server::SignalContext};
 
@@ -40,14 +41,14 @@ impl ShinranEngine {
     }
 
     async fn exit(&self) {
-        println!("Exit!");
-        println!("============================");
+        info!("Exit!");
+        info!("============================");
         sleep(Duration::from_millis(100)).await;
         self.done.notify(1);
     }
 
     async fn update_text(&self, ctxt: &SignalContext<'_>) -> zbus::Result<()> {
-        println!(
+        debug!(
             "UpdateText(text = '{}', cursorPos = {})",
             self.text, self.cursor_pos,
         );
@@ -107,12 +108,12 @@ impl ShinranEngine {
         keycode: u32,
         state: u32,
     ) -> fdo::Result<bool> {
-        println!(
+        debug!(
             "ProcessKeyEvent: keyval={}, keycode={}, state={}",
             keyval, keycode, state
         );
         if state & ibus_constants::RELEASE_MASK != 0 {
-            println!("Key released");
+            debug!("Key released");
             if !self.new_key_pressed {
                 // Pass along key release events that happened before the first key press.
                 ShinranEngine::forward_key_event(&ctxt, keyval, keycode, state).await?;
@@ -186,7 +187,7 @@ impl ShinranEngine {
 
     /// FocusInId method
     fn focus_in_id(&self, object_path: &str, client: &str) -> fdo::Result<()> {
-        println!("FocusInId: object_path={}, client={}", object_path, client);
+        info!("FocusInId: object_path={}, client={}", object_path, client);
         Ok(())
     }
 
@@ -196,7 +197,7 @@ impl ShinranEngine {
         #[zbus(signal_context)] ctxt: SignalContext<'_>,
     ) -> fdo::Result<()> {
         if self.start_time.elapsed() < Duration::from_millis(250) {
-            eprintln!("FocusOut was quickly after starting. Skipping exit.");
+            info!("FocusOut was quickly after starting. Skipping exit.");
         } else {
             self.clear_text(&ctxt).await?;
             self.exit().await;
@@ -221,7 +222,7 @@ impl ShinranEngine {
 
     /// Destroy method
     fn destroy(&self) {
-        println!("Destroy");
+        info!("Destroy");
         self.done.notify(1);
     }
 

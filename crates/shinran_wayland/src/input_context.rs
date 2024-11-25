@@ -4,6 +4,7 @@ use calloop::{
     timer::{TimeoutAction, Timer},
     Dispatcher, RegistrationToken,
 };
+use log::debug;
 use wayland_client::protocol::{wl_keyboard::KeyState, wl_surface::WlSurface};
 use wayland_protocols_misc::{
     zwp_input_method_v2::client::{
@@ -99,12 +100,12 @@ impl<S> InputContext<S> {
                 break;
             }
         }
-        eprintln!("Added key!");
+        debug!("Added key!");
         let mut pressed_num = [0u32; 64];
         for (num, code) in zip(pressed_num.iter_mut(), self.pressed) {
             *num = code.into();
         }
-        eprintln!("{:?}", pressed_num);
+        debug!("{:?}", pressed_num);
     }
 
     pub(crate) fn release_if_pressed(&mut self, keycode: xkb::Keycode) -> bool {
@@ -112,12 +113,12 @@ impl<S> InputContext<S> {
             if *code == keycode {
                 // Clear the slot.
                 *code = xkb::Keycode::default();
-                eprintln!("Removed key!");
+                debug!("Removed key!");
                 let mut pressed_num = [0u32; 64];
                 for (num, code) in zip(pressed_num.iter_mut(), self.pressed) {
                     *num = code.into();
                 }
-                eprintln!("{:?}", pressed_num);
+                debug!("{:?}", pressed_num);
                 return true;
             }
         }
@@ -190,7 +191,7 @@ impl<S> InputContext<S> {
             .expect("Repeat timer should have been set.");
         let key_code = repeating.keycode;
         let key = u32::from(key_code) - 8;
-        eprintln!("Timer repeats {}", key);
+        debug!("Timer repeats {}", key);
         let time = repeating.timestamp;
         // Update the timestamp for the next repetition.
         repeating.timestamp += 1000 / (repeat_rate.as_millis() as u32);
@@ -199,7 +200,7 @@ impl<S> InputContext<S> {
                 .key(time, key, KeyState::Pressed.into());
             self.repeat_timer = None;
             // Don't schedule the timer again.
-            eprintln!("Timer dropped.");
+            debug!("Timer dropped.");
             return TimeoutAction::Drop;
         }
         TimeoutAction::ToDuration(repeat_rate)

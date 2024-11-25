@@ -1,8 +1,7 @@
-use std::env;
-use std::fs;
-use std::io;
 use std::path::PathBuf;
+use std::{env, fs, io};
 
+use log::{error, warn};
 use zbus::Address;
 
 pub fn get_ibus_address() -> zbus::Result<Address> {
@@ -42,7 +41,7 @@ fn get_socket_path() -> io::Result<PathBuf> {
                 Some(display) if !display.is_empty() => {
                     let (hostname, display_number) =
                         parse_display_string(display).ok_or_else(|| {
-                            eprintln!("Failed to parse DISPLAY: {}", display);
+                            error!("Failed to parse DISPLAY: {}", display);
                             io::Error::new(io::ErrorKind::InvalidData, "Failed to parse DISPLAY")
                         })?;
                     let hostname = if hostname.is_empty() {
@@ -53,7 +52,7 @@ fn get_socket_path() -> io::Result<PathBuf> {
                     (display_number, hostname)
                 }
                 _ => {
-                    eprintln!("DISPLAY is empty! We use default DISPLAY (:0.0)");
+                    warn!("DISPLAY is empty! We use default DISPLAY (:0.0)");
                     ("0", None)
                 }
             }

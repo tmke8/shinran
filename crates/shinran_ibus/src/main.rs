@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
 use event_listener::{Event, Listener};
+use log::info;
 use shinran_lib::{load_config_and_renderer, Backend, Stores};
 use zbus::zvariant::{ObjectPath, OwnedObjectPath};
 use zbus::{connection, fdo, Address, ObjectServer};
@@ -29,26 +30,28 @@ impl Factory {
         #[zbus(object_server)] server: &ObjectServer,
         engine_name: &str,
     ) -> fdo::Result<OwnedObjectPath> {
-        println!("CreateEngine: {}", engine_name);
+        info!("CreateEngine: {}", engine_name);
         let path: OwnedObjectPath = ObjectPath::try_from(SERVE_AT)
             .map_err(|_| fdo::Error::BadAddress(SERVE_AT.to_string()))?
             .into();
-        println!("Path: {}", path);
+        info!("Path: {}", path);
         let engine = ShinranEngine::new(self.done.clone(), self.backend.clone());
         server.at(&path, engine).await?;
         Ok(path)
     }
 }
 
+// TODO: Replace with a `OnceLock` when we want to actually parse CLI arguments.
 static STORES: LazyLock<Stores> = LazyLock::new(|| {
-    // TODO: Replace with a `OnceLock` when we want to actually parse CLI arguments.
     let cli_overrides = HashMap::new();
     load_config_and_renderer(&cli_overrides)
 });
 
 #[async_std::main]
 async fn main() -> zbus::Result<()> {
-    println!("Program started!");
+    // Set up the logger.
+    env_logger::init();
+    info!("Program started!");
     // Set up the backend.
     let backend = Backend::new(&STORES).unwrap();
     // Set up the factory.
@@ -60,7 +63,7 @@ async fn main() -> zbus::Result<()> {
     let done_listener = event.listen();
 
     let address: Address = get_ibus_address()?;
-    println!("Address: {}", address);
+    info!("Address: {}", address);
     let _conn = connection::Builder::address(address)?
         .auth_mechanisms(&[AuthMechanism::External, AuthMechanism::Cookie])
         .name(REQUESTED_NAME)?
