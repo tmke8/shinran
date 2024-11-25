@@ -24,7 +24,6 @@ pub(crate) struct ShinranEngine {
     start_time: Instant,
     new_key_pressed: bool,
     backend: Arc<Backend<'static>>,
-    candidates: Vec<String>,
 }
 
 impl ShinranEngine {
@@ -36,7 +35,6 @@ impl ShinranEngine {
             start_time: Instant::now(),
             new_key_pressed: false,
             backend,
-            candidates: vec!["foo".to_string(), "bar".to_string(), "baz".to_string()],
         }
     }
 
@@ -69,12 +67,15 @@ impl ShinranEngine {
         )
         .await?;
 
-        let mut table = ibus_utils::IBusLookupTable::default();
-        for candidate in &self.candidates {
-            table.append_candidate(candidate);
-        }
+        let candidates = self.backend.fuzzy_match(&self.text);
+        if !candidates.is_empty() {
+            let mut table = ibus_utils::IBusLookupTable::default();
+            for (candidate, _) in candidates.into_iter().take(5) {
+                table.append_candidate(candidate);
+            }
 
-        ShinranEngine::update_lookup_table(ctxt, table.into(), true).await?;
+            ShinranEngine::update_lookup_table(ctxt, table.into(), true).await?;
+        }
         Ok(())
     }
 

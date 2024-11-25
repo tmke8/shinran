@@ -36,7 +36,7 @@ use crate::{
 pub struct RendererAdapter<'store> {
     /// Renderer for the variables.
     renderer: &'store shinran_render::Renderer,
-    combined_cache: match_cache::CombinedMatchCache<'store>,
+    pub combined_cache: match_cache::CombinedMatchCache<'store>,
     /// Configuration of the shinran instance.
     pub configuration: Configuration<'store>,
 }
