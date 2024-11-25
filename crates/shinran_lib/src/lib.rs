@@ -1,7 +1,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
+use log::{error, info};
 use shinran_config::{config::ProfileStore, matches::store::MatchStore};
-use log::info;
 use shinran_types::RegexMatchRef;
 
 mod builtin;
@@ -76,10 +76,8 @@ impl<'store> Backend<'store> {
         let configuration = config::Configuration::new(&stores.profiles, &stores.matches);
 
         let builtin_matches = builtin::get_builtin_matches();
-        // `combined_cache` stores references to `cache` and `builtin_matches`
         let combined_cache =
             match_cache::CombinedMatchCache::load(match_cache, builtin_matches, regex_matches);
-        // `adapter` could own `cache`
         let adapter = render::RendererAdapter::new(combined_cache, configuration, &stores.renderer);
         Ok(Backend { adapter })
     }
@@ -105,13 +103,6 @@ impl<'store> Backend<'store> {
     }
 }
 
-macro_rules! error_eprintln {
-  ($($tts:tt)*) => {
-    eprintln!($($tts)*);
-    log::error!($($tts)*);
-  }
-}
-
 fn get_path_override(
     cli_overrides: &HashMap<String, String>,
     argument: &str,
@@ -122,7 +113,7 @@ fn get_path_override(
         if path.is_dir() {
             Some(path)
         } else {
-            error_eprintln!("{} argument was specified, but it doesn't point to a valid directory. Make sure to create it first.", argument);
+            error!("{} argument was specified, but it doesn't point to a valid directory. Make sure to create it first.", argument);
             std::process::exit(1);
         }
     } else if let Ok(path) = std::env::var(env_var) {
@@ -130,7 +121,7 @@ fn get_path_override(
         if path.is_dir() {
             Some(path)
         } else {
-            error_eprintln!("{} env variable was specified, but it doesn't point to a valid directory. Make sure to create it first.", env_var);
+            error!("{} env variable was specified, but it doesn't point to a valid directory. Make sure to create it first.", env_var);
             std::process::exit(1);
         }
     } else {
