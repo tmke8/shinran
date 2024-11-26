@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use log::{error, info};
+use log::error;
 use nucleo_matcher::pattern;
 use shinran_config::{config::ProfileStore, matches::store::MatchStore};
 use shinran_types::{RegexMatchRef, TrigMatchRef};
@@ -20,41 +20,7 @@ mod path;
 mod regex;
 mod render;
 
-pub struct Stores {
-    pub profiles: ProfileStore,
-    pub matches: MatchStore,
-    pub renderer: shinran_render::Renderer,
-}
-
-pub fn load_config_and_renderer(cli_overrides: &HashMap<String, String>) -> Stores {
-    let force_config_path = get_path_override(cli_overrides, "config_dir", "SHINRAN_CONFIG_DIR");
-    let force_package_path = get_path_override(cli_overrides, "package_dir", "SHINRAN_PACKAGE_DIR");
-    let force_runtime_path = get_path_override(cli_overrides, "runtime_dir", "SHINRAN_RUNTIME_DIR");
-
-    let paths = path::resolve_paths(
-        force_config_path.as_deref(),
-        force_package_path.as_deref(),
-        force_runtime_path.as_deref(),
-    );
-    info!("reading configs from: {:?}", paths.config);
-    info!("reading packages from: {:?}", paths.packages);
-    info!("using runtime dir: {:?}", paths.runtime);
-
-    let config_result = load::load_config(&paths.config).expect("unable to load config");
-    let profile_store = config_result.profile_store;
-    let match_store = config_result.match_store;
-
-    let home_path = dirs::home_dir().expect("unable to obtain home dir path");
-    let base_path = &paths.config;
-    let packages_path = &paths.packages;
-    let renderer = shinran_render::Renderer::new(base_path, &home_path, packages_path);
-
-    Stores {
-        profiles: profile_store,
-        matches: match_store,
-        renderer,
-    }
-}
+pub use config::Configuration;
 
 fn get_regex_matches(
     _: &ProfileStore,
@@ -75,16 +41,16 @@ pub struct Backend<'store> {
 }
 
 impl<'store> Backend<'store> {
-    pub fn new(stores: &'store Stores) -> anyhow::Result<Self> {
-        let match_cache = match_cache::MatchCache::load(&stores.profiles, &stores.matches);
-        let regex_matches = get_regex_matches(&stores.profiles, &stores.matches);
-
-        let configuration = config::Configuration::new(&stores.profiles, &stores.matches);
+    pub fn new(configuration: &'store Configuration) -> anyhow::Result<Self> {
+        let match_cache =
+            match_cache::MatchCache::load(&configuration.profile_store, &configuration.match_store);
+        let regex_matches =
+            get_regex_matches(&configuration.profile_store, &configuration.match_store);
 
         let builtin_matches = builtin::get_builtin_matches();
         let combined_cache =
             match_cache::CombinedMatchCache::load(match_cache, builtin_matches, regex_matches);
-        let adapter = render::RendererAdapter::new(combined_cache, configuration, &stores.renderer);
+        let adapter = render::RendererAdapter::new(combined_cache, &configuration);
 
         let matcher = nucleo_matcher::Matcher::new(nucleo_matcher::Config::DEFAULT);
         Ok(Backend {
@@ -94,7 +60,7 @@ impl<'store> Backend<'store> {
     }
 
     pub fn check_trigger(&self, trigger: &str) -> anyhow::Result<Option<String>> {
-        let active_profile = self.adapter.configuration.active_profile();
+        let active_profile = self.adapter.active_profile();
         let matches = self
             .adapter
             .find_matches_from_trigger(trigger, active_profile);
@@ -114,7 +80,7 @@ impl<'store> Backend<'store> {
     }
 
     pub fn fuzzy_match(&self, trigger: &str) -> Vec<(TriggerAndRef<'store>, u16)> {
-        let active_profile = self.adapter.configuration.active_profile();
+        let active_profile = self.adapter.active_profile();
         let user_matches = self
             .adapter
             .combined_cache
@@ -199,7 +165,7 @@ mod tests {
         base_path: &Path,
         match_dir: &Path,
         config_dir: &Path,
-    ) -> Stores {
+    ) -> Configuration {
         let base_file = match_dir.join("base.yml");
         std::fs::write(&base_file, match_definition).unwrap();
 
@@ -211,7 +177,7 @@ mod tests {
             "config_dir".to_string(),
             base_path.to_str().unwrap().to_string(),
         );
-        load_config_and_renderer(&cli_overrides)
+        Configuration::new(&cli_overrides)
     }
 
     #[test]

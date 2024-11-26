@@ -1,126 +1,47 @@
-/*
- * This file is part of espanso.
- *
- * Copyright (C) 2019-2021 Federico Terzi
- *
- * espanso is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * espanso is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
- */
+use std::collections::HashMap;
 
-use shinran_config::{config::ProfileStore, matches::store::MatchStore, ProfileRef};
+use log::info;
+use shinran_config::{config::ProfileStore, matches::store::MatchStore};
 
-use crate::builtin::is_builtin_match;
+use crate::{get_path_override, load, path};
 
-// use super::{
-//     builtin::is_builtin_match,
-//     engine::process::middleware::render::extension::clipboard::ClipboardOperationOptionsProvider,
-// };
-
-/// Struct containing all information loaded from the configuration files.
-/// This includes the config files in the `config` directory and the match files in the `match` directory.
-pub struct Configuration<'store> {
-    profile_store: &'store ProfileStore,
-    pub match_store: &'store MatchStore,
-    // app_info_provider: &'a dyn AppInfoProvider,
+/// A struct containing all the information that was loaded from match files and config files.
+pub struct Configuration {
+    pub profile_store: ProfileStore,
+    pub match_store: MatchStore,
+    /// Renderer for the variables.
+    pub renderer: shinran_render::Renderer,
 }
 
-impl<'store> Configuration<'store> {
-    pub fn new(
-        profile_store: &'store ProfileStore,
-        match_store: &'store MatchStore,
-        // app_info_provider: &'a dyn AppInfoProvider,
-    ) -> Self {
-        Self {
-            profile_store,
-            match_store,
-            // app_info_provider,
+impl Configuration {
+    pub fn new(cli_overrides: &HashMap<String, String>) -> Self {
+        let force_config_path =
+            get_path_override(cli_overrides, "config_dir", "SHINRAN_CONFIG_DIR");
+        let force_package_path =
+            get_path_override(cli_overrides, "package_dir", "SHINRAN_PACKAGE_DIR");
+        let force_runtime_path =
+            get_path_override(cli_overrides, "runtime_dir", "SHINRAN_RUNTIME_DIR");
+
+        let paths = path::resolve_paths(
+            force_config_path.as_deref(),
+            force_package_path.as_deref(),
+            force_runtime_path.as_deref(),
+        );
+        info!("reading configs from: {:?}", paths.config);
+        info!("reading packages from: {:?}", paths.packages);
+        info!("using runtime dir: {:?}", paths.runtime);
+
+        let config_result = load::load_config(&paths.config).expect("unable to load config");
+
+        let home_path = dirs::home_dir().expect("unable to obtain home dir path");
+        let base_path = &paths.config;
+        let packages_path = &paths.packages;
+        let renderer = shinran_render::Renderer::new(base_path, &home_path, packages_path);
+
+        Configuration {
+            profile_store: config_result.profile_store,
+            match_store: config_result.match_store,
+            renderer,
         }
     }
-
-    #[inline]
-    pub fn default_profile(&self) -> ProfileRef {
-        self.profile_store.default_config()
-    }
-
-    // pub fn default_profile_and_matches(&self) -> (&ProfileFile, MatchesAndGlobalVars) {
-    //     let config = self.default_profile();
-    //     let match_paths = config.match_file_paths();
-    //     (
-    //         config,
-    //         self.match_store
-    //             .collect_matches_and_global_vars(match_paths),
-    //     )
-    // }
-
-    /// Get the active configuration file according to the current app.
-    ///
-    /// This functionality is not implemented yet.
-    pub fn active_profile(&self) -> ProfileRef {
-        // let current_app = self.app_info_provider.get_info();
-        // let info = to_app_properties(&current_app);
-        let info = shinran_config::config::AppProperties {
-            title: None,
-            class: None,
-            exec: None,
-        };
-        self.profile_store.active_config(&info)
-    }
-
-    // pub fn active_profile_and_matches(&self) -> (&ProfileFile, MatchesAndGlobalVars) {
-    //     let profile = self.active_profile();
-    //     let match_paths = profile.match_file_paths();
-    //     (
-    //         profile,
-    //         self.match_store
-    //             .collect_matches_and_global_vars(match_paths),
-    //     )
-    // }
-
-    // pub fn filter_active(&self, matches_ids: &[i32]) -> Vec<i32> {
-    //     let ids_set: HashSet<i32> = matches_ids.iter().copied().collect::<HashSet<_>>();
-    //     let (_, match_set) = self.active_profile_and_matches();
-
-    //     let active_user_defined_matches: Vec<i32> = match_set
-    //         .trigger_matches
-    //         .iter()
-    //         .filter(|m| ids_set.contains(&m.id))
-    //         .map(|m| m.id)
-    //         .collect();
-
-    //     let builtin_matches: Vec<i32> = matches_ids
-    //         .iter()
-    //         .filter(|id| is_builtin_match(**id))
-    //         .copied()
-    //         .collect();
-
-    //     let mut output = active_user_defined_matches;
-    //     output.extend(builtin_matches);
-    //     output
-    // }
-
-    // /// Get all the configs and their match sets.
-    // pub fn collect_matches_and_global_vars_from_all_configs(
-    //     &self,
-    // ) -> Vec<(&ProfileFile, MatchesAndGlobalVars)> {
-    //     self.profile_store
-    //         .all_configs()
-    //         .into_iter()
-    //         .map(|config| {
-    //             let match_set = self
-    //                 .match_store
-    //                 .collect_matches_and_global_vars(config.match_file_paths());
-    //             (config, match_set)
-    //         })
-    //         .collect()
-    // }
 }

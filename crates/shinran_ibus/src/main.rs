@@ -3,7 +3,7 @@ use std::sync::{Arc, LazyLock};
 
 use event_listener::{Event, Listener};
 use log::info;
-use shinran_lib::{load_config_and_renderer, Backend, Stores};
+use shinran_lib::{Backend, Configuration};
 use zbus::zvariant::{ObjectPath, OwnedObjectPath};
 use zbus::{connection, fdo, Address, ObjectServer};
 use zbus::{interface, AuthMechanism};
@@ -42,9 +42,9 @@ impl Factory {
 }
 
 // TODO: Replace with a `OnceLock` when we want to actually parse CLI arguments.
-static STORES: LazyLock<Stores> = LazyLock::new(|| {
+static CONFIG: LazyLock<Configuration> = LazyLock::new(|| {
     let cli_overrides = HashMap::new();
-    load_config_and_renderer(&cli_overrides)
+    Configuration::new(&cli_overrides)
 });
 
 #[async_std::main]
@@ -53,7 +53,7 @@ async fn main() -> zbus::Result<()> {
     env_logger::init();
     info!("Program started!");
     // Set up the backend.
-    let backend = Backend::new(&STORES).unwrap();
+    let backend = Backend::new(&CONFIG).unwrap();
     // Set up the factory.
     let event = Arc::new(Event::new());
     let factory = Factory {

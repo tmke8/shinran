@@ -19,10 +19,6 @@
 
 use std::collections::HashMap;
 
-// use thiserror::Error;
-
-// pub mod extension;
-
 use shinran_config::ProfileRef;
 use shinran_render::{CasingStyle, Context, RenderOptions};
 use shinran_types::{MatchEffect, MatchIdx, Params, UpperCasingStyle, Value, VarType, Variable};
@@ -34,24 +30,34 @@ use crate::{
 };
 
 pub struct RendererAdapter<'store> {
-    /// Renderer for the variables.
-    renderer: &'store shinran_render::Renderer,
     pub combined_cache: match_cache::CombinedMatchCache<'store>,
     /// Configuration of the shinran instance.
-    pub configuration: Configuration<'store>,
+    pub configuration: &'store Configuration,
 }
 
 impl<'store> RendererAdapter<'store> {
     pub fn new(
         combined_cache: crate::match_cache::CombinedMatchCache<'store>,
-        configuration: Configuration<'store>,
-        renderer: &'store shinran_render::Renderer,
+        configuration: &'store Configuration,
     ) -> Self {
         Self {
-            renderer,
             configuration,
             combined_cache,
         }
+    }
+
+    /// Get the active configuration file according to the current app.
+    ///
+    /// This functionality is not implemented yet.
+    pub fn active_profile(&self) -> ProfileRef {
+        // let current_app = self.app_info_provider.get_info();
+        // let info = to_app_properties(&current_app);
+        let info = shinran_config::config::AppProperties {
+            title: None,
+            class: None,
+            exec: None,
+        };
+        self.configuration.profile_store.active_config(&info)
     }
 
     pub fn render(
@@ -61,11 +67,6 @@ impl<'store> RendererAdapter<'store> {
         trigger_vars: HashMap<String, String>,
         active_profile: ProfileRef,
     ) -> anyhow::Result<String> {
-        // let Some(Some(template)) = self.template_map.get(&match_id) else {
-        //     // Found no template for the given match ID.
-        //     return Err(RendererError::NotFound.into());
-        // };
-
         let (effect, propagate_case, preferred_uppercasing_style) = match match_id {
             MatchIdx::Trigger(idx) => {
                 let (expected_triggers, m) =
@@ -152,7 +153,11 @@ impl<'store> RendererAdapter<'store> {
                 .global_vars(active_profile),
         };
 
-        match self.renderer.render_template(template, context, &options) {
+        match self
+            .configuration
+            .renderer
+            .render_template(template, context, &options)
+        {
             shinran_render::RenderResult::Success(body) => Ok(body),
             shinran_render::RenderResult::Aborted => Err(RendererError::Aborted.into()),
             shinran_render::RenderResult::Error(err) => {

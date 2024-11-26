@@ -314,6 +314,14 @@ impl ShinranEngine {
         mode: u32,
     ) -> zbus::Result<()>;
 
+    /// UpdateAuxiliaryText signal
+    #[zbus(signal)]
+    async fn update_auxiliary_text(
+        ctxt: &SignalContext<'_>,
+        text: zbus::zvariant::Value<'_>,
+        visible: bool,
+    ) -> zbus::Result<()>;
+
     /// CommitText signal
     #[zbus(signal)]
     async fn commit_text(
