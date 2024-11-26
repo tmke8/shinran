@@ -24,8 +24,8 @@ use crate::{
 };
 use anyhow::Context;
 use shinran_types::{
-    BaseMatch, MatchCause, RegexMatchRef, RegexMatchStore, TrigMatchRef, TrigMatchStore,
-    TriggerMatch, VarRef, VarStore,
+    BaseMatch, MatchCause, RegexMatch, RegexMatchRef, RegexMatchStore, TrigMatchRef,
+    TrigMatchStore, TriggerMatch, VarRef, VarStore,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -78,7 +78,7 @@ impl MatchStore {
             let mut trigger_ids = Vec::new();
             let mut regex_ids = Vec::new();
             let mut global_vars_ids = Vec::new();
-            for m in match_file.matches {
+            for m in match_file.content.matches {
                 let base_match = BaseMatch {
                     // id: m.id,
                     effect: m.effect,
@@ -88,15 +88,20 @@ impl MatchStore {
                 match m.cause {
                     MatchCause::Trigger(trigger) => {
                         let match_ = TriggerMatch {
+                            triggers: trigger.triggers,
                             base_match,
                             propagate_case: trigger.propagate_case,
                             uppercase_style: trigger.uppercase_style,
                         };
-                        let idx = trigger_matches.add(trigger.triggers, match_);
+                        let idx = trigger_matches.add(match_);
                         trigger_ids.push(idx);
                     }
                     MatchCause::Regex(regex) => {
-                        let idx = regex_matches.add(regex.regex, base_match);
+                        let match_ = RegexMatch {
+                            regex: regex.regex,
+                            base_match,
+                        };
+                        let idx = regex_matches.add(match_);
                         regex_ids.push(idx);
                     }
                 }
@@ -266,33 +271,31 @@ mod tests {
     use super::*;
     use std::fs::create_dir_all;
 
-    fn create_match(trigger: &str, replace: &str) -> (Vec<String>, TriggerMatch) {
-        (
-            vec![trigger.to_string()],
-            TriggerMatch {
-                base_match: BaseMatch {
-                    effect: MatchEffect::Text(TextEffect {
-                        body: replace.to_string(),
-                        ..Default::default()
-                    }),
+    fn create_match(trigger: &str, replace: &str) -> TriggerMatch {
+        TriggerMatch {
+            triggers: vec![trigger.to_string()],
+            base_match: BaseMatch {
+                effect: MatchEffect::Text(TextEffect {
+                    body: replace.to_string(),
                     ..Default::default()
-                },
+                }),
                 ..Default::default()
             },
-        )
+            ..Default::default()
+        }
     }
 
-    fn create_matches(matches: &[(&str, &str)]) -> Vec<(Vec<String>, TriggerMatch)> {
+    fn create_matches(matches: &[(&str, &str)]) -> Vec<TriggerMatch> {
         matches
             .iter()
             .map(|(trigger, replace)| create_match(trigger, replace))
             .collect()
     }
 
-    fn sort_matches(matches: &mut Vec<(Vec<String>, TriggerMatch)>) {
+    fn sort_matches(matches: &mut Vec<TriggerMatch>) {
         matches.sort_unstable_by(|a, b| {
-            (&a.0, &a.1.base_match.effect.as_text().unwrap().body)
-                .cmp(&(&b.0, &b.1.base_match.effect.as_text().unwrap().body))
+            (&a.triggers[0], &a.base_match.effect.as_text().unwrap().body)
+                .cmp(&(&b.triggers[0], &b.base_match.effect.as_text().unwrap().body))
         });
     }
 
@@ -364,7 +367,7 @@ mod tests {
                 .get(map.get(&base_file).unwrap())
                 .unwrap()
                 .trigger_matches;
-            let base_group: Vec<(Vec<String>, TriggerMatch)> = base_group
+            let base_group: Vec<TriggerMatch> = base_group
                 .iter()
                 .map(|&m| match_store.trigger_matches.get(m).clone())
                 .collect();
@@ -376,7 +379,7 @@ mod tests {
                 .get(map.get(&another_file).unwrap())
                 .unwrap()
                 .trigger_matches;
-            let another_group: Vec<(Vec<String>, TriggerMatch)> = another_group
+            let another_group: Vec<TriggerMatch> = another_group
                 .iter()
                 .map(|&m| match_store.trigger_matches.get(m).clone())
                 .collect();
@@ -390,7 +393,7 @@ mod tests {
                 .get(map.get(&sub_file).unwrap())
                 .unwrap()
                 .trigger_matches;
-            let sub_group: Vec<(Vec<String>, TriggerMatch)> = sub_group
+            let sub_group: Vec<TriggerMatch> = sub_group
                 .iter()
                 .map(|&m| match_store.trigger_matches.get(m).clone())
                 .collect();
@@ -520,7 +523,7 @@ mod tests {
                 .trigger_matches
                 .into_iter()
                 .map(|m| match_store.trigger_matches.get(m).clone())
-                .collect::<Vec<(Vec<String>, TriggerMatch)>>();
+                .collect::<Vec<TriggerMatch>>();
 
             sort_matches(&mut matches);
 
@@ -611,7 +614,7 @@ mod tests {
                 .trigger_matches
                 .into_iter()
                 .map(|m| match_store.trigger_matches.get(m).clone())
-                .collect::<Vec<(Vec<String>, TriggerMatch)>>();
+                .collect::<Vec<TriggerMatch>>();
             sort_matches(&mut matches);
 
             assert_eq!(
@@ -699,7 +702,7 @@ mod tests {
                 .trigger_matches
                 .into_iter()
                 .map(|m| match_store.trigger_matches.get(m).clone())
-                .collect::<Vec<(Vec<String>, TriggerMatch)>>();
+                .collect::<Vec<TriggerMatch>>();
             sort_matches(&mut matches);
 
             assert_eq!(
@@ -789,7 +792,7 @@ mod tests {
                 .trigger_matches
                 .into_iter()
                 .map(|m| match_store.trigger_matches.get(m).clone())
-                .collect::<Vec<(Vec<String>, TriggerMatch)>>();
+                .collect::<Vec<TriggerMatch>>();
             sort_matches(&mut matches);
 
             assert_eq!(

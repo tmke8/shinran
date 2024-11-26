@@ -1,4 +1,4 @@
-use crate::{BaseMatch, TriggerMatch, Variable};
+use crate::{BaseMatch, RegexMatch, TriggerMatch, Variable};
 
 #[derive(Debug)]
 #[repr(transparent)]
@@ -39,7 +39,7 @@ impl VarStore {
 #[derive(Debug)]
 #[repr(transparent)]
 pub struct TrigMatchStore {
-    matches: Vec<(Vec<String>, TriggerMatch)>,
+    matches: Vec<TriggerMatch>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
@@ -57,19 +57,19 @@ impl TrigMatchStore {
     }
 
     #[inline]
-    pub fn add(&mut self, triggers: Vec<String>, m: TriggerMatch) -> TrigMatchRef {
+    pub fn add(&mut self, m: TriggerMatch) -> TrigMatchRef {
         let idx = self.matches.len();
-        self.matches.push((triggers, m));
+        self.matches.push(m);
         TrigMatchRef { idx }
     }
 
     #[inline]
-    pub fn get(&self, ref_: TrigMatchRef) -> &(Vec<String>, TriggerMatch) {
+    pub fn get(&self, ref_: TrigMatchRef) -> &TriggerMatch {
         &self.matches[ref_.idx]
     }
 
     #[inline]
-    pub fn enumerate(&self) -> impl Iterator<Item = (TrigMatchRef, &(Vec<String>, TriggerMatch))> {
+    pub fn enumerate(&self) -> impl Iterator<Item = (TrigMatchRef, &TriggerMatch)> {
         self.matches
             .iter()
             .enumerate()
@@ -79,7 +79,7 @@ impl TrigMatchStore {
 
 #[repr(transparent)]
 pub struct RegexMatchStore {
-    matches: Vec<(String, BaseMatch)>,
+    matches: Vec<RegexMatch>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
@@ -107,19 +107,19 @@ impl RegexMatchStore {
     }
 
     #[inline]
-    pub fn add(&mut self, regex: String, m: BaseMatch) -> RegexMatchRef {
+    pub fn add(&mut self, m: RegexMatch) -> RegexMatchRef {
         let idx = self.matches.len();
-        self.matches.push((regex, m));
+        self.matches.push(m);
         RegexMatchRef { idx }
     }
 
     #[inline]
-    pub fn get(&self, ref_: RegexMatchRef) -> &(String, BaseMatch) {
+    pub fn get(&self, ref_: RegexMatchRef) -> &RegexMatch {
         &self.matches[ref_.idx]
     }
 
     #[inline]
-    pub fn enumerate(&self) -> impl Iterator<Item = (RegexMatchRef, &(String, BaseMatch))> {
+    pub fn enumerate(&self) -> impl Iterator<Item = (RegexMatchRef, &RegexMatch)> {
         self.matches
             .iter()
             .enumerate()
