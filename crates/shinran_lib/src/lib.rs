@@ -10,7 +10,6 @@ use shinran_config::{config::ProfileStore, matches::store::MatchStore};
 use shinran_types::{RegexMatchRef, TrigMatchRef};
 
 mod builtin;
-mod config;
 mod cursor;
 mod engine;
 mod event;
@@ -23,6 +22,7 @@ mod render;
 pub struct Stores {
     pub profiles: ProfileStore,
     pub matches: MatchStore,
+    /// Renderer for the variables.
     pub renderer: shinran_render::Renderer,
 }
 
@@ -79,12 +79,10 @@ impl<'store> Backend<'store> {
         let match_cache = match_cache::MatchCache::load(&stores.profiles, &stores.matches);
         let regex_matches = get_regex_matches(&stores.profiles, &stores.matches);
 
-        let configuration = config::Configuration::new(&stores.profiles, &stores.matches);
-
         let builtin_matches = builtin::get_builtin_matches();
         let combined_cache =
             match_cache::CombinedMatchCache::load(match_cache, builtin_matches, regex_matches);
-        let adapter = render::RendererAdapter::new(combined_cache, configuration, &stores.renderer);
+        let adapter = render::RendererAdapter::new(combined_cache, &stores);
 
         let matcher = nucleo_matcher::Matcher::new(nucleo_matcher::Config::DEFAULT);
         Ok(Backend {
@@ -94,7 +92,7 @@ impl<'store> Backend<'store> {
     }
 
     pub fn check_trigger(&self, trigger: &str) -> anyhow::Result<Option<String>> {
-        let active_profile = self.adapter.configuration.active_profile();
+        let active_profile = self.adapter.active_profile();
         let matches = self
             .adapter
             .find_matches_from_trigger(trigger, active_profile);
@@ -114,7 +112,7 @@ impl<'store> Backend<'store> {
     }
 
     pub fn fuzzy_match(&self, trigger: &str) -> Vec<(TriggerAndRef<'store>, u16)> {
-        let active_profile = self.adapter.configuration.active_profile();
+        let active_profile = self.adapter.active_profile();
         let user_matches = self
             .adapter
             .combined_cache

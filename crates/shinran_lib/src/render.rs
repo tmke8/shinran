@@ -28,30 +28,39 @@ use shinran_render::{CasingStyle, Context, RenderOptions};
 use shinran_types::{MatchEffect, MatchIdx, Params, UpperCasingStyle, Value, VarType, Variable};
 
 use crate::{
-    config::Configuration,
     engine::RendererError,
     match_cache::{self},
+    Stores,
 };
 
 pub struct RendererAdapter<'store> {
-    /// Renderer for the variables.
-    renderer: &'store shinran_render::Renderer,
     pub combined_cache: match_cache::CombinedMatchCache<'store>,
-    /// Configuration of the shinran instance.
-    pub configuration: Configuration<'store>,
+    pub stores: &'store Stores,
 }
 
 impl<'store> RendererAdapter<'store> {
     pub fn new(
         combined_cache: crate::match_cache::CombinedMatchCache<'store>,
-        configuration: Configuration<'store>,
-        renderer: &'store shinran_render::Renderer,
+        stores: &'store Stores,
     ) -> Self {
         Self {
-            renderer,
-            configuration,
+            stores,
             combined_cache,
         }
+    }
+
+    /// Get the active configuration file according to the current app.
+    ///
+    /// This functionality is not implemented yet.
+    pub fn active_profile(&self) -> ProfileRef {
+        // let current_app = self.app_info_provider.get_info();
+        // let info = to_app_properties(&current_app);
+        let info = shinran_config::config::AppProperties {
+            title: None,
+            class: None,
+            exec: None,
+        };
+        self.stores.profiles.active_config(&info)
     }
 
     pub fn render(
@@ -68,8 +77,7 @@ impl<'store> RendererAdapter<'store> {
 
         let (effect, propagate_case, preferred_uppercasing_style) = match match_id {
             MatchIdx::Trigger(idx) => {
-                let (expected_triggers, m) =
-                    &self.configuration.match_store.trigger_matches.get(idx);
+                let (expected_triggers, m) = &self.stores.matches.trigger_matches.get(idx);
                 if let Some(trigger) = trigger {
                     // If we are not propagating case, we have to make sure that the trigger matches
                     // one of the expected triggers exactly.
@@ -84,13 +92,7 @@ impl<'store> RendererAdapter<'store> {
                 )
             }
             MatchIdx::Regex(idx) => (
-                &self
-                    .configuration
-                    .match_store
-                    .regex_matches
-                    .get(idx)
-                    .1
-                    .effect,
+                &self.stores.matches.regex_matches.get(idx).1.effect,
                 false,
                 None,
             ),
@@ -143,16 +145,20 @@ impl<'store> RendererAdapter<'store> {
         };
 
         let context = Context {
-            matches: &self.configuration.match_store.trigger_matches,
+            matches: &self.stores.matches.trigger_matches,
             matches_map: self.combined_cache.user_match_cache.matches(active_profile),
-            global_vars: &self.configuration.match_store.global_vars,
+            global_vars: &self.stores.matches.global_vars,
             global_vars_map: self
                 .combined_cache
                 .user_match_cache
                 .global_vars(active_profile),
         };
 
-        match self.renderer.render_template(template, context, &options) {
+        match self
+            .stores
+            .renderer
+            .render_template(template, context, &options)
+        {
             shinran_render::RenderResult::Success(body) => Ok(body),
             shinran_render::RenderResult::Aborted => Err(RendererError::Aborted.into()),
             shinran_render::RenderResult::Error(err) => {
