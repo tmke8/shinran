@@ -30,18 +30,18 @@ use shinran_types::{MatchEffect, MatchIdx, Params, UpperCasingStyle, Value, VarT
 use crate::{
     engine::RendererError,
     match_cache::{self},
-    Stores,
+    Configuration,
 };
 
 pub struct RendererAdapter<'store> {
     pub combined_cache: match_cache::CombinedMatchCache<'store>,
-    pub stores: &'store Stores,
+    pub stores: &'store Configuration,
 }
 
 impl<'store> RendererAdapter<'store> {
     pub fn new(
         combined_cache: crate::match_cache::CombinedMatchCache<'store>,
-        stores: &'store Stores,
+        stores: &'store Configuration,
     ) -> Self {
         Self {
             stores,

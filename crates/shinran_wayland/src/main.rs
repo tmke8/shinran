@@ -35,16 +35,16 @@ use wayland_protocols_misc::{
 };
 use xkbcommon::xkb;
 
-use shinran_lib::{load_config_and_renderer, Backend, Stores};
+use shinran_lib::{Backend, Configuration};
 
 mod input_context;
 
 use input_context::{InputContext, RepeatTimer};
 
 // TODO: Replace with a `OnceLock` when we want to actually parse CLI arguments.
-static STORES: LazyLock<Stores> = LazyLock::new(|| {
+static STORES: LazyLock<Configuration> = LazyLock::new(|| {
     let cli_overrides = HashMap::new();
-    load_config_and_renderer(&cli_overrides)
+    Configuration::new(&cli_overrides)
 });
 
 fn main() {
