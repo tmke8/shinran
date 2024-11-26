@@ -44,3 +44,36 @@ impl LoadedMatchFile {
         loader::load_match_file(file_path)
     }
 }
+
+#[repr(transparent)]
+pub struct MatchFileStore {
+    files: Vec<LoadedMatchFile>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[repr(transparent)]
+pub struct MatchFileRef {
+    idx: usize,
+}
+
+impl MatchFileStore {
+    #[inline]
+    pub fn new() -> Self {
+        Self { files: Vec::new() }
+    }
+
+    #[inline]
+    pub fn add(&mut self, file: LoadedMatchFile) -> MatchFileRef {
+        let idx = self.files.len();
+        self.files.push(file);
+        MatchFileRef { idx }
+    }
+
+    #[inline]
+    pub fn into_enumerate(self) -> impl Iterator<Item = (MatchFileRef, LoadedMatchFile)> {
+        self.files
+            .into_iter()
+            .enumerate()
+            .map(|(idx, elem)| (MatchFileRef { idx }, elem))
+    }
+}

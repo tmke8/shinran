@@ -26,12 +26,11 @@ use super::{
     path::calculate_paths,
     AppProperties, RMLVOConfig,
 };
-use crate::merge;
+use crate::{matches::group::MatchFileRef, merge};
 use anyhow::Result;
 use indoc::formatdoc;
 use log::error;
 use regex::Regex;
-use shinran_types::MatchFileRef;
 use std::{collections::HashMap, path::PathBuf};
 use std::{collections::HashSet, path::Path};
 use thiserror::Error;

@@ -18,11 +18,14 @@
  */
 
 use super::MatchesAndGlobalVars;
-use crate::{error::NonFatalErrorSet, matches::group::LoadedMatchFile};
+use crate::{
+    error::NonFatalErrorSet,
+    matches::group::{LoadedMatchFile, MatchFileRef, MatchFileStore},
+};
 use anyhow::Context;
 use shinran_types::{
-    BaseMatch, MatchCause, MatchFilePathStore, MatchFileRef, RegexMatchRef, RegexMatchStore,
-    TrigMatchRef, TrigMatchStore, TriggerMatch, VarRef, VarStore,
+    BaseMatch, MatchCause, RegexMatchRef, RegexMatchStore, TrigMatchRef, TrigMatchStore,
+    TriggerMatch, VarRef, VarStore,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -52,10 +55,9 @@ impl MatchStore {
     pub fn load(
         paths: &[PathBuf],
     ) -> (Self, HashMap<PathBuf, MatchFileRef>, Vec<NonFatalErrorSet>) {
-        let mut loaded_files = HashMap::new();
         let mut non_fatal_error_sets = Vec::new();
         let mut match_file_map = HashMap::new();
-        let mut match_file_store = MatchFilePathStore::new();
+        let mut loaded_files = MatchFileStore::new();
 
         // Because match files can import other match files,
         // we have to load them recursively starting from the
@@ -63,7 +65,6 @@ impl MatchStore {
         load_match_files_recursively(
             &mut loaded_files,
             &mut match_file_map,
-            &mut match_file_store,
             paths,
             &mut non_fatal_error_sets,
         );
@@ -73,7 +74,7 @@ impl MatchStore {
         let mut regex_matches = RegexMatchStore::new();
         let mut global_vars = VarStore::new();
 
-        for (path, match_file) in loaded_files.into_iter() {
+        for (path, match_file) in loaded_files.into_enumerate() {
             let mut trigger_ids = Vec::new();
             let mut regex_ids = Vec::new();
             let mut global_vars_ids = Vec::new();
@@ -215,13 +216,13 @@ fn query_matches_for_paths(
         }
     }
 }
+
 /// Load the files in the given paths and their imports recursively.
 ///
 /// This function fills up the `groups` HashMap with the loaded match groups.
 fn load_match_files_recursively(
-    loaded_files: &mut HashMap<MatchFileRef, LoadedMatchFile>,
+    loaded_files: &mut MatchFileStore,
     match_file_map: &mut HashMap<PathBuf, MatchFileRef>,
-    match_file_store: &mut MatchFilePathStore,
     paths: &[PathBuf],
     non_fatal_error_sets: &mut Vec<NonFatalErrorSet>,
 ) {
@@ -236,8 +237,7 @@ fn load_match_files_recursively(
             Ok((group, non_fatal_error_set)) => {
                 // TODO: Restructure code to avoid cloning here.
                 let imports = &group.imports.clone();
-                let file_ref = match_file_store.add(match_file_path.clone());
-                loaded_files.insert(file_ref, group);
+                let file_ref = loaded_files.add(group);
                 match_file_map.insert(match_file_path.clone(), file_ref);
 
                 if let Some(non_fatal_error_set) = non_fatal_error_set {
@@ -247,7 +247,6 @@ fn load_match_files_recursively(
                 load_match_files_recursively(
                     loaded_files,
                     match_file_map,
-                    match_file_store,
                     imports,
                     non_fatal_error_sets,
                 );

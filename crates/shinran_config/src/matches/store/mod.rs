@@ -23,7 +23,9 @@ use crate::error::NonFatalErrorSet;
 
 mod default;
 pub use default::MatchStore;
-use shinran_types::{MatchFileRef, RegexMatchRef, TrigMatchRef, VarRef};
+use shinran_types::{RegexMatchRef, TrigMatchRef, VarRef};
+
+use super::group::MatchFileRef;
 
 /// The set of matches and global vars associated with one config file.
 ///

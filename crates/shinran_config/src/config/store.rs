@@ -17,14 +17,13 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::config::resolve::LoadedProfileFile;
 use crate::error::NonFatalErrorSet;
 use crate::matches::group::loader::yaml::YAMLImporter;
+use crate::{config::resolve::LoadedProfileFile, matches::group::MatchFileRef};
 
 use super::{ConfigStoreError, ProfileFile};
 use anyhow::{Context, Result};
 use log::{debug, error};
-use shinran_types::MatchFileRef;
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
