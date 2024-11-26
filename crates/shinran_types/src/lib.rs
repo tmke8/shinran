@@ -3,7 +3,10 @@ use std::collections::HashMap;
 
 mod stores;
 
-pub use stores::{RegexMatchRef, RegexMatchStore, TrigMatchRef, TrigMatchStore, VarRef, VarStore};
+pub use stores::{
+    MatchFilePathStore, MatchFileRef, RegexMatchRef, RegexMatchStore, TrigMatchRef, TrigMatchStore,
+    VarRef, VarStore,
+};
 
 pub type StructId = i32;
 

@@ -26,17 +26,148 @@ use super::{
     path::calculate_paths,
     AppProperties, RMLVOConfig,
 };
-use crate::{counter::next_id, merge};
+use crate::merge;
 use anyhow::Result;
 use indoc::formatdoc;
 use log::error;
 use regex::Regex;
-use std::path::PathBuf;
+use shinran_types::MatchFileRef;
+use std::{collections::HashMap, path::PathBuf};
 use std::{collections::HashSet, path::Path};
 use thiserror::Error;
 
 const STANDARD_INCLUDES: &[&str] = &["../match/**/[!_]*.yml"];
 pub type ProfileId = i32;
+
+#[derive(Debug, Clone, Default)]
+pub struct Filters {
+    // TODO: Any config file with non-None filters should probably be ignored on Wayland.
+    // TODO: Should we throw an error if the user specifies filters in the default file?
+    //       (We're currently implicitly ignoring filters in the default file.)
+    pub(crate) title: Option<Regex>,
+    pub(crate) class: Option<Regex>,
+    pub(crate) exec: Option<Regex>,
+}
+
+impl Filters {
+    pub fn is_match(&self, app: &AppProperties) -> bool {
+        if self.title.is_none() && self.exec.is_none() && self.class.is_none() {
+            return false;
+        }
+
+        // let is_os_match = if let Some(filter_os) = self.parsed.filter_os.as_deref() {
+        //     os_matches(filter_os)
+        // } else {
+        //     true
+        // };
+
+        let is_title_match = if let Some(title_regex) = self.title.as_ref() {
+            if let Some(title) = app.title {
+                title_regex.is_match(title)
+            } else {
+                false
+            }
+        } else {
+            true
+        };
+
+        let is_exec_match = if let Some(exec_regex) = self.exec.as_ref() {
+            if let Some(exec) = app.exec {
+                exec_regex.is_match(exec)
+            } else {
+                false
+            }
+        } else {
+            true
+        };
+
+        let is_class_match = if let Some(class_regex) = self.class.as_ref() {
+            if let Some(class) = app.class {
+                class_regex.is_match(class)
+            } else {
+                false
+            }
+        } else {
+            true
+        };
+
+        // All the filters that have been specified must be true to define a match
+        is_exec_match && is_title_match && is_class_match
+    }
+}
+
+/// Struct representing one loaded configuration file.
+#[derive(Debug, Clone, Default)]
+pub struct LoadedProfileFile {
+    pub(crate) content: ParsedConfig,
+
+    pub(crate) source_path: PathBuf,
+
+    pub(crate) match_file_paths: Vec<PathBuf>,
+
+    pub(crate) filter: Filters,
+}
+
+impl LoadedProfileFile {
+    pub fn load_from_path(path: &Path, parent: Option<&Self>) -> Result<Self> {
+        let mut config = ParsedConfig::load(path)?;
+
+        // Inherit from the parent config if present
+        if let Some(parent) = parent {
+            inherit(&mut config, &parent.content);
+        }
+
+        // Extract the base directory
+        let base_dir = path
+            .parent()
+            .ok_or_else(ResolveError::ParentResolveFailed)?;
+
+        let match_paths = generate_match_paths(&config, base_dir)
+            .into_iter()
+            .collect();
+
+        let filter_title = if let Some(filter_title) = config.filter_title.as_deref() {
+            Some(Regex::new(filter_title)?)
+        } else {
+            None
+        };
+
+        let filter_class = if let Some(filter_class) = config.filter_class.as_deref() {
+            Some(Regex::new(filter_class)?)
+        } else {
+            None
+        };
+
+        let filter_exec = if let Some(filter_exec) = config.filter_exec.as_deref() {
+            Some(Regex::new(filter_exec)?)
+        } else {
+            None
+        };
+
+        Ok(Self {
+            content: config,
+            source_path: path.to_owned(),
+            match_file_paths: match_paths,
+            filter: Filters {
+                title: filter_title,
+                class: filter_class,
+                exec: filter_exec,
+            },
+        })
+    }
+
+    pub fn label(&self) -> &str {
+        if let Some(label) = self.content.label.as_deref() {
+            return label;
+        }
+
+        if let Some(source_path) = self.source_path.to_str() {
+            return source_path;
+        }
+
+        "none"
+    }
+}
 
 /// Struct representing one loaded configuration file.
 #[derive(Debug, Clone, Default)]
@@ -45,20 +176,28 @@ pub struct ProfileFile {
 
     pub(crate) source_path: PathBuf,
 
-    pub(crate) id: ProfileId,
-    pub(crate) match_file_paths: Vec<PathBuf>,
+    pub(crate) match_file_paths: Vec<MatchFileRef>,
 
-    // TODO: Any config file with non-None filters should probably be ignored on Wayland.
-    // TODO: Should we throw an error if the user specifies filters in the default file?
-    //       (We're currently implicitly ignoring filters in the default file.)
-    pub(crate) filter_title: Option<Regex>,
-    pub(crate) filter_class: Option<Regex>,
-    pub(crate) filter_exec: Option<Regex>,
+    pub(crate) filter: Filters,
 }
 
 impl ProfileFile {
-    pub fn id(&self) -> i32 {
-        self.id
+    pub fn from_loaded_profile(
+        loaded: LoadedProfileFile,
+        map: &HashMap<PathBuf, MatchFileRef>,
+    ) -> Self {
+        let match_file_paths = loaded
+            .match_file_paths
+            .into_iter()
+            .filter_map(|path| map.get(&path).copied())
+            .collect();
+
+        Self {
+            content: loaded.content,
+            source_path: loaded.source_path,
+            match_file_paths,
+            filter: loaded.filter,
+        }
     }
 
     pub fn label(&self) -> &str {
@@ -73,54 +212,8 @@ impl ProfileFile {
         "none"
     }
 
-    pub fn match_file_paths(&self) -> &[PathBuf] {
+    pub fn match_file_paths(&self) -> &[MatchFileRef] {
         &self.match_file_paths
-    }
-
-    pub fn is_match(&self, app: &AppProperties) -> bool {
-        if self.filter_title.is_none() && self.filter_exec.is_none() && self.filter_class.is_none()
-        {
-            return false;
-        }
-
-        // let is_os_match = if let Some(filter_os) = self.parsed.filter_os.as_deref() {
-        //     os_matches(filter_os)
-        // } else {
-        //     true
-        // };
-
-        let is_title_match = if let Some(title_regex) = self.filter_title.as_ref() {
-            if let Some(title) = app.title {
-                title_regex.is_match(title)
-            } else {
-                false
-            }
-        } else {
-            true
-        };
-
-        let is_exec_match = if let Some(exec_regex) = self.filter_exec.as_ref() {
-            if let Some(exec) = app.exec {
-                exec_regex.is_match(exec)
-            } else {
-                false
-            }
-        } else {
-            true
-        };
-
-        let is_class_match = if let Some(class_regex) = self.filter_class.as_ref() {
-            if let Some(class) = app.class {
-                class_regex.is_match(class)
-            } else {
-                false
-            }
-        } else {
-            true
-        };
-
-        // All the filters that have been specified must be true to define a match
-        is_exec_match && is_title_match && is_class_match
     }
 
     // If false, espanso will be disabled for the current configuration.
@@ -460,161 +553,115 @@ impl ProfileFile {
           self.match_file_paths(),
         }
     }
+}
 
-    pub fn load_from_path(path: &Path, parent: Option<&Self>) -> Result<Self> {
-        let mut config = ParsedConfig::load(path)?;
+fn aggregate_includes(config: &ParsedConfig) -> HashSet<String> {
+    let mut includes = HashSet::new();
 
-        // Inherit from the parent config if present
-        if let Some(parent) = parent {
-            Self::inherit(&mut config, &parent.content);
+    if config.use_standard_includes.is_none() || config.use_standard_includes.unwrap() {
+        for include in STANDARD_INCLUDES {
+            includes.insert((*include).to_string());
         }
-
-        // Extract the base directory
-        let base_dir = path
-            .parent()
-            .ok_or_else(ResolveError::ParentResolveFailed)?;
-
-        let match_paths = Self::generate_match_paths(&config, base_dir)
-            .into_iter()
-            .collect();
-
-        let filter_title = if let Some(filter_title) = config.filter_title.as_deref() {
-            Some(Regex::new(filter_title)?)
-        } else {
-            None
-        };
-
-        let filter_class = if let Some(filter_class) = config.filter_class.as_deref() {
-            Some(Regex::new(filter_class)?)
-        } else {
-            None
-        };
-
-        let filter_exec = if let Some(filter_exec) = config.filter_exec.as_deref() {
-            Some(Regex::new(filter_exec)?)
-        } else {
-            None
-        };
-
-        Ok(Self {
-            content: config,
-            source_path: path.to_owned(),
-            id: next_id(),
-            match_file_paths: match_paths,
-            filter_title,
-            filter_class,
-            filter_exec,
-        })
     }
 
-    /// Override the `None` fields in the child with the parent's value.
-    fn inherit(child: &mut ParsedConfig, parent: &ParsedConfig) {
-        merge!(
-            ParsedConfig,
-            child,
-            parent,
-            // Fields
-            label,
-            backend,
-            enable,
-            clipboard_threshold,
-            auto_restart,
-            pre_paste_delay,
-            preserve_clipboard,
-            restore_clipboard_delay,
-            paste_shortcut,
-            apply_patch,
-            paste_shortcut_event_delay,
-            disable_x11_fast_inject,
-            toggle_key,
-            inject_delay,
-            key_delay,
-            evdev_modifier_delay,
-            word_separators,
-            backspace_limit,
-            keyboard_layout,
-            search_trigger,
-            search_shortcut,
-            undo_backspace,
-            show_icon,
-            show_notifications,
-            secure_input_notification,
-            emulate_alt_codes,
-            post_form_delay,
-            max_form_width,
-            max_form_height,
-            post_search_delay,
-            win32_exclude_orphan_events,
-            win32_keyboard_layout_cache_interval,
-            x11_use_xclip_backend,
-            x11_use_xdotool_backend,
-            includes,
-            excludes,
-            extra_includes,
-            extra_excludes,
-            use_standard_includes,
-            filter_title,
-            filter_class,
-            filter_exec,
-            filter_os
-        );
-    }
-
-    fn aggregate_includes(config: &ParsedConfig) -> HashSet<String> {
-        let mut includes = HashSet::new();
-
-        if config.use_standard_includes.is_none() || config.use_standard_includes.unwrap() {
-            for include in STANDARD_INCLUDES {
-                includes.insert((*include).to_string());
-            }
+    if let Some(yaml_includes) = config.includes.as_ref() {
+        for include in yaml_includes {
+            includes.insert(include.to_string());
         }
+    };
 
-        if let Some(yaml_includes) = config.includes.as_ref() {
-            for include in yaml_includes {
-                includes.insert(include.to_string());
-            }
-        };
-
-        if let Some(extra_includes) = config.extra_includes.as_ref() {
-            for include in extra_includes {
-                includes.insert(include.to_string());
-            }
-        };
-
-        includes
-    }
-
-    fn aggregate_excludes(config: &ParsedConfig) -> HashSet<String> {
-        let mut excludes = HashSet::new();
-
-        if let Some(yaml_excludes) = config.excludes.as_ref() {
-            for exclude in yaml_excludes {
-                excludes.insert(exclude.to_string());
-            }
+    if let Some(extra_includes) = config.extra_includes.as_ref() {
+        for include in extra_includes {
+            includes.insert(include.to_string());
         }
+    };
 
-        if let Some(extra_excludes) = config.extra_excludes.as_ref() {
-            for exclude in extra_excludes {
-                excludes.insert(exclude.to_string());
-            }
+    includes
+}
+
+fn aggregate_excludes(config: &ParsedConfig) -> HashSet<String> {
+    let mut excludes = HashSet::new();
+
+    if let Some(yaml_excludes) = config.excludes.as_ref() {
+        for exclude in yaml_excludes {
+            excludes.insert(exclude.to_string());
         }
-
-        excludes
     }
 
-    fn generate_match_paths(config: &ParsedConfig, base_dir: &Path) -> HashSet<PathBuf> {
-        let includes = Self::aggregate_includes(config);
-        let excludes = Self::aggregate_excludes(config);
-
-        // Extract the paths
-        let exclude_paths = calculate_paths(base_dir, excludes.iter());
-        let include_paths = calculate_paths(base_dir, includes.iter());
-
-        include_paths
-            .difference(&exclude_paths)
-            .cloned()
-            .collect::<HashSet<_>>()
+    if let Some(extra_excludes) = config.extra_excludes.as_ref() {
+        for exclude in extra_excludes {
+            excludes.insert(exclude.to_string());
+        }
     }
+
+    excludes
+}
+
+fn generate_match_paths(config: &ParsedConfig, base_dir: &Path) -> HashSet<PathBuf> {
+    let includes = aggregate_includes(config);
+    let excludes = aggregate_excludes(config);
+
+    // Extract the paths
+    let exclude_paths = calculate_paths(base_dir, excludes.iter());
+    let include_paths = calculate_paths(base_dir, includes.iter());
+
+    include_paths
+        .difference(&exclude_paths)
+        .cloned()
+        .collect::<HashSet<_>>()
+}
+
+/// Override the `None` fields in the child with the parent's value.
+fn inherit(child: &mut ParsedConfig, parent: &ParsedConfig) {
+    merge!(
+        ParsedConfig,
+        child,
+        parent,
+        // Fields
+        label,
+        backend,
+        enable,
+        clipboard_threshold,
+        auto_restart,
+        pre_paste_delay,
+        preserve_clipboard,
+        restore_clipboard_delay,
+        paste_shortcut,
+        apply_patch,
+        paste_shortcut_event_delay,
+        disable_x11_fast_inject,
+        toggle_key,
+        inject_delay,
+        key_delay,
+        evdev_modifier_delay,
+        word_separators,
+        backspace_limit,
+        keyboard_layout,
+        search_trigger,
+        search_shortcut,
+        undo_backspace,
+        show_icon,
+        show_notifications,
+        secure_input_notification,
+        emulate_alt_codes,
+        post_form_delay,
+        max_form_width,
+        max_form_height,
+        post_search_delay,
+        win32_exclude_orphan_events,
+        win32_keyboard_layout_cache_interval,
+        x11_use_xclip_backend,
+        x11_use_xdotool_backend,
+        includes,
+        excludes,
+        extra_includes,
+        extra_excludes,
+        use_standard_includes,
+        filter_title,
+        filter_class,
+        filter_exec,
+        filter_os
+    );
 }
 
 #[derive(Error, Debug)]
@@ -633,7 +680,7 @@ mod tests {
     #[test]
     fn aggregate_includes_empty_config() {
         assert_eq!(
-            ProfileFile::aggregate_includes(&ParsedConfig {
+            aggregate_includes(&ParsedConfig {
                 ..Default::default()
             }),
             ["../match/**/[!_]*.yml".to_string()]
@@ -646,7 +693,7 @@ mod tests {
     #[test]
     fn aggregate_includes_no_standard() {
         assert_eq!(
-            ProfileFile::aggregate_includes(&ParsedConfig {
+            aggregate_includes(&ParsedConfig {
                 use_standard_includes: Some(false),
                 ..Default::default()
             }),
@@ -657,7 +704,7 @@ mod tests {
     #[test]
     fn aggregate_includes_custom_includes() {
         assert_eq!(
-            ProfileFile::aggregate_includes(&ParsedConfig {
+            aggregate_includes(&ParsedConfig {
                 includes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
             }),
@@ -674,7 +721,7 @@ mod tests {
     #[test]
     fn aggregate_includes_extra_includes() {
         assert_eq!(
-            ProfileFile::aggregate_includes(&ParsedConfig {
+            aggregate_includes(&ParsedConfig {
                 extra_includes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
             }),
@@ -691,7 +738,7 @@ mod tests {
     #[test]
     fn aggregate_includes_includes_and_extra_includes() {
         assert_eq!(
-            ProfileFile::aggregate_includes(&ParsedConfig {
+            aggregate_includes(&ParsedConfig {
                 includes: Some(vec!["sub/*.yml".to_string()]),
                 extra_includes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
@@ -710,7 +757,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_empty_config() {
         assert_eq!(
-            ProfileFile::aggregate_excludes(&ParsedConfig {
+            aggregate_excludes(&ParsedConfig {
                 ..Default::default()
             })
             .len(),
@@ -721,7 +768,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_no_standard() {
         assert_eq!(
-            ProfileFile::aggregate_excludes(&ParsedConfig {
+            aggregate_excludes(&ParsedConfig {
                 use_standard_includes: Some(false),
                 ..Default::default()
             }),
@@ -732,7 +779,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_custom_excludes() {
         assert_eq!(
-            ProfileFile::aggregate_excludes(&ParsedConfig {
+            aggregate_excludes(&ParsedConfig {
                 excludes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
             }),
@@ -746,7 +793,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_extra_excludes() {
         assert_eq!(
-            ProfileFile::aggregate_excludes(&ParsedConfig {
+            aggregate_excludes(&ParsedConfig {
                 extra_excludes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
             }),
@@ -760,7 +807,7 @@ mod tests {
     #[test]
     fn aggregate_excludes_excludes_and_extra_excludes() {
         assert_eq!(
-            ProfileFile::aggregate_excludes(&ParsedConfig {
+            aggregate_excludes(&ParsedConfig {
                 excludes: Some(vec!["sub/*.yml".to_string()]),
                 extra_excludes: Some(vec!["custom/*.yml".to_string()]),
                 ..Default::default()
@@ -783,7 +830,7 @@ mod tests {
         };
         assert_eq!(child.use_standard_includes, None);
 
-        ProfileFile::inherit(&mut child, &parent);
+        inherit(&mut child, &parent);
         assert_eq!(child.use_standard_includes, Some(false));
     }
 
@@ -799,7 +846,7 @@ mod tests {
         };
         assert_eq!(child.use_standard_includes, Some(false));
 
-        ProfileFile::inherit(&mut child, &parent);
+        inherit(&mut child, &parent);
         assert_eq!(child.use_standard_includes, Some(false));
     }
 
@@ -821,12 +868,12 @@ mod tests {
             let config_file = config_dir.join("default.yml");
             std::fs::write(&config_file, "").unwrap();
 
-            let config = ProfileFile::load_from_path(&config_file, None).unwrap();
+            let config = LoadedProfileFile::load_from_path(&config_file, None).unwrap();
 
             let mut expected = vec![base_file, another_file, sub_file];
             expected.sort();
 
-            let mut result = config.match_file_paths().to_vec();
+            let mut result = config.match_file_paths.to_vec();
             result.sort();
 
             assert_eq!(result, expected.as_slice());
@@ -872,19 +919,19 @@ mod tests {
             )
             .unwrap();
 
-            let parent = ProfileFile::load_from_path(&parent_file, None).unwrap();
-            let child = ProfileFile::load_from_path(&config_file, Some(&parent)).unwrap();
+            let parent = LoadedProfileFile::load_from_path(&parent_file, None).unwrap();
+            let child = LoadedProfileFile::load_from_path(&config_file, Some(&parent)).unwrap();
 
             let mut expected = vec![sub_file, sub_under_file];
             expected.sort();
 
-            let mut result = child.match_file_paths().to_vec();
+            let mut result = child.match_file_paths.to_vec();
             result.sort();
             assert_eq!(result, expected.as_slice());
 
             let expected = vec![base_file];
 
-            assert_eq!(parent.match_file_paths(), expected.as_slice());
+            assert_eq!(parent.match_file_paths, expected.as_slice());
         });
     }
 
@@ -906,12 +953,12 @@ mod tests {
             let config_file = config_dir.join("default.yml");
             std::fs::write(&config_file, "extra_includes: ['../match/_sub.yml']").unwrap();
 
-            let config = ProfileFile::load_from_path(&config_file, None).unwrap();
+            let config = LoadedProfileFile::load_from_path(&config_file, None).unwrap();
 
             let mut expected = vec![base_file, another_file, sub_file, under_file];
             expected.sort();
 
-            let mut result = config.match_file_paths().to_vec();
+            let mut result = config.match_file_paths.to_vec();
             result.sort();
 
             assert_eq!(result, expected.as_slice());
@@ -925,9 +972,9 @@ mod tests {
             let config_file = config_dir.join("default.yml");
             std::fs::write(&config_file, config).unwrap();
 
-            let config = ProfileFile::load_from_path(&config_file, None).unwrap();
+            let config = LoadedProfileFile::load_from_path(&config_file, None).unwrap();
 
-            *result_ref = config.is_match(app);
+            *result_ref = config.filter.is_match(app);
         });
         result
     }

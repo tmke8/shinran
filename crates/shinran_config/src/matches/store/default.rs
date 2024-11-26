@@ -21,8 +21,8 @@ use super::MatchesAndGlobalVars;
 use crate::{error::NonFatalErrorSet, matches::group::LoadedMatchFile};
 use anyhow::Context;
 use shinran_types::{
-    BaseMatch, MatchCause, RegexMatchRef, RegexMatchStore, TrigMatchRef, TrigMatchStore,
-    TriggerMatch, VarRef, VarStore,
+    BaseMatch, MatchCause, MatchFilePathStore, MatchFileRef, RegexMatchRef, RegexMatchStore,
+    TrigMatchRef, TrigMatchStore, TriggerMatch, VarRef, VarStore,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -31,7 +31,7 @@ use std::{
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct IndexedMatchFile {
-    pub imports: Vec<PathBuf>,
+    pub imports: Vec<MatchFileRef>,
     pub global_vars: Vec<VarRef>,
     pub trigger_matches: Vec<TrigMatchRef>,
     pub regex_matches: Vec<RegexMatchRef>,
@@ -42,21 +42,31 @@ pub struct IndexedMatchFile {
 /// We first have hash map of all match files, indexed by their file system path.
 /// Then inside the match files, we have a vector of matches and a vector of global variables.
 pub struct MatchStore {
-    pub indexed_files: HashMap<PathBuf, IndexedMatchFile>,
+    pub indexed_files: HashMap<MatchFileRef, IndexedMatchFile>,
     pub trigger_matches: TrigMatchStore,
     pub regex_matches: RegexMatchStore,
     pub global_vars: VarStore,
 }
 
 impl MatchStore {
-    pub fn load(paths: &[PathBuf]) -> (Self, Vec<NonFatalErrorSet>) {
+    pub fn load(
+        paths: &[PathBuf],
+    ) -> (Self, HashMap<PathBuf, MatchFileRef>, Vec<NonFatalErrorSet>) {
         let mut loaded_files = HashMap::new();
         let mut non_fatal_error_sets = Vec::new();
+        let mut match_file_map = HashMap::new();
+        let mut match_file_store = MatchFilePathStore::new();
 
         // Because match files can import other match files,
         // we have to load them recursively starting from the
         // top-level ones.
-        load_match_files_recursively(&mut loaded_files, paths, &mut non_fatal_error_sets);
+        load_match_files_recursively(
+            &mut loaded_files,
+            &mut match_file_map,
+            &mut match_file_store,
+            paths,
+            &mut non_fatal_error_sets,
+        );
 
         let mut indexed_files = HashMap::new();
         let mut trigger_matches = TrigMatchStore::new();
@@ -96,8 +106,14 @@ impl MatchStore {
                 global_vars_ids.push(idx);
             }
 
+            let imports = match_file
+                .imports
+                .iter()
+                .filter_map(|path| match_file_map.get(path).copied())
+                .collect::<_>();
+
             let indexed_file = IndexedMatchFile {
-                imports: match_file.imports,
+                imports,
                 global_vars: global_vars_ids,
                 trigger_matches: trigger_ids,
                 regex_matches: regex_ids,
@@ -112,6 +128,7 @@ impl MatchStore {
                 regex_matches,
                 global_vars,
             },
+            match_file_map,
             non_fatal_error_sets,
         )
     }
@@ -126,7 +143,7 @@ impl MatchStore {
     /// Returns all matches and global vars that were defined in the given paths.
     ///
     /// This function recursively loads all the matches in the given paths and their imports.
-    pub fn collect_matches_and_global_vars(&self, paths: &[PathBuf]) -> MatchesAndGlobalVars {
+    pub fn collect_matches_and_global_vars(&self, paths: &[MatchFileRef]) -> MatchesAndGlobalVars {
         let mut visited_paths = HashSet::new();
         let mut visited_trigger_matches = HashSet::new();
         let mut visited_regex_matches = HashSet::new();
@@ -148,18 +165,18 @@ impl MatchStore {
         }
     }
 
-    pub fn loaded_paths(&self) -> Vec<PathBuf> {
-        self.indexed_files.keys().cloned().collect()
+    pub fn loaded_paths(&self) -> Vec<MatchFileRef> {
+        self.indexed_files.keys().copied().collect()
     }
 }
 
 fn query_matches_for_paths(
-    indexed_files: &HashMap<PathBuf, IndexedMatchFile>,
-    visited_paths: &mut HashSet<PathBuf>,
+    indexed_files: &HashMap<MatchFileRef, IndexedMatchFile>,
+    visited_paths: &mut HashSet<MatchFileRef>,
     visited_trigger_matches: &mut HashSet<TrigMatchRef>,
     visited_regex_matches: &mut HashSet<RegexMatchRef>,
     visited_global_vars: &mut HashSet<VarRef>,
-    paths: &[PathBuf],
+    paths: &[MatchFileRef],
 ) {
     for path in paths {
         if visited_paths.contains(path) {
@@ -202,31 +219,41 @@ fn query_matches_for_paths(
 ///
 /// This function fills up the `groups` HashMap with the loaded match groups.
 fn load_match_files_recursively(
-    groups: &mut HashMap<PathBuf, LoadedMatchFile>,
+    loaded_files: &mut HashMap<MatchFileRef, LoadedMatchFile>,
+    match_file_map: &mut HashMap<PathBuf, MatchFileRef>,
+    match_file_store: &mut MatchFilePathStore,
     paths: &[PathBuf],
     non_fatal_error_sets: &mut Vec<NonFatalErrorSet>,
 ) {
-    for path in paths {
-        if groups.contains_key(path) {
+    for match_file_path in paths {
+        if match_file_map.contains_key(match_file_path) {
             continue; // Already loaded
         }
 
-        let group_path = PathBuf::from(path);
-        match LoadedMatchFile::load(&group_path)
-            .with_context(|| format!("unable to load match group {group_path:?}"))
+        match LoadedMatchFile::load(&match_file_path)
+            .with_context(|| format!("unable to load match group {match_file_path:?}"))
         {
             Ok((group, non_fatal_error_set)) => {
-                let imports = group.imports.clone();
-                groups.insert(path.clone(), group);
+                // TODO: Restructure code to avoid cloning here.
+                let imports = &group.imports.clone();
+                let file_ref = match_file_store.add(match_file_path.clone());
+                loaded_files.insert(file_ref, group);
+                match_file_map.insert(match_file_path.clone(), file_ref);
 
                 if let Some(non_fatal_error_set) = non_fatal_error_set {
                     non_fatal_error_sets.push(non_fatal_error_set);
                 }
 
-                load_match_files_recursively(groups, &imports, non_fatal_error_sets);
+                load_match_files_recursively(
+                    loaded_files,
+                    match_file_map,
+                    match_file_store,
+                    imports,
+                    non_fatal_error_sets,
+                );
             }
             Err(err) => {
-                non_fatal_error_sets.push(NonFatalErrorSet::single_error(&group_path, err));
+                non_fatal_error_sets.push(NonFatalErrorSet::single_error(&match_file_path, err));
             }
         }
     }
@@ -329,13 +356,13 @@ mod tests {
             )
             .unwrap();
 
-            let (match_store, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
+            let (match_store, map, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
             assert_eq!(non_fatal_error_sets.len(), 0);
             assert_eq!(match_store.indexed_files.len(), 3);
 
             let base_group = &match_store
                 .indexed_files
-                .get(&base_file)
+                .get(map.get(&base_file).unwrap())
                 .unwrap()
                 .trigger_matches;
             let base_group: Vec<(Vec<String>, TriggerMatch)> = base_group
@@ -347,7 +374,7 @@ mod tests {
 
             let another_group = &match_store
                 .indexed_files
-                .get(&another_file)
+                .get(map.get(&another_file).unwrap())
                 .unwrap()
                 .trigger_matches;
             let another_group: Vec<(Vec<String>, TriggerMatch)> = another_group
@@ -361,7 +388,7 @@ mod tests {
 
             let sub_group = &match_store
                 .indexed_files
-                .get(&sub_file)
+                .get(map.get(&sub_file).unwrap())
                 .unwrap()
                 .trigger_matches;
             let sub_group: Vec<(Vec<String>, TriggerMatch)> = sub_group
@@ -422,7 +449,7 @@ mod tests {
             )
             .unwrap();
 
-            let (match_store, non_fatal_error_sets) = MatchStore::load(&[base_file]);
+            let (match_store, _, non_fatal_error_sets) = MatchStore::load(&[base_file]);
 
             assert_eq!(match_store.indexed_files.len(), 3);
             assert_eq!(non_fatal_error_sets.len(), 0);
@@ -484,10 +511,11 @@ mod tests {
             )
             .unwrap();
 
-            let (match_store, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
+            let (match_store, map, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
             assert_eq!(non_fatal_error_sets.len(), 0);
 
-            let match_set = match_store.collect_matches_and_global_vars(&[base_file]);
+            let match_set =
+                match_store.collect_matches_and_global_vars(&[*map.get(&base_file).unwrap()]);
 
             let mut matches = match_set
                 .trigger_matches
@@ -575,10 +603,11 @@ mod tests {
             )
             .unwrap();
 
-            let (match_store, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
+            let (match_store, map, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
             assert_eq!(non_fatal_error_sets.len(), 0);
 
-            let match_set = match_store.collect_matches_and_global_vars(&[base_file]);
+            let match_set =
+                match_store.collect_matches_and_global_vars(&[*map.get(&base_file).unwrap()]);
             let mut matches = match_set
                 .trigger_matches
                 .into_iter()
@@ -659,11 +688,14 @@ mod tests {
             )
             .unwrap();
 
-            let (match_store, non_fatal_error_sets) =
-                MatchStore::load(&[base_file.clone(), sub_file.clone()]);
+            let paths = [base_file, sub_file];
+            let (match_store, map, non_fatal_error_sets) = MatchStore::load(&paths);
             assert_eq!(non_fatal_error_sets.len(), 0);
 
-            let match_set = match_store.collect_matches_and_global_vars(&[base_file, sub_file]);
+            let match_set = match_store.collect_matches_and_global_vars(&[
+                *map.get(&paths[0]).unwrap(),
+                *map.get(&paths[1]).unwrap(),
+            ]);
             let mut matches = match_set
                 .trigger_matches
                 .into_iter()
@@ -747,10 +779,13 @@ mod tests {
             )
             .unwrap();
 
-            let (match_store, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
+            let (match_store, map, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
             assert_eq!(non_fatal_error_sets.len(), 0);
 
-            let match_set = match_store.collect_matches_and_global_vars(&[base_file, sub_file]);
+            let match_set = match_store.collect_matches_and_global_vars(&[
+                *map.get(&base_file).unwrap(),
+                *map.get(&sub_file).unwrap(),
+            ]);
             let mut matches = match_set
                 .trigger_matches
                 .into_iter()

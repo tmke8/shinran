@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{BaseMatch, TriggerMatch, Variable};
 
 #[derive(Debug)]
@@ -124,5 +126,43 @@ impl RegexMatchStore {
             .iter()
             .enumerate()
             .map(|(idx, elem)| (RegexMatchRef { idx }, elem))
+    }
+}
+
+#[repr(transparent)]
+pub struct MatchFilePathStore {
+    paths: Vec<PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[repr(transparent)]
+pub struct MatchFileRef {
+    idx: usize,
+}
+
+impl MatchFilePathStore {
+    #[inline]
+    pub fn new() -> Self {
+        Self { paths: Vec::new() }
+    }
+
+    #[inline]
+    pub fn add(&mut self, path: PathBuf) -> MatchFileRef {
+        let idx = self.paths.len();
+        self.paths.push(path);
+        MatchFileRef { idx }
+    }
+
+    #[inline]
+    pub fn get(&self, ref_: MatchFileRef) -> &PathBuf {
+        &self.paths[ref_.idx]
+    }
+
+    #[inline]
+    pub fn enumerate(&self) -> impl Iterator<Item = (MatchFileRef, &PathBuf)> {
+        self.paths
+            .iter()
+            .enumerate()
+            .map(|(idx, elem)| (MatchFileRef { idx }, elem))
     }
 }
