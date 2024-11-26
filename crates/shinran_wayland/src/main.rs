@@ -42,7 +42,7 @@ mod input_context;
 use input_context::{InputContext, RepeatTimer};
 
 // TODO: Replace with a `OnceLock` when we want to actually parse CLI arguments.
-static STORES: LazyLock<Configuration> = LazyLock::new(|| {
+static CONFIG: LazyLock<Configuration> = LazyLock::new(|| {
     let cli_overrides = HashMap::new();
     Configuration::new(&cli_overrides)
 });
@@ -52,7 +52,7 @@ fn main() {
     env_logger::init();
 
     // Set up the backend.
-    let backend = Backend::new(&STORES).unwrap();
+    let backend = Backend::new(&CONFIG).unwrap();
 
     // Set up the Wayland connection.
     let conn = Connection::connect_to_env()

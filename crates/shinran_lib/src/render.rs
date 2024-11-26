@@ -35,16 +35,16 @@ use crate::{
 
 pub struct RendererAdapter<'store> {
     pub combined_cache: match_cache::CombinedMatchCache<'store>,
-    pub stores: &'store Configuration,
+    pub configuration: &'store Configuration,
 }
 
 impl<'store> RendererAdapter<'store> {
     pub fn new(
         combined_cache: crate::match_cache::CombinedMatchCache<'store>,
-        stores: &'store Configuration,
+        configuration: &'store Configuration,
     ) -> Self {
         Self {
-            stores,
+            configuration,
             combined_cache,
         }
     }
@@ -60,7 +60,7 @@ impl<'store> RendererAdapter<'store> {
             class: None,
             exec: None,
         };
-        self.stores.profiles.active_config(&info)
+        self.configuration.profile_store.active_config(&info)
     }
 
     pub fn render(
@@ -77,7 +77,8 @@ impl<'store> RendererAdapter<'store> {
 
         let (effect, propagate_case, preferred_uppercasing_style) = match match_id {
             MatchIdx::Trigger(idx) => {
-                let (expected_triggers, m) = &self.stores.matches.trigger_matches.get(idx);
+                let (expected_triggers, m) =
+                    &self.configuration.match_store.trigger_matches.get(idx);
                 if let Some(trigger) = trigger {
                     // If we are not propagating case, we have to make sure that the trigger matches
                     // one of the expected triggers exactly.
@@ -92,7 +93,13 @@ impl<'store> RendererAdapter<'store> {
                 )
             }
             MatchIdx::Regex(idx) => (
-                &self.stores.matches.regex_matches.get(idx).1.effect,
+                &self
+                    .configuration
+                    .match_store
+                    .regex_matches
+                    .get(idx)
+                    .1
+                    .effect,
                 false,
                 None,
             ),
@@ -145,9 +152,9 @@ impl<'store> RendererAdapter<'store> {
         };
 
         let context = Context {
-            matches: &self.stores.matches.trigger_matches,
+            matches: &self.configuration.match_store.trigger_matches,
             matches_map: self.combined_cache.user_match_cache.matches(active_profile),
-            global_vars: &self.stores.matches.global_vars,
+            global_vars: &self.configuration.match_store.global_vars,
             global_vars_map: self
                 .combined_cache
                 .user_match_cache
@@ -155,7 +162,7 @@ impl<'store> RendererAdapter<'store> {
         };
 
         match self
-            .stores
+            .configuration
             .renderer
             .render_template(template, context, &options)
         {

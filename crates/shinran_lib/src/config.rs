@@ -6,8 +6,8 @@ use shinran_config::{config::ProfileStore, matches::store::MatchStore};
 use crate::{get_path_override, load, path};
 
 pub struct Configuration {
-    pub profiles: ProfileStore,
-    pub matches: MatchStore,
+    pub profile_store: ProfileStore,
+    pub match_store: MatchStore,
     /// Renderer for the variables.
     pub renderer: shinran_render::Renderer,
 }
@@ -31,8 +31,6 @@ impl Configuration {
         info!("using runtime dir: {:?}", paths.runtime);
 
         let config_result = load::load_config(&paths.config).expect("unable to load config");
-        let profile_store = config_result.profile_store;
-        let match_store = config_result.match_store;
 
         let home_path = dirs::home_dir().expect("unable to obtain home dir path");
         let base_path = &paths.config;
@@ -40,8 +38,8 @@ impl Configuration {
         let renderer = shinran_render::Renderer::new(base_path, &home_path, packages_path);
 
         Configuration {
-            profiles: profile_store,
-            matches: match_store,
+            profile_store: config_result.profile_store,
+            match_store: config_result.match_store,
             renderer,
         }
     }

@@ -42,7 +42,7 @@ impl Factory {
 }
 
 // TODO: Replace with a `OnceLock` when we want to actually parse CLI arguments.
-static STORES: LazyLock<Configuration> = LazyLock::new(|| {
+static CONFIG: LazyLock<Configuration> = LazyLock::new(|| {
     let cli_overrides = HashMap::new();
     Configuration::new(&cli_overrides)
 });
@@ -53,7 +53,7 @@ async fn main() -> zbus::Result<()> {
     env_logger::init();
     info!("Program started!");
     // Set up the backend.
-    let backend = Backend::new(&STORES).unwrap();
+    let backend = Backend::new(&CONFIG).unwrap();
     // Set up the factory.
     let event = Arc::new(Event::new());
     let factory = Factory {

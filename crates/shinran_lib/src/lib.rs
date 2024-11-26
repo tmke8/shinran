@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use log::{error, info};
+use log::error;
 use nucleo_matcher::pattern;
 use shinran_config::{config::ProfileStore, matches::store::MatchStore};
 use shinran_types::{RegexMatchRef, TrigMatchRef};
@@ -41,14 +41,16 @@ pub struct Backend<'store> {
 }
 
 impl<'store> Backend<'store> {
-    pub fn new(stores: &'store Configuration) -> anyhow::Result<Self> {
-        let match_cache = match_cache::MatchCache::load(&stores.profiles, &stores.matches);
-        let regex_matches = get_regex_matches(&stores.profiles, &stores.matches);
+    pub fn new(configuration: &'store Configuration) -> anyhow::Result<Self> {
+        let match_cache =
+            match_cache::MatchCache::load(&configuration.profile_store, &configuration.match_store);
+        let regex_matches =
+            get_regex_matches(&configuration.profile_store, &configuration.match_store);
 
         let builtin_matches = builtin::get_builtin_matches();
         let combined_cache =
             match_cache::CombinedMatchCache::load(match_cache, builtin_matches, regex_matches);
-        let adapter = render::RendererAdapter::new(combined_cache, &stores);
+        let adapter = render::RendererAdapter::new(combined_cache, &configuration);
 
         let matcher = nucleo_matcher::Matcher::new(nucleo_matcher::Config::DEFAULT);
         Ok(Backend {
