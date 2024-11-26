@@ -19,22 +19,19 @@
 
 use std::collections::HashMap;
 
-// use thiserror::Error;
-
-// pub mod extension;
-
 use shinran_config::ProfileRef;
 use shinran_render::{CasingStyle, Context, RenderOptions};
 use shinran_types::{MatchEffect, MatchIdx, Params, UpperCasingStyle, Value, VarType, Variable};
 
 use crate::{
+    config::Configuration,
     engine::RendererError,
     match_cache::{self},
-    Configuration,
 };
 
 pub struct RendererAdapter<'store> {
     pub combined_cache: match_cache::CombinedMatchCache<'store>,
+    /// Configuration of the shinran instance.
     pub configuration: &'store Configuration,
 }
 
@@ -70,11 +67,6 @@ impl<'store> RendererAdapter<'store> {
         trigger_vars: HashMap<String, String>,
         active_profile: ProfileRef,
     ) -> anyhow::Result<String> {
-        // let Some(Some(template)) = self.template_map.get(&match_id) else {
-        //     // Found no template for the given match ID.
-        //     return Err(RendererError::NotFound.into());
-        // };
-
         let (effect, propagate_case, preferred_uppercasing_style) = match match_id {
             MatchIdx::Trigger(idx) => {
                 let (expected_triggers, m) =

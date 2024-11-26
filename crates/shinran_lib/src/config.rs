@@ -5,6 +5,7 @@ use shinran_config::{config::ProfileStore, matches::store::MatchStore};
 
 use crate::{get_path_override, load, path};
 
+/// A struct containing all the information that was loaded from match files and config files.
 pub struct Configuration {
     pub profile_store: ProfileStore,
     pub match_store: MatchStore,
