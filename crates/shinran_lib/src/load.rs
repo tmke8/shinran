@@ -18,8 +18,8 @@
  */
 
 use anyhow::{Context, Result};
-use shinran_config::{config::ProfileStore, error::ErrorLevel, matches::store::MatchStore};
 use log::{error, info, warn};
+use shinran_config::{config::ProfileStore, error::ErrorLevel, matches::store::MatchStore};
 use std::path::Path;
 
 const DEFAULT_CONFIG_FILE_CONTENT: &str = include_str!("./res/config/default.yml");

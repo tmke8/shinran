@@ -18,14 +18,22 @@
  */
 
 use anyhow::Result;
+use shinran_types::{BaseMatch, TriggerMatch};
 use std::path::{Path, PathBuf};
 
 use crate::error::NonFatalErrorSet;
 
-use super::{LoadedMatch, Variable};
+use super::Variable;
 
 pub(crate) mod loader;
 mod path;
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct MatchFile {
+    pub global_vars: Vec<Variable>,
+    pub trigger_matches: Vec<TriggerMatch>,
+    pub regex_matches: Vec<BaseMatch>,
+}
 
 /// A `LoadedMatchFile` describes one file in the `match` directory.
 ///
@@ -34,13 +42,45 @@ mod path;
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct LoadedMatchFile {
     pub imports: Vec<PathBuf>,
-    pub global_vars: Vec<Variable>,
-    pub matches: Vec<LoadedMatch>,
+    pub content: MatchFile,
 }
 
 impl LoadedMatchFile {
     // TODO: test
     pub fn load(file_path: &Path) -> Result<(Self, Option<NonFatalErrorSet>)> {
         loader::load_match_file(file_path)
+    }
+}
+
+#[repr(transparent)]
+pub struct MatchFileStore {
+    files: Vec<LoadedMatchFile>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[repr(transparent)]
+pub struct MatchFileRef {
+    idx: usize,
+}
+
+impl MatchFileStore {
+    #[inline]
+    pub fn new() -> Self {
+        Self { files: Vec::new() }
+    }
+
+    #[inline]
+    pub fn add(&mut self, file: LoadedMatchFile) -> MatchFileRef {
+        let idx = self.files.len();
+        self.files.push(file);
+        MatchFileRef { idx }
+    }
+
+    #[inline]
+    pub fn into_enumerate(self) -> impl Iterator<Item = (MatchFileRef, LoadedMatchFile)> {
+        self.files
+            .into_iter()
+            .enumerate()
+            .map(|(idx, elem)| (MatchFileRef { idx }, elem))
     }
 }

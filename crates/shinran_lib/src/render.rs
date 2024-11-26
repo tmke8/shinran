@@ -19,7 +19,7 @@
 
 use std::collections::HashMap;
 
-use shinran_config::ProfileRef;
+use shinran_config::config::ProfileRef;
 use shinran_render::{CasingStyle, Context, RenderOptions};
 use shinran_types::{MatchEffect, MatchIdx, Params, UpperCasingStyle, Value, VarType, Variable};
 

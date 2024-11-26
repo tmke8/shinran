@@ -22,7 +22,7 @@ use std::ffi::OsStr;
 use crate::{
     error::{ErrorRecord, NonFatalErrorSet},
     matches::{
-        group::{path::resolve_imports, LoadedMatchFile},
+        group::{path::resolve_imports, LoadedMatchFile, MatchFile},
         LoadedMatch,
     },
 };
@@ -31,8 +31,9 @@ use lazy_static::lazy_static;
 use parse::YAMLMatchFile;
 use regex::{Captures, Regex};
 use shinran_types::{
-    ImageEffect, MatchCause, MatchEffect, Params, RegexCause, TextEffect, TextFormat,
-    TextInjectMode, TriggerCause, UpperCasingStyle, Value, VarType, Variable, WordBoundary,
+    BaseMatch, ImageEffect, Match, MatchCause, MatchEffect, Params, RegexCause, RegexMatch,
+    TextEffect, TextFormat, TextInjectMode, TriggerCause, TriggerMatch, UpperCasingStyle, Value,
+    VarType, Variable, WordBoundary,
 };
 
 use self::{
@@ -92,9 +93,11 @@ impl YAMLImporter {
             }
         }
 
-        let mut matches = Vec::new();
+        let mut trigger_matches = Vec::new();
+        let mut regex_matches = Vec::new();
         for yaml_match in yaml_loaded.matches.clone().unwrap_or_default() {
             match try_convert_into_match(yaml_match, false) {
+                // CONTINUE HERE
                 Ok((m, warnings)) => {
                     matches.push(m);
                     non_fatal_errors.extend(warnings.into_iter().map(ErrorRecord::warn));
@@ -120,8 +123,11 @@ impl YAMLImporter {
         Ok((
             LoadedMatchFile {
                 imports: resolved_imports,
-                global_vars,
-                matches,
+                content: MatchFile {
+                    global_vars,
+                    trigger_matches,
+                    regex_matches,
+                },
             },
             non_fatal_error_set,
         ))
@@ -132,7 +138,7 @@ impl YAMLImporter {
 pub fn try_convert_into_match(
     yaml_match: YAMLMatch,
     use_compatibility_mode: bool,
-) -> Result<(LoadedMatch, Vec<Warning>)> {
+) -> Result<(Match, Vec<Warning>)> {
     let mut warnings = Vec::new();
 
     if yaml_match.uppercase_style.is_some() && yaml_match.propagate_case.is_none() {
@@ -305,12 +311,24 @@ pub fn try_convert_into_match(
     );
     }
 
+    let base = BaseMatch {
+        effect,
+        label: yaml_match.label,
+        search_terms: yaml_match.search_terms.unwrap_or_default(),
+    };
+
     Ok((
-        LoadedMatch {
-            cause,
-            effect,
-            label: yaml_match.label,
-            search_terms: yaml_match.search_terms.unwrap_or_default(),
+        match cause {
+            MatchCause::Regex(regex) => Match::Regex(RegexMatch {
+                regex: regex.regex,
+                base_match: base,
+            }),
+            MatchCause::Trigger(trigger) => Match::Trigger(TriggerMatch {
+                triggers: trigger.triggers,
+                base_match: base,
+                propagate_case: trigger.propagate_case,
+                uppercase_style: trigger.uppercase_style,
+            }),
         },
         warnings,
     ))
@@ -357,14 +375,14 @@ mod tests {
     fn create_match_with_warnings(
         yaml: &str,
         use_compatibility_mode: bool,
-    ) -> Result<(LoadedMatch, Vec<Warning>)> {
+    ) -> Result<(Match, Vec<Warning>)> {
         let yaml_match: YAMLMatch = serde_yaml_ng::from_str(yaml)?;
         let (m, warnings) = try_convert_into_match(yaml_match, use_compatibility_mode)?;
 
         Ok((m, warnings))
     }
 
-    fn create_match(yaml: &str) -> Result<LoadedMatch> {
+    fn create_match(yaml: &str) -> Result<Match> {
         let (m, warnings) = create_match_with_warnings(yaml, false)?;
         assert!(
             warnings.is_empty(),
@@ -896,18 +914,21 @@ mod tests {
                 file,
                 LoadedMatchFile {
                     imports: vec![sub_file],
-                    global_vars: vars,
-                    matches: vec![LoadedMatch {
-                        cause: MatchCause::Trigger(TriggerCause {
+                    content: MatchFile {
+                        global_vars: vars,
+                        trigger_matches: vec![TriggerMatch {
                             triggers: vec!["hello".to_string()],
+                            base_match: BaseMatch {
+                                effect: MatchEffect::Text(TextEffect {
+                                    body: "world".to_string(),
+                                    ..Default::default()
+                                }),
+                                ..Default::default()
+                            },
                             ..Default::default()
-                        }),
-                        effect: MatchEffect::Text(TextEffect {
-                            body: "world".to_string(),
-                            ..Default::default()
-                        }),
+                        }],
                         ..Default::default()
-                    }],
+                    }
                 }
             );
         });

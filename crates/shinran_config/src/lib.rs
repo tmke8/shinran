@@ -22,15 +22,12 @@ use std::path::Path;
 use thiserror::Error;
 
 pub mod config;
-mod counter;
 pub mod error;
 pub mod matches;
 mod util;
 
-use config::store::ProfileStore;
+use config::ProfileStore;
 use matches::store::MatchStore;
-
-pub use config::store::ProfileRef;
 
 type LoadableConfig = (ProfileStore, MatchStore, Vec<error::NonFatalErrorSet>);
 
@@ -46,7 +43,9 @@ pub fn load(base_path: &Path) -> Result<LoadableConfig> {
         .into_iter()
         .collect();
 
-    let (match_store, non_fatal_match_errors) = matches::store::load(&root_paths);
+    let (match_store, map, non_fatal_match_errors) = matches::store::load(&root_paths);
+
+    let profile_store = ProfileStore::resolve_paths(profile_store, &map);
 
     let mut non_fatal_errors = Vec::new();
     non_fatal_errors.extend(non_fatal_config_errors);
@@ -240,6 +239,8 @@ mod tests {
             .unwrap();
 
             let (config_store, match_store, errors) = load(base).unwrap();
+
+            println!("{:?}", errors);
 
             assert_eq!(errors.len(), 3);
             // It shouldn't have loaded the "config.yml" one because of the YAML error

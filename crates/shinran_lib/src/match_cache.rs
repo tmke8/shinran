@@ -20,9 +20,7 @@
 use std::collections::HashMap;
 
 use shinran_config::{
-    config::{ProfileFile, ProfileStore},
-    matches::store::MatchStore,
-    ProfileRef,
+    config::ProfileFile, config::ProfileRef, config::ProfileStore, matches::store::MatchStore,
 };
 use shinran_types::{MatchIdx, RegexMatchRef, TrigMatchRef, VarRef};
 
@@ -40,10 +38,8 @@ pub struct MatchCache<'store> {
 
 impl<'store> MatchCache<'store> {
     pub fn load(profile_store: &'store ProfileStore, match_store: &'store MatchStore) -> Self {
-        let mut trigger_profiles: HashMap<ProfileRef, HashMap<&'store str, TrigMatchRef>> =
-            HashMap::new();
-        let mut global_var_profiles: HashMap<ProfileRef, HashMap<&'store str, VarRef>> =
-            HashMap::new();
+        let mut trigger_profiles = HashMap::new();
+        let mut global_var_profiles = HashMap::new();
 
         for profile_ref in profile_store.all_configs() {
             let profile = profile_store.get(profile_ref);

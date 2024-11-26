@@ -132,7 +132,7 @@ impl<M: Extension> Renderer<M> {
                     let sub_template = get_trigger_from_var(variable)
                         .and_then(|trigger| context.matches_map.get(trigger))
                         .map(|&match_ref| context.matches.get(match_ref))
-                        .map(|match_| &match_.1.base_match.effect);
+                        .map(|match_| &match_.base_match.effect);
                     let Some(MatchEffect::Text(sub_template)) = sub_template else {
                         error!("unable to find sub-match: {}", variable.name);
                         return RenderResult::Error(RendererError::MissingSubMatch.into());
@@ -400,7 +400,7 @@ mod tests {
     }
 
     impl MyContext {
-        pub fn new(vars: Vec<MyVariable>, ms: Vec<(&'static str, TriggerMatch)>) -> Self {
+        pub fn new(vars: Vec<MyVariable>, ms: Vec<TriggerMatch>) -> Self {
             let mut global_vars = VarStore::new();
             let mut global_vars_map = HashMap::new();
             for var in vars.into_iter() {
@@ -410,8 +410,8 @@ mod tests {
             }
             let mut matches = TrigMatchStore::new();
             let mut matches_map = HashMap::new();
-            for (trigger, m) in ms.into_iter() {
-                let idx = matches.add(vec![trigger.to_string()], m);
+            for m in ms.into_iter() {
+                let idx = matches.add(m);
                 matches_map.insert(trigger, idx);
             }
             MyContext {
@@ -788,16 +788,14 @@ mod tests {
         };
         let templates = MyContext::new(
             vec![],
-            vec![(
-                "nested",
-                TriggerMatch {
-                    base_match: BaseMatch {
-                        effect: MatchEffect::Text(nested_template),
-                        ..Default::default()
-                    },
+            vec![TriggerMatch {
+                triggers: vec!["nested".to_string()],
+                base_match: BaseMatch {
+                    effect: MatchEffect::Text(nested_template),
                     ..Default::default()
                 },
-            )],
+                ..Default::default()
+            }],
         );
         let res =
             renderer.render_template(&template, templates.as_context(), &RenderOptions::default());

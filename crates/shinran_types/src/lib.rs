@@ -209,9 +209,22 @@ pub struct BaseMatch {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TriggerMatch {
     pub base_match: BaseMatch,
+    pub triggers: Vec<String>,
 
     pub propagate_case: bool,
     pub uppercase_style: UpperCasingStyle,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct RegexMatch {
+    pub base_match: BaseMatch,
+    pub regex: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Match {
+    Trigger(TriggerMatch),
+    Regex(RegexMatch),
 }
 
 #[cfg(test)]

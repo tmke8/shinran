@@ -6,7 +6,7 @@ use std::{
 
 use log::error;
 use nucleo_matcher::pattern;
-use shinran_config::{config::ProfileStore, matches::store::MatchStore};
+use shinran_config::matches::store::MatchStore;
 use shinran_types::{RegexMatchRef, TrigMatchRef};
 
 mod builtin;
@@ -22,10 +22,7 @@ mod render;
 
 pub use config::Configuration;
 
-fn get_regex_matches(
-    _: &ProfileStore,
-    match_store: &MatchStore,
-) -> Vec<regex::RegexMatch<RegexMatchRef>> {
+fn get_regex_matches(match_store: &MatchStore) -> Vec<regex::RegexMatch<RegexMatchRef>> {
     let mut regex_matches = Vec::new();
 
     // TODO: This should take into account the current profile.
@@ -44,8 +41,7 @@ impl<'store> Backend<'store> {
     pub fn new(configuration: &'store Configuration) -> anyhow::Result<Self> {
         let match_cache =
             match_cache::MatchCache::load(&configuration.profile_store, &configuration.match_store);
-        let regex_matches =
-            get_regex_matches(&configuration.profile_store, &configuration.match_store);
+        let regex_matches = get_regex_matches(&configuration.match_store);
 
         let builtin_matches = builtin::get_builtin_matches();
         let combined_cache =
