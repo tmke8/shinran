@@ -134,7 +134,15 @@ mod tests {
             )
             .unwrap();
 
-            assert_eq!(load_match_file(&file).unwrap().0.matches.len(), 1);
+            assert_eq!(
+                load_match_file(&file)
+                    .unwrap()
+                    .0
+                    .content
+                    .trigger_matches
+                    .len(),
+                1
+            );
         });
     }
 
@@ -152,7 +160,15 @@ mod tests {
             )
             .unwrap();
 
-            assert_eq!(load_match_file(&file).unwrap().0.matches.len(), 1);
+            assert_eq!(
+                load_match_file(&file)
+                    .unwrap()
+                    .0
+                    .content
+                    .trigger_matches
+                    .len(),
+                1
+            );
         });
     }
 
@@ -170,7 +186,15 @@ mod tests {
             )
             .unwrap();
 
-            assert_eq!(load_match_file(&file).unwrap().0.matches.len(), 1);
+            assert_eq!(
+                load_match_file(&file)
+                    .unwrap()
+                    .0
+                    .content
+                    .trigger_matches
+                    .len(),
+                1
+            );
         });
     }
 }

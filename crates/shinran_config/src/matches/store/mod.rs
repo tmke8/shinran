@@ -17,27 +17,21 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use crate::error::NonFatalErrorSet;
 
 mod default;
 pub use default::MatchStore;
-use shinran_types::{RegexMatchRef, TrigMatchRef, VarRef};
 
-/// The set of matches and global vars associated with one config file.
-///
-/// This struct contains a list of references to the matches that matched the query
-/// and a list of references to the global variables that were defined in the matches.
-#[derive(Debug, Clone, PartialEq)]
-pub struct MatchesAndGlobalVars {
-    pub trigger_matches: Vec<TrigMatchRef>,
-    pub regex_matches: Vec<RegexMatchRef>,
-    pub global_vars: Vec<VarRef>,
-}
+use super::group::MatchFileRef;
 
-pub fn load(paths: &[PathBuf]) -> (MatchStore, Vec<NonFatalErrorSet>) {
-    // TODO: here we can replace the MatchStore with a caching wrapper
-    // that returns the same response for the given "paths" query
+pub fn load(
+    paths: &[PathBuf],
+) -> (
+    MatchStore,
+    HashMap<PathBuf, MatchFileRef>,
+    Vec<NonFatalErrorSet>,
+) {
     default::MatchStore::load(paths)
 }

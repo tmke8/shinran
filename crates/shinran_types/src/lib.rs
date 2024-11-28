@@ -1,9 +1,6 @@
-use enum_as_inner::EnumAsInner;
 use std::collections::HashMap;
 
-mod stores;
-
-pub use stores::{RegexMatchRef, RegexMatchStore, TrigMatchRef, TrigMatchStore, VarRef, VarStore};
+use enum_as_inner::EnumAsInner;
 
 pub type StructId = i32;
 
@@ -63,21 +60,15 @@ pub enum Number {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum MatchIdx {
-    Trigger(TrigMatchRef),
-    Regex(RegexMatchRef),
+pub enum MatchRef<'store> {
+    Trigger(&'store TriggerMatch),
+    Regex(&'store RegexMatch),
     BuiltIn(i32),
-}
-
-impl Default for MatchIdx {
-    fn default() -> Self {
-        Self::Trigger(TrigMatchRef::default())
-    }
 }
 
 // Causes
 
-#[derive(Debug, Clone, Eq, Hash, PartialEq, EnumAsInner)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub enum MatchCause {
     Trigger(TriggerCause),
     Regex(RegexCause),
@@ -209,9 +200,34 @@ pub struct BaseMatch {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TriggerMatch {
     pub base_match: BaseMatch,
+    pub triggers: Vec<String>,
 
     pub propagate_case: bool,
     pub uppercase_style: UpperCasingStyle,
+    pub word_boundary: WordBoundary,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct RegexMatch {
+    pub base_match: BaseMatch,
+    pub regex: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Match {
+    Trigger(TriggerMatch),
+    Regex(RegexMatch),
+}
+
+/// The set of matches and global vars associated with one config file.
+///
+/// This struct contains a list of references to the matches that matched the query
+/// and a list of references to the global variables that were defined in the matches.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchesAndGlobalVars<'store> {
+    pub trigger_matches: Vec<&'store TriggerMatch>,
+    pub regex_matches: Vec<&'store RegexMatch>,
+    pub global_vars: Vec<&'store Variable>,
 }
 
 #[cfg(test)]

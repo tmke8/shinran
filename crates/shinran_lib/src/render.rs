@@ -19,9 +19,9 @@
 
 use std::collections::HashMap;
 
-use shinran_config::ProfileRef;
+use shinran_config::config::ProfileRef;
 use shinran_render::{CasingStyle, Context, RenderOptions};
-use shinran_types::{MatchEffect, MatchIdx, Params, UpperCasingStyle, Value, VarType, Variable};
+use shinran_types::{MatchEffect, MatchRef, Params, UpperCasingStyle, Value, VarType, Variable};
 
 use crate::{
     config::Configuration,
@@ -62,15 +62,14 @@ impl<'store> RendererAdapter<'store> {
 
     pub fn render(
         &self,
-        match_id: MatchIdx,
+        match_id: MatchRef,
         trigger: Option<&str>,
         trigger_vars: HashMap<String, String>,
         active_profile: ProfileRef,
     ) -> anyhow::Result<String> {
         let (effect, propagate_case, preferred_uppercasing_style) = match match_id {
-            MatchIdx::Trigger(idx) => {
-                let (expected_triggers, m) =
-                    &self.configuration.match_store.trigger_matches.get(idx);
+            MatchRef::Trigger(m) => {
+                let expected_triggers = &m.triggers;
                 if let Some(trigger) = trigger {
                     // If we are not propagating case, we have to make sure that the trigger matches
                     // one of the expected triggers exactly.
@@ -84,18 +83,8 @@ impl<'store> RendererAdapter<'store> {
                     Some(m.uppercase_style),
                 )
             }
-            MatchIdx::Regex(idx) => (
-                &self
-                    .configuration
-                    .match_store
-                    .regex_matches
-                    .get(idx)
-                    .1
-                    .effect,
-                false,
-                None,
-            ),
-            MatchIdx::BuiltIn(_) => {
+            MatchRef::Regex(m) => (&m.base_match.effect, false, None),
+            MatchRef::BuiltIn(_) => {
                 unreachable!()
             }
         };
@@ -144,9 +133,10 @@ impl<'store> RendererAdapter<'store> {
         };
 
         let context = Context {
-            matches: &self.configuration.match_store.trigger_matches,
-            matches_map: self.combined_cache.user_match_cache.matches(active_profile),
-            global_vars: &self.configuration.match_store.global_vars,
+            matches_map: self
+                .combined_cache
+                .user_match_cache
+                .trigger_matches(active_profile),
             global_vars_map: self
                 .combined_cache
                 .user_match_cache
@@ -177,8 +167,14 @@ impl<'store> RendererAdapter<'store> {
     }
 
     #[inline]
-    pub fn find_regex_matches(&self, trigger: &str) -> Vec<crate::engine::DetectedMatch> {
-        self.combined_cache.regex_matcher.find_matches(trigger)
+    pub fn find_regex_matches(
+        &self,
+        trigger: &str,
+        active_profile: ProfileRef,
+    ) -> Vec<crate::engine::DetectedMatch> {
+        self.combined_cache
+            .regex_matcher(active_profile)
+            .find_matches(trigger)
     }
 }
 

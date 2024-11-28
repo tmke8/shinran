@@ -21,18 +21,16 @@ use std::ffi::OsStr;
 
 use crate::{
     error::{ErrorRecord, NonFatalErrorSet},
-    matches::{
-        group::{path::resolve_imports, LoadedMatchFile},
-        LoadedMatch,
-    },
+    matches::group::{path::resolve_imports, LoadedMatchFile, MatchFile},
 };
 use anyhow::{anyhow, bail, Context, Result};
 use lazy_static::lazy_static;
 use parse::YAMLMatchFile;
 use regex::{Captures, Regex};
 use shinran_types::{
-    ImageEffect, MatchCause, MatchEffect, Params, RegexCause, TextEffect, TextFormat,
-    TextInjectMode, TriggerCause, UpperCasingStyle, Value, VarType, Variable, WordBoundary,
+    BaseMatch, ImageEffect, MatchCause, MatchEffect, Params, RegexCause, RegexMatch, TextEffect,
+    TextFormat, TextInjectMode, TriggerCause, TriggerMatch, UpperCasingStyle, Value, VarType,
+    Variable, WordBoundary,
 };
 
 use self::{
@@ -92,13 +90,16 @@ impl YAMLImporter {
             }
         }
 
-        let mut matches = Vec::new();
+        let mut trigger_matches = Vec::new();
+        let mut regex_matches = Vec::new();
         for yaml_match in yaml_loaded.matches.clone().unwrap_or_default() {
-            match try_convert_into_match(yaml_match, false) {
-                Ok((m, warnings)) => {
-                    matches.push(m);
-                    non_fatal_errors.extend(warnings.into_iter().map(ErrorRecord::warn));
-                }
+            match try_convert_into_match(
+                yaml_match,
+                &mut trigger_matches,
+                &mut regex_matches,
+                &mut non_fatal_errors,
+            ) {
+                Ok(_) => {}
                 Err(err) => {
                     non_fatal_errors.push(ErrorRecord::error(err));
                 }
@@ -120,8 +121,11 @@ impl YAMLImporter {
         Ok((
             LoadedMatchFile {
                 imports: resolved_imports,
-                global_vars,
-                matches,
+                content: MatchFile {
+                    global_vars,
+                    trigger_matches,
+                    regex_matches,
+                },
             },
             non_fatal_error_set,
         ))
@@ -131,8 +135,10 @@ impl YAMLImporter {
 /// Convert a YAMLMatch into a Match.
 pub fn try_convert_into_match(
     yaml_match: YAMLMatch,
-    use_compatibility_mode: bool,
-) -> Result<(LoadedMatch, Vec<Warning>)> {
+    trigger_matches: &mut Vec<TriggerMatch>,
+    regex_matches: &mut Vec<RegexMatch>,
+    non_fatal_errors: &mut Vec<ErrorRecord>,
+) -> Result<()> {
     let mut warnings = Vec::new();
 
     if yaml_match.uppercase_style.is_some() && yaml_match.propagate_case.is_none() {
@@ -206,7 +212,7 @@ pub fn try_convert_into_match(
         || yaml_match.markdown.is_some()
         || yaml_match.html.is_some()
     {
-        // TODO: test markdown and html cases
+        // TODO: Test markdown and html cases.
         let (replace, format) = if let Some(plain) = yaml_match.replace {
             (plain, TextFormat::Plain)
         } else if let Some(markdown) = yaml_match.markdown {
@@ -219,9 +225,9 @@ pub fn try_convert_into_match(
 
         let mut vars: Vec<Variable> = Vec::new();
         for yaml_var in yaml_match.vars.unwrap_or_default() {
-            let (var, var_warnings) =
-                try_convert_into_variable(yaml_var.clone(), use_compatibility_mode)
-                    .with_context(|| format!("failed to load variable: {yaml_var:?}"))?;
+            // TODO: Avoid cloning the variable.
+            let (var, var_warnings) = try_convert_into_variable(yaml_var.clone(), false)
+                .with_context(|| format!("failed to load variable: {:?}", yaml_var))?;
             warnings.extend(var_warnings);
             vars.push(var);
         }
@@ -236,35 +242,17 @@ pub fn try_convert_into_match(
         // Replace all the form fields with actual variables
 
         // In v2.1.0-alpha the form control syntax was replaced with [[control]]
-        // instead of {{control}}, so we check if compatibility mode is being used.
-        // TODO: remove once compatibility mode is removed
+        // instead of {{control}}.
 
-        let (resolved_replace, resolved_layout) = if use_compatibility_mode {
-            (
-                VAR_REGEX
-                    .replace_all(&form_layout, |caps: &Captures| {
-                        let var_name = caps.get(1).unwrap().as_str();
-                        format!("{{{{form1.{var_name}}}}}")
-                    })
-                    .to_string(),
-                VAR_REGEX
-                    .replace_all(&form_layout, |caps: &Captures| {
-                        let var_name = caps.get(1).unwrap().as_str();
-                        format!("[[{var_name}]]")
-                    })
-                    .to_string(),
-            )
-        } else {
-            (
-                FORM_CONTROL_REGEX
-                    .replace_all(&form_layout, |caps: &Captures| {
-                        let var_name = caps.get(1).unwrap().as_str();
-                        format!("{{{{form1.{var_name}}}}}")
-                    })
-                    .to_string(),
-                form_layout,
-            )
-        };
+        let (resolved_replace, resolved_layout) = (
+            FORM_CONTROL_REGEX
+                .replace_all(&form_layout, |caps: &Captures| {
+                    let var_name = caps.get(1).unwrap().as_str();
+                    format!("{{{{form1.{var_name}}}}}")
+                })
+                .to_string(),
+            form_layout,
+        );
 
         // Convert escaped brakets in forms
         let resolved_replace = resolved_replace.replace("\\{", "{ ").replace("\\}", " }");
@@ -305,15 +293,27 @@ pub fn try_convert_into_match(
     );
     }
 
-    Ok((
-        LoadedMatch {
-            cause,
-            effect,
-            label: yaml_match.label,
-            search_terms: yaml_match.search_terms.unwrap_or_default(),
-        },
-        warnings,
-    ))
+    let base = BaseMatch {
+        effect,
+        label: yaml_match.label,
+        search_terms: yaml_match.search_terms.unwrap_or_default(),
+    };
+    match cause {
+        MatchCause::Regex(regex) => regex_matches.push(RegexMatch {
+            regex: regex.regex,
+            base_match: base,
+        }),
+        MatchCause::Trigger(trigger) => trigger_matches.push(TriggerMatch {
+            triggers: trigger.triggers,
+            base_match: base,
+            propagate_case: trigger.propagate_case,
+            uppercase_style: trigger.uppercase_style,
+            word_boundary: trigger.word_boundary,
+        }),
+    };
+    non_fatal_errors.extend(warnings.into_iter().map(ErrorRecord::warn));
+
+    Ok(())
 }
 
 pub fn try_convert_into_variable(
@@ -348,24 +348,31 @@ pub fn try_convert_into_variable(
 #[cfg(test)]
 mod tests {
     use shinran_helpers::use_test_directory;
-    use shinran_types::{MatchCause, TextEffect, TriggerCause};
+    use shinran_types::TextEffect;
 
     use super::*;
-    use crate::matches::LoadedMatch;
     use std::{ffi::OsString, fs::create_dir_all};
 
-    fn create_match_with_warnings(
-        yaml: &str,
-        use_compatibility_mode: bool,
-    ) -> Result<(LoadedMatch, Vec<Warning>)> {
+    fn create_match_with_warnings(yaml: &str) -> Result<(TriggerMatch, Vec<ErrorRecord>)> {
         let yaml_match: YAMLMatch = serde_yaml_ng::from_str(yaml)?;
-        let (m, warnings) = try_convert_into_match(yaml_match, use_compatibility_mode)?;
+        let mut trigger_matches = Vec::new();
+        let mut regex_matches = Vec::new();
+        let mut non_fatal_errors = Vec::new();
+        try_convert_into_match(
+            yaml_match,
+            &mut trigger_matches,
+            &mut regex_matches,
+            &mut non_fatal_errors,
+        )?;
 
-        Ok((m, warnings))
+        Ok((
+            trigger_matches.into_iter().next().unwrap(),
+            non_fatal_errors,
+        ))
     }
 
-    fn create_match(yaml: &str) -> Result<LoadedMatch> {
-        let (m, warnings) = create_match_with_warnings(yaml, false)?;
+    fn create_match(yaml: &str) -> Result<TriggerMatch> {
+        let (m, warnings) = create_match_with_warnings(yaml)?;
         assert!(
             warnings.is_empty(),
             "warnings were detected but not handled: {warnings:?}"
@@ -383,15 +390,15 @@ mod tests {
         "#
             )
             .unwrap(),
-            LoadedMatch {
-                cause: MatchCause::Trigger(TriggerCause {
-                    triggers: vec!["Hello".to_string()],
+            TriggerMatch {
+                triggers: vec!["Hello".to_string()],
+                base_match: BaseMatch {
+                    effect: MatchEffect::Text(TextEffect {
+                        body: "world".to_string(),
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                effect: MatchEffect::Text(TextEffect {
-                    body: "world".to_string(),
-                    ..Default::default()
-                }),
+                },
                 ..Default::default()
             }
         );
@@ -407,15 +414,15 @@ mod tests {
         "#
             )
             .unwrap(),
-            LoadedMatch {
-                cause: MatchCause::Trigger(TriggerCause {
-                    triggers: vec!["Hello".to_string(), "john".to_string()],
+            TriggerMatch {
+                triggers: vec!["Hello".to_string(), "john".to_string()],
+                base_match: BaseMatch {
+                    effect: MatchEffect::Text(TextEffect {
+                        body: "world".to_string(),
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                effect: MatchEffect::Text(TextEffect {
-                    body: "world".to_string(),
-                    ..Default::default()
-                }),
+                },
                 ..Default::default()
             }
         );
@@ -432,16 +439,16 @@ mod tests {
         "#
             )
             .unwrap(),
-            LoadedMatch {
-                cause: MatchCause::Trigger(TriggerCause {
-                    triggers: vec!["Hello".to_string()],
-                    word_boundary: WordBoundary::Both,
+            TriggerMatch {
+                triggers: vec!["Hello".to_string()],
+                word_boundary: WordBoundary::Both,
+                base_match: BaseMatch {
+                    effect: MatchEffect::Text(TextEffect {
+                        body: "world".to_string(),
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                effect: MatchEffect::Text(TextEffect {
-                    body: "world".to_string(),
-                    ..Default::default()
-                }),
+                },
                 ..Default::default()
             }
         );
@@ -458,16 +465,16 @@ mod tests {
         "#
             )
             .unwrap(),
-            LoadedMatch {
-                cause: MatchCause::Trigger(TriggerCause {
-                    triggers: vec!["Hello".to_string()],
-                    word_boundary: WordBoundary::Left,
+            TriggerMatch {
+                triggers: vec!["Hello".to_string()],
+                word_boundary: WordBoundary::Left,
+                base_match: BaseMatch {
+                    effect: MatchEffect::Text(TextEffect {
+                        body: "world".to_string(),
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                effect: MatchEffect::Text(TextEffect {
-                    body: "world".to_string(),
-                    ..Default::default()
-                }),
+                },
                 ..Default::default()
             }
         );
@@ -484,16 +491,16 @@ mod tests {
         "#
             )
             .unwrap(),
-            LoadedMatch {
-                cause: MatchCause::Trigger(TriggerCause {
-                    triggers: vec!["Hello".to_string()],
-                    word_boundary: WordBoundary::Right,
+            TriggerMatch {
+                triggers: vec!["Hello".to_string()],
+                word_boundary: WordBoundary::Right,
+                base_match: BaseMatch {
+                    effect: MatchEffect::Text(TextEffect {
+                        body: "world".to_string(),
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                effect: MatchEffect::Text(TextEffect {
-                    body: "world".to_string(),
-                    ..Default::default()
-                }),
+                },
                 ..Default::default()
             }
         );
@@ -510,16 +517,16 @@ mod tests {
         "#
             )
             .unwrap(),
-            LoadedMatch {
-                cause: MatchCause::Trigger(TriggerCause {
-                    triggers: vec!["Hello".to_string()],
-                    propagate_case: true,
+            TriggerMatch {
+                triggers: vec!["Hello".to_string()],
+                propagate_case: true,
+                base_match: BaseMatch {
+                    effect: MatchEffect::Text(TextEffect {
+                        body: "world".to_string(),
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                effect: MatchEffect::Text(TextEffect {
-                    body: "world".to_string(),
-                    ..Default::default()
-                }),
+                },
                 ..Default::default()
             }
         );
@@ -537,9 +544,6 @@ mod tests {
         "#
             )
             .unwrap()
-            .cause
-            .into_trigger()
-            .unwrap()
             .uppercase_style,
             UpperCasingStyle::Capitalize,
         );
@@ -553,9 +557,6 @@ mod tests {
         propagate_case: true
         "#
             )
-            .unwrap()
-            .cause
-            .into_trigger()
             .unwrap()
             .uppercase_style,
             UpperCasingStyle::CapitalizeWords,
@@ -571,9 +572,6 @@ mod tests {
         "#
             )
             .unwrap()
-            .cause
-            .into_trigger()
-            .unwrap()
             .uppercase_style,
             UpperCasingStyle::Uppercase,
         );
@@ -585,13 +583,9 @@ mod tests {
         replace: "world"
         uppercase_style: "capitalize"
         "#,
-            false,
         )
         .unwrap();
-        assert_eq!(
-            m.cause.into_trigger().unwrap().uppercase_style,
-            UpperCasingStyle::Capitalize,
-        );
+        assert_eq!(m.uppercase_style, UpperCasingStyle::Capitalize,);
         assert_eq!(warnings.len(), 1);
 
         // Invalid style
@@ -602,13 +596,9 @@ mod tests {
         uppercase_style: "invalid"
         propagate_case: true
         "#,
-            false,
         )
         .unwrap();
-        assert_eq!(
-            m.cause.into_trigger().unwrap().uppercase_style,
-            UpperCasingStyle::Uppercase,
-        );
+        assert_eq!(m.uppercase_style, UpperCasingStyle::Uppercase,);
         assert_eq!(warnings.len(), 1);
     }
 
@@ -628,22 +618,22 @@ mod tests {
         "#
             )
             .unwrap(),
-            LoadedMatch {
-                cause: MatchCause::Trigger(TriggerCause {
-                    triggers: vec!["Hello".to_string()],
-                    ..Default::default()
-                }),
-                effect: MatchEffect::Text(TextEffect {
-                    body: "Hi {{form1.name}}!".to_string(),
-                    vars: vec![Variable {
-                        // id: 0,
-                        name: "form1".to_string(),
-                        var_type: VarType::Form,
-                        params,
+            TriggerMatch {
+                triggers: vec!["Hello".to_string()],
+                base_match: BaseMatch {
+                    effect: MatchEffect::Text(TextEffect {
+                        body: "Hi {{form1.name}}!".to_string(),
+                        vars: vec![Variable {
+                            // id: 0,
+                            name: "form1".to_string(),
+                            var_type: VarType::Form,
+                            params,
+                            ..Default::default()
+                        }],
                         ..Default::default()
-                    }],
+                    }),
                     ..Default::default()
-                }),
+                },
                 ..Default::default()
             }
         );
@@ -665,61 +655,22 @@ mod tests {
         "#
             )
             .unwrap(),
-            LoadedMatch {
-                cause: MatchCause::Trigger(TriggerCause {
-                    triggers: vec!["Hello".to_string()],
-                    ..Default::default()
-                }),
-                effect: MatchEffect::Text(TextEffect {
-                    body: "Hi {{form1.name}}! {{signature}}".to_string(),
-                    vars: vec![Variable {
-                        // id: 0,
-                        name: "form1".to_string(),
-                        var_type: VarType::Form,
-                        params,
+            TriggerMatch {
+                triggers: vec!["Hello".to_string()],
+                base_match: BaseMatch {
+                    effect: MatchEffect::Text(TextEffect {
+                        body: "Hi {{form1.name}}! {{signature}}".to_string(),
+                        vars: vec![Variable {
+                            // id: 0,
+                            name: "form1".to_string(),
+                            var_type: VarType::Form,
+                            params,
+                            ..Default::default()
+                        }],
                         ..Default::default()
-                    }],
+                    }),
                     ..Default::default()
-                }),
-                ..Default::default()
-            }
-        );
-    }
-
-    #[test]
-    fn form_maps_correctly_legacy_format() {
-        let mut params = Params::new();
-        params.insert(
-            "layout".to_string(),
-            Value::String("Hi [[name]]!".to_string()),
-        );
-
-        assert_eq!(
-            create_match_with_warnings(
-                r#"
-        trigger: "Hello"
-        form: "Hi {{name}}!"
-        "#,
-                true
-            )
-            .unwrap()
-            .0,
-            LoadedMatch {
-                cause: MatchCause::Trigger(TriggerCause {
-                    triggers: vec!["Hello".to_string()],
-                    ..Default::default()
-                }),
-                effect: MatchEffect::Text(TextEffect {
-                    body: "Hi {{form1.name}}!".to_string(),
-                    vars: vec![Variable {
-                        // id: 0,
-                        name: "form1".to_string(),
-                        var_type: VarType::Form,
-                        params,
-                        ..Default::default()
-                    }],
-                    ..Default::default()
-                }),
+                },
                 ..Default::default()
             }
         );
@@ -748,16 +699,16 @@ mod tests {
         "#
             )
             .unwrap(),
-            LoadedMatch {
-                cause: MatchCause::Trigger(TriggerCause {
-                    triggers: vec!["Hello".to_string()],
+            TriggerMatch {
+                triggers: vec!["Hello".to_string()],
+                base_match: BaseMatch {
+                    effect: MatchEffect::Text(TextEffect {
+                        body: "world".to_string(),
+                        vars,
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                effect: MatchEffect::Text(TextEffect {
-                    body: "world".to_string(),
-                    vars,
-                    ..Default::default()
-                }),
+                },
                 ..Default::default()
             }
         );
@@ -794,16 +745,16 @@ mod tests {
         "#
             )
             .unwrap(),
-            LoadedMatch {
-                cause: MatchCause::Trigger(TriggerCause {
-                    triggers: vec!["Hello".to_string()],
+            TriggerMatch {
+                triggers: vec!["Hello".to_string()],
+                base_match: BaseMatch {
+                    effect: MatchEffect::Text(TextEffect {
+                        body: "world".to_string(),
+                        vars,
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                effect: MatchEffect::Text(TextEffect {
-                    body: "world".to_string(),
-                    vars,
-                    ..Default::default()
-                }),
+                },
                 ..Default::default()
             }
         );
@@ -828,16 +779,16 @@ mod tests {
         "#
             )
             .unwrap(),
-            LoadedMatch {
-                cause: MatchCause::Trigger(TriggerCause {
-                    triggers: vec!["Hello".to_string()],
+            TriggerMatch {
+                triggers: vec!["Hello".to_string()],
+                base_match: BaseMatch {
+                    effect: MatchEffect::Text(TextEffect {
+                        body: "world".to_string(),
+                        vars,
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                effect: MatchEffect::Text(TextEffect {
-                    body: "world".to_string(),
-                    vars,
-                    ..Default::default()
-                }),
+                },
                 ..Default::default()
             }
         );
@@ -896,18 +847,21 @@ mod tests {
                 file,
                 LoadedMatchFile {
                     imports: vec![sub_file],
-                    global_vars: vars,
-                    matches: vec![LoadedMatch {
-                        cause: MatchCause::Trigger(TriggerCause {
+                    content: MatchFile {
+                        global_vars: vars,
+                        trigger_matches: vec![TriggerMatch {
                             triggers: vec!["hello".to_string()],
+                            base_match: BaseMatch {
+                                effect: MatchEffect::Text(TextEffect {
+                                    body: "world".to_string(),
+                                    ..Default::default()
+                                }),
+                                ..Default::default()
+                            },
                             ..Default::default()
-                        }),
-                        effect: MatchEffect::Text(TextEffect {
-                            body: "world".to_string(),
-                            ..Default::default()
-                        }),
+                        }],
                         ..Default::default()
-                    }],
+                    }
                 }
             );
         });

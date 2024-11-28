@@ -16,15 +16,18 @@
  * You should have received a copy of the GNU General Public License
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
+use std::{
+    collections::{HashMap, HashSet},
+    path::{Path, PathBuf},
+};
 
 use crate::error::NonFatalErrorSet;
 use crate::matches::group::loader::yaml::YAMLImporter;
+use crate::{config::resolve::LoadedProfileFile, matches::group::MatchFileRef};
 
-use super::{resolve::ProfileFile, ConfigStoreError};
+use super::{ConfigStoreError, ProfileFile};
 use anyhow::{Context, Result};
 use log::{debug, error};
-use std::path::PathBuf;
-use std::{collections::HashSet, path::Path};
 
 #[repr(transparent)]
 pub struct ProfileStore {
@@ -54,11 +57,23 @@ impl ProfileStore {
     pub fn active_config(&self, app: &super::AppProperties) -> ProfileRef {
         // Find a custom config that matches or fallback to the default one
         for (idx, custom) in self.profiles[1..].iter().enumerate() {
-            if custom.is_match(app) {
+            if custom.filter.is_match(app) {
                 return ProfileRef { idx: idx + 1 };
             }
         }
         self.default_config()
+    }
+
+    pub fn resolve_paths(
+        loaded: LoadedProfileStore,
+        file_map: &HashMap<PathBuf, MatchFileRef>,
+    ) -> Self {
+        let profiles = loaded
+            .profiles
+            .into_iter()
+            .map(|loaded| ProfileFile::from_loaded_profile(loaded, file_map))
+            .collect::<_>();
+        ProfileStore { profiles }
     }
 
     pub fn all_configs(&self) -> Vec<ProfileRef> {
@@ -66,13 +81,25 @@ impl ProfileStore {
             .map(|idx| ProfileRef { idx })
             .collect()
     }
+}
+
+#[repr(transparent)]
+pub struct LoadedProfileStore {
+    profiles: Vec<LoadedProfileFile>,
+}
+
+impl LoadedProfileStore {
+    #[inline]
+    pub fn get(&self, ref_: ProfileRef) -> &LoadedProfileFile {
+        &self.profiles[ref_.idx]
+    }
 
     // TODO: test
     pub fn get_all_match_file_paths(&self) -> HashSet<PathBuf> {
         let mut paths = HashSet::new();
 
         for profile in &self.profiles {
-            paths.extend(profile.match_file_paths().iter().cloned());
+            paths.extend(profile.match_file_paths.iter().cloned());
         }
 
         paths
@@ -91,12 +118,12 @@ impl ProfileStore {
 
         let mut non_fatal_errors = Vec::new();
 
-        let default = ProfileFile::load_from_path(&default_file, None)
+        let default = LoadedProfileFile::load_from_path(&default_file, None)
             .context("failed to load default.yml configuration")?;
         debug!("loaded default config at path: {:?}", default_file);
 
         // Then the others
-        let mut profiles: Vec<ProfileFile> = vec![default];
+        let mut profiles: Vec<LoadedProfileFile> = vec![default];
         for entry in std::fs::read_dir(config_dir).map_err(ConfigStoreError::IOError)? {
             let config_file = entry?.path();
             let Some(extension) = config_file.extension() else {
@@ -108,7 +135,7 @@ impl ProfileStore {
                 && config_file != default_file
                 && YAMLImporter::is_supported(extension)
             {
-                match ProfileFile::load_from_path(&config_file, Some(&profiles[0])) {
+                match LoadedProfileFile::load_from_path(&config_file, Some(&profiles[0])) {
                     Ok(config) => {
                         profiles.push(config);
                         debug!("loaded config at path: {:?}", config_file);
@@ -155,7 +182,6 @@ mod tests {
                 label: Some(label),
                 ..Default::default()
             },
-            id: 0,
             ..Default::default()
         }
     }
@@ -165,7 +191,7 @@ mod tests {
         let default = new_mock("default");
         let custom1 = new_mock("custom1");
         let mut custom2 = new_mock("custom2");
-        custom2.filter_class = Some(Regex::new("foo").unwrap());
+        custom2.filter.class = Some(Regex::new("foo").unwrap());
 
         let store = ProfileStore {
             profiles: vec![default, custom1, custom2],

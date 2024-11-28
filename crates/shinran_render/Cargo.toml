@@ -1,7 +1,10 @@
 [package]
 name = "shinran_render"
 version = "0.1.0"
-authors = ["Thomas MK <tmke8@posteo.net>", "Federico Terzi <federico-terzi@users.noreply.github.com>"]
+authors = [
+    "Thomas MK <tmke8@posteo.net>",
+    "Federico Terzi <federico-terzi@users.noreply.github.com>",
+]
 edition = "2021"
 
 [dependencies]

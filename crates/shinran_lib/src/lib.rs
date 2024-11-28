@@ -6,8 +6,7 @@ use std::{
 
 use log::error;
 use nucleo_matcher::pattern;
-use shinran_config::{config::ProfileStore, matches::store::MatchStore};
-use shinran_types::{RegexMatchRef, TrigMatchRef};
+use shinran_types::TriggerMatch;
 
 mod builtin;
 mod config;
@@ -22,19 +21,6 @@ mod render;
 
 pub use config::Configuration;
 
-fn get_regex_matches(
-    _: &ProfileStore,
-    match_store: &MatchStore,
-) -> Vec<regex::RegexMatch<RegexMatchRef>> {
-    let mut regex_matches = Vec::new();
-
-    // TODO: This should take into account the current profile.
-    for (match_idx, (regex, _)) in match_store.regex_matches.enumerate() {
-        regex_matches.push(regex::RegexMatch::new(match_idx, regex.clone()));
-    }
-    regex_matches
-}
-
 pub struct Backend<'store> {
     adapter: render::RendererAdapter<'store>,
     fuzzy_matcher: Arc<Mutex<nucleo_matcher::Matcher>>,
@@ -44,13 +30,10 @@ impl<'store> Backend<'store> {
     pub fn new(configuration: &'store Configuration) -> anyhow::Result<Self> {
         let match_cache =
             match_cache::MatchCache::load(&configuration.profile_store, &configuration.match_store);
-        let regex_matches =
-            get_regex_matches(&configuration.profile_store, &configuration.match_store);
 
         let builtin_matches = builtin::get_builtin_matches();
-        let combined_cache =
-            match_cache::CombinedMatchCache::load(match_cache, builtin_matches, regex_matches);
-        let adapter = render::RendererAdapter::new(combined_cache, &configuration);
+        let combined_cache = match_cache::CombinedMatchCache::load(match_cache, builtin_matches);
+        let adapter = render::RendererAdapter::new(combined_cache, configuration);
 
         let matcher = nucleo_matcher::Matcher::new(nucleo_matcher::Config::DEFAULT);
         Ok(Backend {
@@ -67,7 +50,11 @@ impl<'store> Backend<'store> {
         let match_ = if let Some(match_) = matches.into_iter().next() {
             match_
         } else {
-            let matches = self.adapter.find_regex_matches(trigger).into_iter().next();
+            let matches = self
+                .adapter
+                .find_regex_matches(trigger, active_profile)
+                .into_iter()
+                .next();
             if let Some(matches) = matches {
                 matches
             } else {
@@ -85,7 +72,7 @@ impl<'store> Backend<'store> {
             .adapter
             .combined_cache
             .user_match_cache
-            .matches(active_profile);
+            .trigger_matches(active_profile);
 
         let atom = get_simple_atom(trigger);
         let mut matcher = self.fuzzy_matcher.lock().unwrap();
@@ -96,7 +83,7 @@ impl<'store> Backend<'store> {
     }
 }
 
-pub struct TriggerAndRef<'a>(pub &'a str, pub TrigMatchRef);
+pub struct TriggerAndRef<'a>(pub &'a str, pub &'a TriggerMatch);
 
 impl AsRef<str> for TriggerAndRef<'_> {
     fn as_ref(&self) -> &str {

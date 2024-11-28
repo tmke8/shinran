@@ -18,29 +18,70 @@
  */
 
 use anyhow::Result;
+use shinran_types::{RegexMatch, TriggerMatch, Variable};
 use std::path::{Path, PathBuf};
 
 use crate::error::NonFatalErrorSet;
 
-use super::{LoadedMatch, Variable};
-
 pub(crate) mod loader;
 mod path;
 
+/// Content of a match file.
+///
+/// This struct owns the variables and matches, and is used to store the content of a match file.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct MatchFile {
+    pub global_vars: Vec<Variable>,
+    pub trigger_matches: Vec<TriggerMatch>,
+    pub regex_matches: Vec<RegexMatch>,
+}
+
 /// A `LoadedMatchFile` describes one file in the `match` directory.
 ///
-/// Such a file has a list of imports, a list of global [`Variable`]s and a list of [`Match`]es.
-/// The imports have been resolved to paths, but they haven't been loaded yet.
+/// Such a file has a list of imports, and the content, which is the matches and variables.
+/// The imports have been converted to paths, but they haven't been loaded yet.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct LoadedMatchFile {
     pub imports: Vec<PathBuf>,
-    pub global_vars: Vec<Variable>,
-    pub matches: Vec<LoadedMatch>,
+    pub content: MatchFile,
 }
 
 impl LoadedMatchFile {
     // TODO: test
     pub fn load(file_path: &Path) -> Result<(Self, Option<NonFatalErrorSet>)> {
         loader::load_match_file(file_path)
+    }
+}
+
+#[repr(transparent)]
+pub struct MatchFileStore {
+    files: Vec<LoadedMatchFile>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[repr(transparent)]
+pub struct MatchFileRef {
+    idx: usize,
+}
+
+impl MatchFileStore {
+    #[inline]
+    pub fn new() -> Self {
+        Self { files: Vec::new() }
+    }
+
+    #[inline]
+    pub fn add(&mut self, file: LoadedMatchFile) -> MatchFileRef {
+        let idx = self.files.len();
+        self.files.push(file);
+        MatchFileRef { idx }
+    }
+
+    #[inline]
+    pub fn into_enumerate(self) -> impl Iterator<Item = (MatchFileRef, LoadedMatchFile)> {
+        self.files
+            .into_iter()
+            .enumerate()
+            .map(|(idx, elem)| (MatchFileRef { idx }, elem))
     }
 }

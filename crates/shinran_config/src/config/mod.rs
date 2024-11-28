@@ -29,7 +29,7 @@ pub(crate) mod store;
 mod util;
 
 pub use resolve::{ProfileFile, ProfileId};
-pub use store::ProfileStore;
+pub use store::{LoadedProfileStore, ProfileRef, ProfileStore};
 
 // #[cfg(test)]
 // use mockall::{automock, predicate::*};
@@ -341,8 +341,8 @@ impl std::fmt::Display for RMLVOConfig {
     }
 }
 
-pub fn load_store(config_dir: &Path) -> Result<(store::ProfileStore, Vec<NonFatalErrorSet>)> {
-    store::ProfileStore::load(config_dir)
+pub fn load_store(config_dir: &Path) -> Result<(store::LoadedProfileStore, Vec<NonFatalErrorSet>)> {
+    store::LoadedProfileStore::load(config_dir)
 }
 
 #[derive(Error, Debug)]
