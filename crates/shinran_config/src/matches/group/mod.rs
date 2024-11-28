@@ -18,12 +18,10 @@
  */
 
 use anyhow::Result;
-use shinran_types::{RegexMatch, TriggerMatch};
+use shinran_types::{RegexMatch, TriggerMatch, Variable};
 use std::path::{Path, PathBuf};
 
 use crate::error::NonFatalErrorSet;
-
-use super::Variable;
 
 pub(crate) mod loader;
 mod path;

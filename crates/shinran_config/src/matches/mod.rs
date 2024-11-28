@@ -17,56 +17,5 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use shinran_types::{MatchCause, MatchEffect, TriggerCause, Variable};
-
 pub(crate) mod group;
 pub mod store;
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct LoadedMatch {
-    pub cause: MatchCause,
-    pub effect: MatchEffect,
-
-    // Metadata
-    pub label: Option<String>,
-    pub search_terms: Vec<String>,
-}
-
-impl Default for LoadedMatch {
-    fn default() -> Self {
-        Self {
-            cause: MatchCause::Trigger(TriggerCause::default()),
-            effect: MatchEffect::None,
-            label: None,
-            search_terms: vec![],
-        }
-    }
-}
-
-impl LoadedMatch {
-    // TODO: test
-    pub fn description(&self) -> &str {
-        if let Some(label) = &self.label {
-            label
-        } else if let MatchEffect::Text(text_effect) = &self.effect {
-            &text_effect.body
-        } else if let MatchEffect::Image(_) = &self.effect {
-            "Image content"
-        } else {
-            "No description available for this match"
-        }
-    }
-
-    // TODO: test
-    pub fn cause_description(&self) -> Option<&str> {
-        self.cause.description()
-    }
-
-    pub fn search_terms(&self) -> Vec<&str> {
-        self.search_terms
-            .iter()
-            .map(String::as_str)
-            .chain(self.cause.search_terms())
-            .collect()
-    }
-}
