@@ -25,8 +25,8 @@ mod render;
 pub use config::Configuration;
 
 fn get_regex_matches<'store>(
-    match_cache: &MatchCache<'store>,
     profile_store: &ProfileStore,
+    match_cache: &MatchCache<'store>,
 ) -> Vec<&'store RegexMatch> {
     // TODO: Use the active profile here, instead of the default one.
     let profile_ref = profile_store.default_config();
@@ -43,7 +43,7 @@ impl<'store> Backend<'store> {
     pub fn new(configuration: &'store Configuration) -> anyhow::Result<Self> {
         let match_cache =
             match_cache::MatchCache::load(&configuration.profile_store, &configuration.match_store);
-        let regex_matches = get_regex_matches(&match_cache, &configuration.profile_store);
+        let regex_matches = get_regex_matches(&configuration.profile_store, &match_cache);
 
         let builtin_matches = builtin::get_builtin_matches();
         let combined_cache =
@@ -83,7 +83,7 @@ impl<'store> Backend<'store> {
             .adapter
             .combined_cache
             .user_match_cache
-            .matches(active_profile);
+            .trigger_matches(active_profile);
 
         let atom = get_simple_atom(trigger);
         let mut matcher = self.fuzzy_matcher.lock().unwrap();

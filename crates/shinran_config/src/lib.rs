@@ -240,8 +240,6 @@ mod tests {
 
             let (config_store, match_store, errors) = load(base).unwrap();
 
-            println!("{:?}", errors);
-
             assert_eq!(errors.len(), 3);
             // It shouldn't have loaded the "config.yml" one because of the YAML error
             assert_eq!(config_store.all_configs().len(), 1);

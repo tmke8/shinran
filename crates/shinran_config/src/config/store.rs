@@ -16,6 +16,10 @@
  * You should have received a copy of the GNU General Public License
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
+use std::{
+    collections::{HashMap, HashSet},
+    path::{Path, PathBuf},
+};
 
 use crate::error::NonFatalErrorSet;
 use crate::matches::group::loader::yaml::YAMLImporter;
@@ -24,37 +28,27 @@ use crate::{config::resolve::LoadedProfileFile, matches::group::MatchFileRef};
 use super::{ConfigStoreError, ProfileFile};
 use anyhow::{Context, Result};
 use log::{debug, error};
-use std::{
-    collections::{HashMap, HashSet},
-    path::{Path, PathBuf},
-};
 
 #[repr(transparent)]
 pub struct ProfileStore {
     profiles: Vec<ProfileFile>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[repr(transparent)]
+pub struct ProfileRef {
+    idx: usize,
+}
+
 impl ProfileStore {
-    pub fn resolve_paths(
-        loaded: LoadedProfileStore,
-        file_map: &HashMap<PathBuf, MatchFileRef>,
-    ) -> Self {
-        let profiles = loaded
-            .profiles
-            .into_iter()
-            .map(|loaded| ProfileFile::from_loaded_profile(loaded, file_map))
-            .collect::<_>();
-        ProfileStore { profiles }
+    #[inline]
+    pub fn default_config(&self) -> ProfileRef {
+        ProfileRef { idx: 0 }
     }
 
     #[inline]
     pub fn get(&self, ref_: ProfileRef) -> &ProfileFile {
         &self.profiles[ref_.idx]
-    }
-
-    #[inline]
-    pub fn default_config(&self) -> ProfileRef {
-        ProfileRef { idx: 0 }
     }
 
     /// Get the active configuration for the given app.
@@ -70,6 +64,18 @@ impl ProfileStore {
         self.default_config()
     }
 
+    pub fn resolve_paths(
+        loaded: LoadedProfileStore,
+        file_map: &HashMap<PathBuf, MatchFileRef>,
+    ) -> Self {
+        let profiles = loaded
+            .profiles
+            .into_iter()
+            .map(|loaded| ProfileFile::from_loaded_profile(loaded, file_map))
+            .collect::<_>();
+        ProfileStore { profiles }
+    }
+
     pub fn all_configs(&self) -> Vec<ProfileRef> {
         (0..self.profiles.len())
             .map(|idx| ProfileRef { idx })
@@ -80,12 +86,6 @@ impl ProfileStore {
 #[repr(transparent)]
 pub struct LoadedProfileStore {
     profiles: Vec<LoadedProfileFile>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
-#[repr(transparent)]
-pub struct ProfileRef {
-    idx: usize,
 }
 
 impl LoadedProfileStore {

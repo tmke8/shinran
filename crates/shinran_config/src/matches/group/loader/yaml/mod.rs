@@ -99,11 +99,6 @@ impl YAMLImporter {
                 &mut regex_matches,
                 &mut non_fatal_errors,
             ) {
-                // CONTINUE HERE
-                // Ok((m, warnings)) => {
-                //     matches.push(m);
-                //     non_fatal_errors.extend(warnings.into_iter().map(ErrorRecord::warn));
-                // }
                 Ok(_) => {}
                 Err(err) => {
                     non_fatal_errors.push(ErrorRecord::error(err));
@@ -217,7 +212,7 @@ pub fn try_convert_into_match(
         || yaml_match.markdown.is_some()
         || yaml_match.html.is_some()
     {
-        // TODO: test markdown and html cases
+        // TODO: Test markdown and html cases.
         let (replace, format) = if let Some(plain) = yaml_match.replace {
             (plain, TextFormat::Plain)
         } else if let Some(markdown) = yaml_match.markdown {
@@ -230,8 +225,9 @@ pub fn try_convert_into_match(
 
         let mut vars: Vec<Variable> = Vec::new();
         for yaml_var in yaml_match.vars.unwrap_or_default() {
+            // TODO: Avoid cloning the variable.
             let (var, var_warnings) = try_convert_into_variable(yaml_var.clone(), false)
-                .with_context(|| format!("failed to load variable: {yaml_var:?}"))?;
+                .with_context(|| format!("failed to load variable: {:?}", yaml_var))?;
             warnings.extend(var_warnings);
             vars.push(var);
         }
@@ -246,8 +242,7 @@ pub fn try_convert_into_match(
         // Replace all the form fields with actual variables
 
         // In v2.1.0-alpha the form control syntax was replaced with [[control]]
-        // instead of {{control}}, so we check if compatibility mode is being used.
-        // TODO: remove once compatibility mode is removed
+        // instead of {{control}}.
 
         let (resolved_replace, resolved_layout) = (
             FORM_CONTROL_REGEX

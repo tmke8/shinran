@@ -133,7 +133,10 @@ impl<'store> RendererAdapter<'store> {
         };
 
         let context = Context {
-            matches_map: self.combined_cache.user_match_cache.matches(active_profile),
+            matches_map: self
+                .combined_cache
+                .user_match_cache
+                .trigger_matches(active_profile),
             global_vars_map: self
                 .combined_cache
                 .user_match_cache

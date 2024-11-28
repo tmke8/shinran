@@ -58,7 +58,10 @@ impl<'store> MatchCache<'store> {
         }
     }
 
-    pub fn matches(&self, profile_ref: ProfileRef) -> &HashMap<&'store str, &'store TriggerMatch> {
+    pub fn trigger_matches(
+        &self,
+        profile_ref: ProfileRef,
+    ) -> &HashMap<&'store str, &'store TriggerMatch> {
         &self.trigger_profiles[&profile_ref]
     }
 
@@ -180,7 +183,7 @@ impl<'store> CombinedMatchCache<'store> {
     ) -> Vec<DetectedMatch> {
         let mut user_matches: Option<DetectedMatch> = self
             .user_match_cache
-            .matches(active_profile)
+            .trigger_matches(active_profile)
             .get(trigger)
             .map(|&m| DetectedMatch {
                 id: MatchRef::Trigger(m),
@@ -196,7 +199,7 @@ impl<'store> CombinedMatchCache<'store> {
             // This needs to be checked during the rendering.
             user_matches = self
                 .user_match_cache
-                .matches(active_profile)
+                .trigger_matches(active_profile)
                 .get(&trigger.to_ascii_lowercase()[..])
                 .map(|&m| DetectedMatch {
                     id: MatchRef::Trigger(m),

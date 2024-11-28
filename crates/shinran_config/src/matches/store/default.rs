@@ -114,45 +114,34 @@ impl MatchStore {
     }
 }
 
-fn query_matches_for_paths<'store, 'vec>(
+fn query_matches_for_paths<'store>(
     indexed_files: &'store HashMap<MatchFileRef, ResolvedMatchFile>,
     visited_paths: &mut HashSet<MatchFileRef>,
-    visited_trigger_matches: &'vec mut Vec<&'store TriggerMatch>,
-    visited_regex_matches: &'vec mut Vec<&'store RegexMatch>,
-    visited_global_vars: &'vec mut Vec<&'store Variable>,
+    visited_trigger_matches: &mut Vec<&'store TriggerMatch>,
+    visited_regex_matches: &mut Vec<&'store RegexMatch>,
+    visited_global_vars: &mut Vec<&'store Variable>,
     paths: &[MatchFileRef],
-) where
-    'store: 'vec,
-{
+) {
     for path in paths {
         if visited_paths.contains(path) {
             continue; // Already visited
         }
 
-        visited_paths.insert(path.clone());
+        visited_paths.insert(*path);
 
-        if let Some(file) = indexed_files.get(path) {
-            query_matches_for_paths(
-                indexed_files,
-                visited_paths,
-                visited_trigger_matches,
-                visited_regex_matches,
-                visited_global_vars,
-                &file.imports,
-            );
+        let file = indexed_files.get(path).unwrap();
+        visited_trigger_matches.extend(file.content.trigger_matches.iter());
+        visited_regex_matches.extend(file.content.regex_matches.iter());
+        visited_global_vars.extend(file.content.global_vars.iter());
 
-            for m in &file.content.trigger_matches {
-                visited_trigger_matches.push(m);
-            }
-
-            for m in &file.content.regex_matches {
-                visited_regex_matches.push(m);
-            }
-
-            for var in &file.content.global_vars {
-                visited_global_vars.push(var);
-            }
-        }
+        query_matches_for_paths(
+            indexed_files,
+            visited_paths,
+            visited_trigger_matches,
+            visited_regex_matches,
+            visited_global_vars,
+            &file.imports,
+        );
     }
 }
 

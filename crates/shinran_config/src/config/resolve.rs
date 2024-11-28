@@ -16,6 +16,10 @@
  * You should have received a copy of the GNU General Public License
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
+use std::{
+    collections::{HashMap, HashSet},
+    path::{Path, PathBuf},
+};
 
 use super::{
     default::{
@@ -31,8 +35,6 @@ use anyhow::Result;
 use indoc::formatdoc;
 use log::error;
 use regex::Regex;
-use std::{collections::HashMap, path::PathBuf};
-use std::{collections::HashSet, path::Path};
 use thiserror::Error;
 
 const STANDARD_INCLUDES: &[&str] = &["../match/**/[!_]*.yml"];
@@ -185,6 +187,9 @@ impl ProfileFile {
         loaded: LoadedProfileFile,
         file_map: &HashMap<PathBuf, MatchFileRef>,
     ) -> Self {
+        // Convert the paths to MatchFileRef.
+        // We use `filter_map` here because we have already reported errors for missing files,
+        // so we can safely ignore them here.
         let match_file_paths = loaded
             .match_file_paths
             .into_iter()
@@ -578,38 +583,6 @@ fn aggregate_includes(config: &ParsedConfig) -> HashSet<String> {
     includes
 }
 
-fn aggregate_excludes(config: &ParsedConfig) -> HashSet<String> {
-    let mut excludes = HashSet::new();
-
-    if let Some(yaml_excludes) = config.excludes.as_ref() {
-        for exclude in yaml_excludes {
-            excludes.insert(exclude.to_string());
-        }
-    }
-
-    if let Some(extra_excludes) = config.extra_excludes.as_ref() {
-        for exclude in extra_excludes {
-            excludes.insert(exclude.to_string());
-        }
-    }
-
-    excludes
-}
-
-fn generate_match_paths(config: &ParsedConfig, base_dir: &Path) -> HashSet<PathBuf> {
-    let includes = aggregate_includes(config);
-    let excludes = aggregate_excludes(config);
-
-    // Extract the paths
-    let exclude_paths = calculate_paths(base_dir, excludes.iter());
-    let include_paths = calculate_paths(base_dir, includes.iter());
-
-    include_paths
-        .difference(&exclude_paths)
-        .cloned()
-        .collect::<HashSet<_>>()
-}
-
 /// Override the `None` fields in the child with the parent's value.
 fn inherit(child: &mut ParsedConfig, parent: &ParsedConfig) {
     merge!(
@@ -661,6 +634,38 @@ fn inherit(child: &mut ParsedConfig, parent: &ParsedConfig) {
         filter_exec,
         filter_os
     );
+}
+
+fn aggregate_excludes(config: &ParsedConfig) -> HashSet<String> {
+    let mut excludes = HashSet::new();
+
+    if let Some(yaml_excludes) = config.excludes.as_ref() {
+        for exclude in yaml_excludes {
+            excludes.insert(exclude.to_string());
+        }
+    }
+
+    if let Some(extra_excludes) = config.extra_excludes.as_ref() {
+        for exclude in extra_excludes {
+            excludes.insert(exclude.to_string());
+        }
+    }
+
+    excludes
+}
+
+fn generate_match_paths(config: &ParsedConfig, base_dir: &Path) -> HashSet<PathBuf> {
+    let includes = aggregate_includes(config);
+    let excludes = aggregate_excludes(config);
+
+    // Extract the paths
+    let exclude_paths = calculate_paths(base_dir, excludes.iter());
+    let include_paths = calculate_paths(base_dir, includes.iter());
+
+    include_paths
+        .difference(&exclude_paths)
+        .cloned()
+        .collect::<HashSet<_>>()
 }
 
 #[derive(Error, Debug)]
