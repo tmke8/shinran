@@ -167,8 +167,14 @@ impl<'store> RendererAdapter<'store> {
     }
 
     #[inline]
-    pub fn find_regex_matches(&self, trigger: &str) -> Vec<crate::engine::DetectedMatch> {
-        self.combined_cache.regex_matcher.find_matches(trigger)
+    pub fn find_regex_matches(
+        &self,
+        trigger: &str,
+        active_profile: ProfileRef,
+    ) -> Vec<crate::engine::DetectedMatch> {
+        self.combined_cache
+            .regex_matcher(active_profile)
+            .find_matches(trigger)
     }
 }
 

@@ -31,8 +31,7 @@ use super::builtin::BuiltInMatch;
 
 pub struct MatchCache<'store> {
     trigger_profiles: HashMap<ProfileRef, HashMap<&'store str, &'store TriggerMatch>>,
-    // TODO: This should be a hash map of `RegexMatcher`s.
-    regex_profiles: HashMap<ProfileRef, Vec<&'store RegexMatch>>,
+    regex_profiles: HashMap<ProfileRef, RegexMatcher<'store>>,
     global_var_profiles: HashMap<ProfileRef, HashMap<&'store str, &'store Variable>>,
 }
 
@@ -47,7 +46,7 @@ impl<'store> MatchCache<'store> {
             let (trigger_map, global_var_map, regex_matches) =
                 create_profile_cache(profile, match_store);
             trigger_profiles.insert(profile_ref, trigger_map);
-            regex_profiles.insert(profile_ref, regex_matches);
+            regex_profiles.insert(profile_ref, RegexMatcher::new(regex_matches));
             global_var_profiles.insert(profile_ref, global_var_map);
         }
 
@@ -65,7 +64,7 @@ impl<'store> MatchCache<'store> {
         &self.trigger_profiles[&profile_ref]
     }
 
-    pub fn regex_matches(&self, profile_ref: ProfileRef) -> &Vec<&'store RegexMatch> {
+    pub fn regex_matches(&self, profile_ref: ProfileRef) -> &RegexMatcher<'store> {
         &self.regex_profiles[&profile_ref]
     }
 
@@ -106,7 +105,6 @@ fn create_profile_cache<'store>(
 pub struct CombinedMatchCache<'store> {
     pub user_match_cache: MatchCache<'store>,
     builtin_match_cache: HashMap<i32, BuiltInMatch>,
-    pub regex_matcher: RegexMatcher<'store>,
 }
 
 // pub enum MatchVariant<'a> {
@@ -116,24 +114,21 @@ pub struct CombinedMatchCache<'store> {
 // }
 
 impl<'store> CombinedMatchCache<'store> {
-    pub fn load(
-        match_cache: MatchCache<'store>,
-        builtin_matches: Vec<BuiltInMatch>,
-        regex_matches: Vec<&'store RegexMatch>,
-    ) -> Self {
+    pub fn load(match_cache: MatchCache<'store>, builtin_matches: Vec<BuiltInMatch>) -> Self {
         let mut builtin_match_cache = HashMap::new();
 
         for m in builtin_matches {
             builtin_match_cache.insert(m.id, m);
         }
 
-        let matcher = RegexMatcher::new(regex_matches);
-
         Self {
             user_match_cache: match_cache,
             builtin_match_cache,
-            regex_matcher: matcher,
         }
+    }
+
+    pub fn regex_matcher(&self, active_profile: ProfileRef) -> &RegexMatcher<'store> {
+        self.user_match_cache.regex_matches(active_profile)
     }
 
     // pub fn get(&self, match_id: usize) -> Option<MatchVariant<'_>> {

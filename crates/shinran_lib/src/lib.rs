@@ -6,10 +6,7 @@ use std::{
 
 use log::error;
 use nucleo_matcher::pattern;
-use shinran_config::config::ProfileStore;
-use shinran_types::{RegexMatch, TriggerMatch};
-
-use match_cache::MatchCache;
+use shinran_types::TriggerMatch;
 
 mod builtin;
 mod config;
@@ -24,16 +21,6 @@ mod render;
 
 pub use config::Configuration;
 
-fn get_regex_matches<'store>(
-    profile_store: &ProfileStore,
-    match_cache: &MatchCache<'store>,
-) -> Vec<&'store RegexMatch> {
-    // TODO: Use the active profile here, instead of the default one.
-    let profile_ref = profile_store.default_config();
-    // TODO: Restructure the code such that we don't need to clone here.
-    match_cache.regex_matches(profile_ref).clone()
-}
-
 pub struct Backend<'store> {
     adapter: render::RendererAdapter<'store>,
     fuzzy_matcher: Arc<Mutex<nucleo_matcher::Matcher>>,
@@ -43,11 +30,9 @@ impl<'store> Backend<'store> {
     pub fn new(configuration: &'store Configuration) -> anyhow::Result<Self> {
         let match_cache =
             match_cache::MatchCache::load(&configuration.profile_store, &configuration.match_store);
-        let regex_matches = get_regex_matches(&configuration.profile_store, &match_cache);
 
         let builtin_matches = builtin::get_builtin_matches();
-        let combined_cache =
-            match_cache::CombinedMatchCache::load(match_cache, builtin_matches, regex_matches);
+        let combined_cache = match_cache::CombinedMatchCache::load(match_cache, builtin_matches);
         let adapter = render::RendererAdapter::new(combined_cache, &configuration);
 
         let matcher = nucleo_matcher::Matcher::new(nucleo_matcher::Config::DEFAULT);
@@ -65,7 +50,11 @@ impl<'store> Backend<'store> {
         let match_ = if let Some(match_) = matches.into_iter().next() {
             match_
         } else {
-            let matches = self.adapter.find_regex_matches(trigger).into_iter().next();
+            let matches = self
+                .adapter
+                .find_regex_matches(trigger, active_profile)
+                .into_iter()
+                .next();
             if let Some(matches) = matches {
                 matches
             } else {
