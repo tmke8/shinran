@@ -159,7 +159,7 @@ fn load_match_files_recursively(
             continue; // Already loaded
         }
 
-        match LoadedMatchFile::load(&match_file_path)
+        match LoadedMatchFile::load(match_file_path)
             .with_context(|| format!("unable to load match group {match_file_path:?}"))
         {
             Ok((group, non_fatal_error_set)) => {
@@ -180,7 +180,7 @@ fn load_match_files_recursively(
                 );
             }
             Err(err) => {
-                non_fatal_error_sets.push(NonFatalErrorSet::single_error(&match_file_path, err));
+                non_fatal_error_sets.push(NonFatalErrorSet::single_error(match_file_path, err));
             }
         }
     }

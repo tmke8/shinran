@@ -75,7 +75,7 @@ impl<'store> RegexMatcher<'store> {
         let mut matches = Vec::new();
 
         for index in self.regex_set.matches(trigger) {
-            let (Some(id), Some(regex)) = (self.ids.get(index), self.regexes.get(index)) else {
+            let (Some(m), Some(regex)) = (self.ids.get(index), self.regexes.get(index)) else {
                 error!(
                     "received inconsistent index from regex set with index: {}",
                     index
@@ -97,7 +97,7 @@ impl<'store> RegexMatcher<'store> {
                     .collect();
 
                 let result = DetectedMatch {
-                    id: MatchRef::Regex(*id),
+                    id: MatchRef::Regex(m),
                     trigger: full_match.to_string(),
                     left_separator: None,
                     right_separator: None,

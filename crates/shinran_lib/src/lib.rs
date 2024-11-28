@@ -33,7 +33,7 @@ impl<'store> Backend<'store> {
 
         let builtin_matches = builtin::get_builtin_matches();
         let combined_cache = match_cache::CombinedMatchCache::load(match_cache, builtin_matches);
-        let adapter = render::RendererAdapter::new(combined_cache, &configuration);
+        let adapter = render::RendererAdapter::new(combined_cache, configuration);
 
         let matcher = nucleo_matcher::Matcher::new(nucleo_matcher::Config::DEFAULT);
         Ok(Backend {
