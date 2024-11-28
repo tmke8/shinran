@@ -99,10 +99,7 @@ impl<M: Extension> Renderer<M> {
                     .filter_map(|var| {
                         if matches!(var.var_type, VarType::Unresolved) {
                             // Try to resolve it with a global variable.
-                            context
-                                .global_vars_map
-                                .get(&*var.name)
-                                .map(|&var_ref| context.global_vars.get(var_ref))
+                            context.global_vars_map.get(&*var.name).copied()
                         } else {
                             Some(var)
                         }
@@ -114,10 +111,15 @@ impl<M: Extension> Renderer<M> {
 
             // Here we execute a graph dependency resolution algorithm to determine a valid
             // evaluation order for variables.
+            let global_vars = context
+                .global_vars_map
+                .values()
+                .copied()
+                .collect::<Vec<_>>();
             let variables = match resolve::resolve_evaluation_order(
                 &template.body,
                 &local_variables,
-                context.global_vars.as_slice(),
+                global_vars.as_slice(),
             ) {
                 Ok(variables) => variables,
                 Err(err) => return RenderResult::Error(err),
@@ -130,8 +132,7 @@ impl<M: Extension> Renderer<M> {
                     // Recursive call
                     // Call render recursively
                     let sub_template = get_trigger_from_var(variable)
-                        .and_then(|trigger| context.matches_map.get(trigger))
-                        .map(|&match_ref| context.matches.get(match_ref))
+                        .and_then(|trigger| context.matches_map.get(trigger).copied())
                         .map(|match_| &match_.base_match.effect);
                     let Some(MatchEffect::Text(sub_template)) = sub_template else {
                         error!("unable to find sub-match: {}", variable.name);
@@ -275,10 +276,7 @@ pub enum RendererError {
 #[cfg(test)]
 mod tests {
 
-    use shinran_types::{
-        BaseMatch, Params, TextFormat, TrigMatchRef, TrigMatchStore, TriggerMatch, VarRef,
-        VarStore, Variable,
-    };
+    use shinran_types::{BaseMatch, Params, TextFormat, TriggerMatch, Variable};
 
     use super::*;
     use std::{collections::HashMap, iter::FromIterator};
@@ -392,41 +390,34 @@ mod tests {
         }
     }
 
-    struct MyContext {
-        matches: TrigMatchStore,
-        matches_map: HashMap<&'static str, TrigMatchRef>,
-        global_vars: VarStore,
-        global_vars_map: HashMap<&'static str, VarRef>,
+    struct MyContext<'a> {
+        matches_map: HashMap<&'a str, &'a TriggerMatch>,
+        global_vars_map: HashMap<&'a str, &'a Variable>,
     }
 
-    impl MyContext {
-        pub fn new(vars: Vec<MyVariable>, ms: Vec<TriggerMatch>) -> Self {
-            let mut global_vars = VarStore::new();
+    impl<'a> MyContext<'a> {
+        pub fn new(vars: &[&'a Variable], ms: &[&'a TriggerMatch]) -> MyContext<'a> {
             let mut global_vars_map = HashMap::new();
-            for var in vars.into_iter() {
-                let var_name = var.name;
-                let idx = global_vars.add(var.into());
-                global_vars_map.insert(var_name, idx);
+            for var in vars {
+                let var_name = &var.name;
+                global_vars_map.insert(var_name.as_str(), *var);
             }
-            let mut matches = TrigMatchStore::new();
             let mut matches_map = HashMap::new();
-            for m in ms.into_iter() {
-                let idx = matches.add(m);
-                matches_map.insert(trigger, idx);
+            for m in ms {
+                let triggers = &m.triggers;
+                for trigger in triggers {
+                    matches_map.insert(trigger.as_str(), *m);
+                }
             }
             MyContext {
-                matches,
                 matches_map,
-                global_vars,
                 global_vars_map,
             }
         }
 
         pub fn as_context(&self) -> Context {
             Context {
-                matches: &self.matches,
                 matches_map: &self.matches_map,
-                global_vars: &self.global_vars,
                 global_vars_map: &self.global_vars_map,
             }
         }
@@ -529,18 +520,16 @@ mod tests {
     fn global_variable() {
         let renderer = get_renderer();
         let template = template("hello {{var}}", &[]);
-        let global_vars = MyContext::new(
-            vec![MyVariable {
-                name: "var",
-                var_type: VarType::Mock,
-                params: Params::from_iter(vec![(
-                    "echo".to_string(),
-                    Value::String("world".to_string()),
-                )]),
-                ..Default::default()
-            }],
-            vec![],
-        );
+        let var1 = &Variable {
+            name: "var".to_string(),
+            var_type: VarType::Mock,
+            params: Params::from_iter(vec![(
+                "echo".to_string(),
+                Value::String("world".to_string()),
+            )]),
+            ..Default::default()
+        };
+        let global_vars = MyContext::new(&[var1], &[]);
         let res = renderer.render_template(
             &template,
             global_vars.as_context(),
@@ -553,20 +542,18 @@ mod tests {
     fn global_dict_variable() {
         let renderer = get_renderer();
         let template = template("hello {{var.nested}}", &[]);
-        let global_vars = MyContext::new(
-            vec![MyVariable {
-                name: "var",
-                var_type: VarType::Mock,
-                params: vec![
-                    ("name".to_string(), Value::String("nested".to_string())),
-                    ("value".to_string(), Value::String("dict".to_string())),
-                ]
-                .into_iter()
-                .collect::<Params>(),
-                ..Default::default()
-            }],
-            vec![],
-        );
+        let var1 = &Variable {
+            name: "var".to_string(),
+            var_type: VarType::Mock,
+            params: vec![
+                ("name".to_string(), Value::String("nested".to_string())),
+                ("value".to_string(), Value::String("dict".to_string())),
+            ]
+            .into_iter()
+            .collect::<Params>(),
+            ..Default::default()
+        };
+        let global_vars = MyContext::new(&[var1], &[]);
         let res = renderer.render_template(
             &template,
             global_vars.as_context(),
@@ -597,18 +584,16 @@ mod tests {
             ],
             ..Default::default()
         };
-        let global_vars = MyContext::new(
-            vec![MyVariable {
-                name: "var",
-                var_type: VarType::Mock,
-                params: Params::from_iter(vec![(
-                    "read".to_string(),
-                    Value::String("local".to_string()),
-                )]),
-                ..Default::default()
-            }],
-            vec![],
-        );
+        let var1 = &Variable {
+            name: "var".to_string(),
+            var_type: VarType::Mock,
+            params: Params::from_iter(vec![(
+                "read".to_string(),
+                Value::String("local".to_string()),
+            )]),
+            ..Default::default()
+        };
+        let global_vars = MyContext::new(&[var1], &[]);
         let res = renderer.render_template(
             &template,
             global_vars.as_context(),
@@ -626,29 +611,25 @@ mod tests {
     fn nested_global_variable() {
         let renderer = get_renderer();
         let template = template("hello {{var2}}", &[]);
-        let global_vars = MyContext::new(
-            vec![
-                MyVariable {
-                    name: "var",
-                    var_type: VarType::Mock,
-                    params: Params::from_iter(vec![(
-                        "echo".to_string(),
-                        Value::String("world".to_string()),
-                    )]),
-                    ..Default::default()
-                },
-                MyVariable {
-                    name: "var2",
-                    var_type: VarType::Mock,
-                    params: Params::from_iter(vec![(
-                        "echo".to_string(),
-                        Value::String("{{var}}".to_string()),
-                    )]),
-                    ..Default::default()
-                },
-            ],
-            vec![],
-        );
+        let var1 = &Variable {
+            name: "var".to_string(),
+            var_type: VarType::Mock,
+            params: Params::from_iter(vec![(
+                "echo".to_string(),
+                Value::String("world".to_string()),
+            )]),
+            ..Default::default()
+        };
+        let var2 = &Variable {
+            name: "var2".to_string(),
+            var_type: VarType::Mock,
+            params: Params::from_iter(vec![(
+                "echo".to_string(),
+                Value::String("{{var}}".to_string()),
+            )]),
+            ..Default::default()
+        };
+        let global_vars = MyContext::new(&[var1, var2], &[]);
         let res = renderer.render_template(
             &template,
             global_vars.as_context(),
@@ -661,38 +642,34 @@ mod tests {
     fn nested_global_variable_circular_dependency_should_fail() {
         let renderer = get_renderer();
         let template = template("hello {{var}}", &[]);
-        let global_vars = MyContext::new(
-            vec![
-                MyVariable {
-                    name: "var",
-                    var_type: VarType::Mock,
-                    params: Params::from_iter(vec![(
-                        "echo".to_string(),
-                        Value::String("{{var2}}".to_string()),
-                    )]),
-                    ..Default::default()
-                },
-                MyVariable {
-                    name: "var2",
-                    var_type: VarType::Mock,
-                    params: Params::from_iter(vec![(
-                        "echo".to_string(),
-                        Value::String("{{var3}}".to_string()),
-                    )]),
-                    ..Default::default()
-                },
-                MyVariable {
-                    name: "var3",
-                    var_type: VarType::Mock,
-                    params: Params::from_iter(vec![(
-                        "echo".to_string(),
-                        Value::String("{{var}}".to_string()),
-                    )]),
-                    ..Default::default()
-                },
-            ],
-            vec![],
-        );
+        let var1 = &Variable {
+            name: "var".to_string(),
+            var_type: VarType::Mock,
+            params: Params::from_iter(vec![(
+                "echo".to_string(),
+                Value::String("{{var2}}".to_string()),
+            )]),
+            ..Default::default()
+        };
+        let var2 = &Variable {
+            name: "var2".to_string(),
+            var_type: VarType::Mock,
+            params: Params::from_iter(vec![(
+                "echo".to_string(),
+                Value::String("{{var3}}".to_string()),
+            )]),
+            ..Default::default()
+        };
+        let var3 = &Variable {
+            name: "var3".to_string(),
+            var_type: VarType::Mock,
+            params: Params::from_iter(vec![(
+                "echo".to_string(),
+                Value::String("{{var}}".to_string()),
+            )]),
+            ..Default::default()
+        };
+        let global_vars = MyContext::new(&[var1, var2, var3], &[]);
         let res = renderer.render_template(
             &template,
             global_vars.as_context(),
@@ -705,27 +682,23 @@ mod tests {
     fn global_variable_depends_on() {
         let renderer = get_renderer();
         let template = template("hello {{var}}", &[]);
-        let global_vars = MyContext::new(
-            vec![
-                MyVariable {
-                    name: "var",
-                    var_type: VarType::Mock,
-                    params: Params::from_iter(vec![(
-                        "echo".to_string(),
-                        Value::String("world".to_string()),
-                    )]),
-                    depends_on: vec!["var2"],
-                    ..Default::default()
-                },
-                MyVariable {
-                    name: "var2",
-                    var_type: VarType::Mock,
-                    params: Params::from_iter(vec![("abort".to_string(), Value::Null)]),
-                    ..Default::default()
-                },
-            ],
-            vec![],
-        );
+        let var1 = &Variable {
+            name: "var".to_string(),
+            var_type: VarType::Mock,
+            params: Params::from_iter(vec![(
+                "echo".to_string(),
+                Value::String("world".to_string()),
+            )]),
+            depends_on: vec!["var2".to_string()],
+            ..Default::default()
+        };
+        let var2 = &Variable {
+            name: "var2".to_string(),
+            var_type: VarType::Mock,
+            params: Params::from_iter(vec![("abort".to_string(), Value::Null)]),
+            ..Default::default()
+        };
+        let global_vars = MyContext::new(&[var1, var2], &[]);
         let res = renderer.render_template(
             &template,
             global_vars.as_context(),
@@ -750,15 +723,13 @@ mod tests {
             }],
             ..Default::default()
         };
-        let global_vars = MyContext::new(
-            vec![MyVariable {
-                name: "global",
-                var_type: VarType::Mock,
-                params: Params::from_iter(vec![("abort".to_string(), Value::Null)]),
-                ..Default::default()
-            }],
-            vec![],
-        );
+        let var1 = &Variable {
+            name: "global".to_string(),
+            var_type: VarType::Mock,
+            params: Params::from_iter(vec![("abort".to_string(), Value::Null)]),
+            ..Default::default()
+        };
+        let global_vars = MyContext::new(&[var1], &[]);
         let res = renderer.render_template(
             &template,
             global_vars.as_context(),
@@ -786,17 +757,15 @@ mod tests {
             body: "world".to_string(),
             ..Default::default()
         };
-        let templates = MyContext::new(
-            vec![],
-            vec![TriggerMatch {
-                triggers: vec!["nested".to_string()],
-                base_match: BaseMatch {
-                    effect: MatchEffect::Text(nested_template),
-                    ..Default::default()
-                },
+        let match1 = &TriggerMatch {
+            triggers: vec!["nested".to_string()],
+            base_match: BaseMatch {
+                effect: MatchEffect::Text(nested_template),
                 ..Default::default()
-            }],
-        );
+            },
+            ..Default::default()
+        };
+        let templates = MyContext::new(&[], &[match1]);
         let res =
             renderer.render_template(&template, templates.as_context(), &RenderOptions::default());
         assert!(matches!(res, RenderResult::Success(str) if str == "hello world"));
@@ -1008,18 +977,16 @@ mod tests {
             },
         ];
 
-        let global_vars = MyContext::new(
-            vec![MyVariable {
-                name: "var",
-                var_type: VarType::Mock,
-                params: Params::from_iter(vec![(
-                    "echo".to_string(),
-                    Value::String("global".to_string()),
-                )]),
-                ..Default::default()
-            }],
-            vec![],
-        );
+        let var1 = &Variable {
+            name: "var".to_string(),
+            var_type: VarType::Mock,
+            params: Params::from_iter(vec![(
+                "echo".to_string(),
+                Value::String("global".to_string()),
+            )]),
+            ..Default::default()
+        };
+        let global_vars = MyContext::new(&[var1], &[]);
         let res = renderer.render_template(
             &template,
             global_vars.as_context(),
@@ -1053,18 +1020,16 @@ mod tests {
             },
         ];
 
-        let global_vars = MyContext::new(
-            vec![MyVariable {
-                name: "var",
-                var_type: VarType::Mock,
-                params: Params::from_iter(vec![(
-                    "echo".to_string(),
-                    Value::String("global".to_string()),
-                )]),
-                ..Default::default()
-            }],
-            vec![],
-        );
+        let var1 = &Variable {
+            name: "var".to_string(),
+            var_type: VarType::Mock,
+            params: Params::from_iter(vec![(
+                "echo".to_string(),
+                Value::String("global".to_string()),
+            )]),
+            ..Default::default()
+        };
+        let global_vars = MyContext::new(&[var1], &[]);
         let res = renderer.render_template(
             &template,
             global_vars.as_context(),

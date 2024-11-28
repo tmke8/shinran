@@ -18,7 +18,7 @@
  */
 
 use anyhow::Result;
-use shinran_types::{BaseMatch, TriggerMatch};
+use shinran_types::{RegexMatch, TriggerMatch};
 use std::path::{Path, PathBuf};
 
 use crate::error::NonFatalErrorSet;
@@ -32,7 +32,7 @@ mod path;
 pub struct MatchFile {
     pub global_vars: Vec<Variable>,
     pub trigger_matches: Vec<TriggerMatch>,
-    pub regex_matches: Vec<BaseMatch>,
+    pub regex_matches: Vec<RegexMatch>,
 }
 
 /// A `LoadedMatchFile` describes one file in the `match` directory.

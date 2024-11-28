@@ -15,9 +15,9 @@ pub enum RendererError {
     Aborted,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct DetectedMatch {
-    pub id: MatchIdx,
+#[derive(Debug, Clone, PartialEq)]
+pub struct DetectedMatch<'store> {
+    pub id: MatchIdx<'store>,
     pub trigger: String,
     pub left_separator: Option<String>,
     pub right_separator: Option<String>,

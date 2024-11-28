@@ -68,9 +68,8 @@ impl<'store> RendererAdapter<'store> {
         active_profile: ProfileRef,
     ) -> anyhow::Result<String> {
         let (effect, propagate_case, preferred_uppercasing_style) = match match_id {
-            MatchIdx::Trigger(idx) => {
-                let (expected_triggers, m) =
-                    &self.configuration.match_store.trigger_matches.get(idx);
+            MatchIdx::Trigger(m) => {
+                let expected_triggers = &m.triggers;
                 if let Some(trigger) = trigger {
                     // If we are not propagating case, we have to make sure that the trigger matches
                     // one of the expected triggers exactly.
@@ -84,17 +83,7 @@ impl<'store> RendererAdapter<'store> {
                     Some(m.uppercase_style),
                 )
             }
-            MatchIdx::Regex(idx) => (
-                &self
-                    .configuration
-                    .match_store
-                    .regex_matches
-                    .get(idx)
-                    .1
-                    .effect,
-                false,
-                None,
-            ),
+            MatchIdx::Regex(m) => (&m.base_match.effect, false, None),
             MatchIdx::BuiltIn(_) => {
                 unreachable!()
             }
@@ -144,9 +133,7 @@ impl<'store> RendererAdapter<'store> {
         };
 
         let context = Context {
-            matches: &self.configuration.match_store.trigger_matches,
             matches_map: self.combined_cache.user_match_cache.matches(active_profile),
-            global_vars: &self.configuration.match_store.global_vars,
             global_vars_map: self
                 .combined_cache
                 .user_match_cache

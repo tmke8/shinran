@@ -18,7 +18,7 @@
  */
 
 use enum_as_inner::EnumAsInner;
-use shinran_types::{Params, TrigMatchRef, TrigMatchStore, VarRef, VarStore};
+use shinran_types::{Params, TriggerMatch, Variable};
 use std::collections::HashMap;
 
 pub mod extension;
@@ -44,34 +44,21 @@ pub enum RenderResult {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Context<'a, 'store> {
-    pub matches: &'a TrigMatchStore,
-    pub matches_map: &'a HashMap<&'store str, TrigMatchRef>,
-    pub global_vars: &'a VarStore,
-    pub global_vars_map: &'a HashMap<&'store str, VarRef>,
+    pub matches_map: &'a HashMap<&'store str, &'store TriggerMatch>,
+    pub global_vars_map: &'a HashMap<&'store str, &'store Variable>,
 }
 
 static DEFAULT_CONTEXT: std::sync::LazyLock<(
-    TrigMatchStore,
-    HashMap<&'static str, TrigMatchRef>,
-    VarStore,
-    HashMap<&'static str, VarRef>,
-)> = std::sync::LazyLock::new(|| {
-    (
-        TrigMatchStore::new(),
-        HashMap::new(),
-        VarStore::new(),
-        HashMap::new(),
-    )
-});
+    HashMap<&'static str, &'static TriggerMatch>,
+    HashMap<&'static str, &'static Variable>,
+)> = std::sync::LazyLock::new(|| (HashMap::new(), HashMap::new()));
 
 impl Default for Context<'static, 'static> {
     fn default() -> Self {
         let values = &*DEFAULT_CONTEXT;
         Self {
-            matches: &values.0,
-            matches_map: &values.1,
-            global_vars: &values.2,
-            global_vars_map: &values.3,
+            matches_map: &values.0,
+            global_vars_map: &values.1,
         }
     }
 }

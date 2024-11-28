@@ -21,24 +21,12 @@ use std::collections::HashMap;
 
 use log::error;
 use regex::{Regex, RegexSet};
-use shinran_types::{MatchIdx, RegexMatchRef};
+use shinran_types::{MatchIdx, RegexMatch};
 
 use crate::engine::DetectedMatch;
 
-#[derive(Debug)]
-pub struct RegexMatch<Id> {
-    pub id: Id,
-    pub regex: String,
-}
-
-impl<Id> RegexMatch<Id> {
-    pub fn new(id: Id, regex: String) -> Self {
-        Self { id, regex }
-    }
-}
-
-pub struct RegexMatcher {
-    ids: Vec<RegexMatchRef>,
+pub struct RegexMatcher<'store> {
+    ids: Vec<&'store RegexMatch>,
     // The RegexSet is used to efficiently determine which regexes match
     regex_set: RegexSet,
 
@@ -46,7 +34,7 @@ pub struct RegexMatcher {
     regexes: Vec<Regex>,
 }
 
-impl RegexMatcher {
+impl<'store> RegexMatcher<'store> {
     // fn process(
     //     &'a self,
     //     prev_state: Option<&RegexMatcherState>,
@@ -121,10 +109,8 @@ impl RegexMatcher {
         }
         matches
     }
-}
 
-impl RegexMatcher {
-    pub fn new(matches: Vec<RegexMatch<RegexMatchRef>>) -> Self {
+    pub fn new(matches: Vec<&'store RegexMatch>) -> Self {
         let mut ids = Vec::new();
         let mut regexes = Vec::new();
         let mut good_regexes = Vec::new();
@@ -132,8 +118,8 @@ impl RegexMatcher {
         for m in matches {
             match Regex::new(&m.regex) {
                 Ok(regex) => {
-                    ids.push(m.id);
-                    good_regexes.push(m.regex);
+                    good_regexes.push(&m.regex);
+                    ids.push(m);
                     regexes.push(regex);
                 }
                 Err(err) => {
@@ -154,14 +140,14 @@ impl RegexMatcher {
 
 #[cfg(test)]
 mod tests {
-    use shinran_types::MatchIdx;
+    use shinran_types::{BaseMatch, MatchIdx};
 
     use super::*;
 
-    pub(crate) fn get_matches_after_str(
-        string: &str,
-        matcher: &RegexMatcher,
-    ) -> Vec<DetectedMatch> {
+    pub(crate) fn get_matches_after_str<'a>(
+        string: &'static str,
+        matcher: &'a RegexMatcher<'_>,
+    ) -> Vec<DetectedMatch<'a>> {
         matcher.find_matches(&string)
 
         // for c in string.chars() {
@@ -180,14 +166,18 @@ mod tests {
         // matches
     }
 
-    fn match_result(id: usize, trigger: &str, vars: &[(&str, &str)]) -> DetectedMatch {
+    fn match_result<'a>(
+        id: &'a RegexMatch,
+        trigger: &'static str,
+        vars: &'static [(&'static str, &'static str)],
+    ) -> DetectedMatch<'a> {
         let args: HashMap<String, String> = vars
             .iter()
             .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
             .collect();
 
         DetectedMatch {
-            id: MatchIdx::Regex(unsafe { RegexMatchRef::new(id) }),
+            id: MatchIdx::Regex(id),
             trigger: trigger.to_string(),
             left_separator: None,
             right_separator: None,
@@ -197,52 +187,56 @@ mod tests {
 
     #[test]
     fn matcher_simple_matches() {
-        let matcher = RegexMatcher::new(vec![
-            RegexMatch::new(unsafe { RegexMatchRef::new(1) }, "hello".to_string()),
-            RegexMatch::new(unsafe { RegexMatchRef::new(2) }, "num\\d{1,3}s".to_string()),
-        ]);
+        let match1 = &RegexMatch {
+            regex: "hello".to_string(),
+            base_match: BaseMatch::default(),
+        };
+        let match2 = &RegexMatch {
+            regex: "num\\d{1,3}s".to_string(),
+            base_match: BaseMatch::default(),
+        };
+        let matcher = RegexMatcher::new(vec![match1, match2]);
         assert_eq!(get_matches_after_str("hi", &matcher), vec![]);
         assert_eq!(
             get_matches_after_str("hello", &matcher),
-            vec![match_result(1, "hello", &[])]
+            vec![match_result(match1, "hello", &[])]
         );
         assert_eq!(
             get_matches_after_str("say hello", &matcher),
-            vec![match_result(1, "hello", &[])]
+            vec![match_result(match1, "hello", &[])]
         );
         assert_eq!(
             get_matches_after_str("num1s", &matcher),
-            vec![match_result(2, "num1s", &[])]
+            vec![match_result(match2, "num1s", &[])]
         );
         assert_eq!(
             get_matches_after_str("num134s", &matcher),
-            vec![match_result(2, "num134s", &[])]
+            vec![match_result(match2, "num134s", &[])]
         );
         assert_eq!(get_matches_after_str("nums", &matcher), vec![]);
     }
 
     #[test]
     fn matcher_with_variables() {
-        let matcher = RegexMatcher::new(vec![
-            RegexMatch::new(
-                unsafe { RegexMatchRef::new(1) },
-                "hello\\((?P<name>.*?)\\)".to_string(),
-            ),
-            RegexMatch::new(
-                unsafe { RegexMatchRef::new(2) },
-                "multi\\((?P<name1>.*?),(?P<name2>.*?)\\)".to_string(),
-            ),
-        ]);
+        let match1 = &RegexMatch {
+            regex: "hello\\((?P<name>.*?)\\)".to_string(),
+            base_match: BaseMatch::default(),
+        };
+        let match2 = &RegexMatch {
+            regex: "multi\\((?P<name1>.*?),(?P<name2>.*?)\\)".to_string(),
+            base_match: BaseMatch::default(),
+        };
+        let matcher = RegexMatcher::new(vec![match1, match2]);
         assert_eq!(get_matches_after_str("hi", &matcher), vec![]);
         assert_eq!(
             get_matches_after_str("say hello(mary)", &matcher),
-            vec![match_result(1, "hello(mary)", &[("name", "mary")])]
+            vec![match_result(match1, "hello(mary)", &[("name", "mary")])]
         );
         assert_eq!(get_matches_after_str("hello(mary", &matcher), vec![]);
         assert_eq!(
             get_matches_after_str("multi(mary,jane)", &matcher),
             vec![match_result(
-                2,
+                match2,
                 "multi(mary,jane)",
                 &[("name1", "mary"), ("name2", "jane")]
             )]
@@ -251,24 +245,23 @@ mod tests {
 
     #[test]
     fn matcher_max_buffer_size() {
-        let matcher = RegexMatcher::new(vec![
-            RegexMatch::new(
-                unsafe { RegexMatchRef::new(1) },
-                "hello\\((?P<name>.*?)\\)".to_string(),
-            ),
-            RegexMatch::new(
-                unsafe { RegexMatchRef::new(2) },
-                "multi\\((?P<name1>.*?),(?P<name2>.*?)\\)".to_string(),
-            ),
-        ]);
+        let match1 = &RegexMatch {
+            regex: "hello\\((?P<name>.*?)\\)".to_string(),
+            base_match: BaseMatch::default(),
+        };
+        let match2 = &RegexMatch {
+            regex: "multi\\((?P<name1>.*?),(?P<name2>.*?)\\)".to_string(),
+            base_match: BaseMatch::default(),
+        };
+        let matcher = RegexMatcher::new(vec![match1, match2]);
         assert_eq!(
             get_matches_after_str("say hello(mary)", &matcher),
-            vec![match_result(1, "hello(mary)", &[("name", "mary")])]
+            vec![match_result(match1, "hello(mary)", &[("name", "mary")])]
         );
         assert_eq!(
             get_matches_after_str("hello(very long name over buffer)", &matcher),
             vec![match_result(
-                1,
+                match1,
                 "hello(very long name over buffer)",
                 &[("name", "very long name over buffer")]
             )]

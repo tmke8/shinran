@@ -23,20 +23,8 @@ use crate::error::NonFatalErrorSet;
 
 mod default;
 pub use default::MatchStore;
-use shinran_types::{RegexMatchRef, TrigMatchRef, VarRef};
 
 use super::group::MatchFileRef;
-
-/// The set of matches and global vars associated with one config file.
-///
-/// This struct contains a list of references to the matches that matched the query
-/// and a list of references to the global variables that were defined in the matches.
-#[derive(Debug, Clone, PartialEq)]
-pub struct MatchesAndGlobalVars {
-    pub trigger_matches: Vec<TrigMatchRef>,
-    pub regex_matches: Vec<RegexMatchRef>,
-    pub global_vars: Vec<VarRef>,
-}
 
 pub fn load(
     paths: &[PathBuf],

@@ -6,8 +6,10 @@ use std::{
 
 use log::error;
 use nucleo_matcher::pattern;
-use shinran_config::matches::store::MatchStore;
-use shinran_types::{RegexMatchRef, TrigMatchRef};
+use shinran_config::config::ProfileStore;
+use shinran_types::{RegexMatch, TriggerMatch};
+
+use match_cache::MatchCache;
 
 mod builtin;
 mod config;
@@ -22,14 +24,14 @@ mod render;
 
 pub use config::Configuration;
 
-fn get_regex_matches(match_store: &MatchStore) -> Vec<regex::RegexMatch<RegexMatchRef>> {
-    let mut regex_matches = Vec::new();
-
-    // TODO: This should take into account the current profile.
-    for (match_idx, (regex, _)) in match_store.regex_matches.enumerate() {
-        regex_matches.push(regex::RegexMatch::new(match_idx, regex.clone()));
-    }
-    regex_matches
+fn get_regex_matches<'store>(
+    match_cache: &MatchCache<'store>,
+    profile_store: &ProfileStore,
+) -> Vec<&'store RegexMatch> {
+    // TODO: Use the active profile here, instead of the default one.
+    let profile_ref = profile_store.default_config();
+    // TODO: Restructure the code such that we don't need to clone here.
+    match_cache.regex_matches(profile_ref).clone()
 }
 
 pub struct Backend<'store> {
@@ -41,7 +43,7 @@ impl<'store> Backend<'store> {
     pub fn new(configuration: &'store Configuration) -> anyhow::Result<Self> {
         let match_cache =
             match_cache::MatchCache::load(&configuration.profile_store, &configuration.match_store);
-        let regex_matches = get_regex_matches(&configuration.match_store);
+        let regex_matches = get_regex_matches(&match_cache, &configuration.profile_store);
 
         let builtin_matches = builtin::get_builtin_matches();
         let combined_cache =
@@ -92,7 +94,7 @@ impl<'store> Backend<'store> {
     }
 }
 
-pub struct TriggerAndRef<'a>(pub &'a str, pub TrigMatchRef);
+pub struct TriggerAndRef<'a>(pub &'a str, pub &'a TriggerMatch);
 
 impl AsRef<str> for TriggerAndRef<'_> {
     fn as_ref(&self) -> &str {
