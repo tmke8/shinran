@@ -559,30 +559,6 @@ impl ProfileFile {
     }
 }
 
-fn aggregate_includes(config: &ParsedConfig) -> HashSet<String> {
-    let mut includes = HashSet::new();
-
-    if config.use_standard_includes.is_none() || config.use_standard_includes.unwrap() {
-        for include in STANDARD_INCLUDES {
-            includes.insert((*include).to_string());
-        }
-    }
-
-    if let Some(yaml_includes) = config.includes.as_ref() {
-        for include in yaml_includes {
-            includes.insert(include.to_string());
-        }
-    };
-
-    if let Some(extra_includes) = config.extra_includes.as_ref() {
-        for include in extra_includes {
-            includes.insert(include.to_string());
-        }
-    };
-
-    includes
-}
-
 /// Override the `None` fields in the child with the parent's value.
 fn inherit(child: &mut ParsedConfig, parent: &ParsedConfig) {
     merge!(
@@ -634,6 +610,30 @@ fn inherit(child: &mut ParsedConfig, parent: &ParsedConfig) {
         filter_exec,
         filter_os
     );
+}
+
+fn aggregate_includes(config: &ParsedConfig) -> HashSet<String> {
+    let mut includes = HashSet::new();
+
+    if config.use_standard_includes.is_none() || config.use_standard_includes.unwrap() {
+        for include in STANDARD_INCLUDES {
+            includes.insert((*include).to_string());
+        }
+    }
+
+    if let Some(yaml_includes) = config.includes.as_ref() {
+        for include in yaml_includes {
+            includes.insert(include.to_string());
+        }
+    };
+
+    if let Some(extra_includes) = config.extra_includes.as_ref() {
+        for include in extra_includes {
+            includes.insert(include.to_string());
+        }
+    };
+
+    includes
 }
 
 fn aggregate_excludes(config: &ParsedConfig) -> HashSet<String> {
