@@ -43,9 +43,9 @@ pub fn load(base_path: &Path) -> Result<LoadableConfig> {
         .into_iter()
         .collect();
 
-    let (match_store, map, non_fatal_match_errors) = matches::store::load(&root_paths);
+    let (match_store, file_map, non_fatal_match_errors) = matches::store::load(&root_paths);
 
-    let profile_store = ProfileStore::resolve_paths(profile_store, &map);
+    let profile_store = ProfileStore::resolve_paths(profile_store, &file_map);
 
     let mut non_fatal_errors = Vec::new();
     non_fatal_errors.extend(non_fatal_config_errors);

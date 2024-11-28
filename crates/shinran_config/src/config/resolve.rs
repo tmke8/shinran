@@ -183,12 +183,12 @@ pub struct ProfileFile {
 impl ProfileFile {
     pub fn from_loaded_profile(
         loaded: LoadedProfileFile,
-        map: &HashMap<PathBuf, MatchFileRef>,
+        file_map: &HashMap<PathBuf, MatchFileRef>,
     ) -> Self {
         let match_file_paths = loaded
             .match_file_paths
             .into_iter()
-            .filter_map(|path| map.get(&path).copied())
+            .filter_map(|path| file_map.get(&path).copied())
             .collect();
 
         Self {

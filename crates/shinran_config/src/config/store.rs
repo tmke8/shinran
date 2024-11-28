@@ -35,11 +35,14 @@ pub struct ProfileStore {
 }
 
 impl ProfileStore {
-    pub fn resolve_paths(loaded: LoadedProfileStore, map: &HashMap<PathBuf, MatchFileRef>) -> Self {
+    pub fn resolve_paths(
+        loaded: LoadedProfileStore,
+        file_map: &HashMap<PathBuf, MatchFileRef>,
+    ) -> Self {
         let profiles = loaded
             .profiles
             .into_iter()
-            .map(|loaded| ProfileFile::from_loaded_profile(loaded, map))
+            .map(|loaded| ProfileFile::from_loaded_profile(loaded, file_map))
             .collect::<_>();
         ProfileStore { profiles }
     }

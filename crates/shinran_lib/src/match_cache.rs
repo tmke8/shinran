@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use shinran_config::{
     config::ProfileFile, config::ProfileRef, config::ProfileStore, matches::store::MatchStore,
 };
-use shinran_types::{MatchIdx, RegexMatch, TriggerMatch, Variable};
+use shinran_types::{MatchRef, RegexMatch, TriggerMatch, Variable};
 
 use crate::engine::DetectedMatch;
 use crate::regex::RegexMatcher;
@@ -182,8 +182,8 @@ impl<'store> CombinedMatchCache<'store> {
             .user_match_cache
             .matches(active_profile)
             .get(trigger)
-            .map(|&idx| DetectedMatch {
-                id: MatchIdx::Trigger(idx),
+            .map(|&m| DetectedMatch {
+                id: MatchRef::Trigger(m),
                 trigger: trigger.to_string(),
                 left_separator: None,
                 right_separator: None,
@@ -198,8 +198,8 @@ impl<'store> CombinedMatchCache<'store> {
                 .user_match_cache
                 .matches(active_profile)
                 .get(&trigger.to_ascii_lowercase()[..])
-                .map(|&idx| DetectedMatch {
-                    id: MatchIdx::Trigger(idx),
+                .map(|&m| DetectedMatch {
+                    id: MatchRef::Trigger(m),
                     trigger: trigger.to_string(),
                     left_separator: None,
                     right_separator: None,
@@ -213,7 +213,7 @@ impl<'store> CombinedMatchCache<'store> {
             .filter_map(|m| {
                 if m.triggers.iter().any(|t| t == trigger) {
                     Some(DetectedMatch {
-                        id: MatchIdx::BuiltIn(m.id),
+                        id: MatchRef::BuiltIn(m.id),
                         trigger: trigger.to_string(),
                         left_separator: None,
                         right_separator: None,

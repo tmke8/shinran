@@ -60,17 +60,11 @@ pub enum Number {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum MatchIdx<'store> {
+pub enum MatchRef<'store> {
     Trigger(&'store TriggerMatch),
     Regex(&'store RegexMatch),
     BuiltIn(i32),
 }
-
-// impl Default for MatchIdx {
-//     fn default() -> Self {
-//         Self::Trigger(TrigMatchRef::default())
-//     }
-// }
 
 // Causes
 

@@ -28,17 +28,21 @@ use std::{
     path::PathBuf,
 };
 
+/// Struct representing a match file, where all imports have been resolved.
+///
+/// In contrast, a [`LoadedMatchFile`] contains unresolved imports.
 #[derive(Debug, Clone, PartialEq, Default)]
-pub struct IndexedMatchFile {
-    pub imports: Vec<MatchFileRef>,
-    pub content: MatchFile,
+pub struct ResolvedMatchFile {
+    imports: Vec<MatchFileRef>,
+    content: MatchFile,
 }
 
 /// The MatchStore contains all matches that we have loaded.
 ///
 /// We have a hash map of all match files, indexed by their file system path.
 pub struct MatchStore {
-    pub indexed_files: HashMap<MatchFileRef, IndexedMatchFile>,
+    // TODO: This HashMap should be a Vec, with the index being the MatchFileRef.
+    indexed_files: HashMap<MatchFileRef, ResolvedMatchFile>,
 }
 
 impl MatchStore {
@@ -50,8 +54,7 @@ impl MatchStore {
         let mut loaded_files = MatchFileStore::new();
 
         // Because match files can import other match files,
-        // we have to load them recursively starting from the
-        // top-level ones.
+        // we have to load them recursively starting from the top-level ones.
         load_match_files_recursively(
             &mut loaded_files,
             &mut match_file_map,
@@ -68,7 +71,7 @@ impl MatchStore {
                 .filter_map(|path| match_file_map.get(path).copied())
                 .collect::<_>();
 
-            let indexed_file = IndexedMatchFile {
+            let indexed_file = ResolvedMatchFile {
                 imports,
                 content: match_file.content,
             };
@@ -77,13 +80,6 @@ impl MatchStore {
 
         (Self { indexed_files }, match_file_map, non_fatal_error_sets)
     }
-
-    // pub fn get(&self, index: MatchIdx) -> &BaseMatch {
-    //     match index {
-    //         MatchIdx::Trigger(idx) => &self.trigger_matches[idx].1.base_match,
-    //         MatchIdx::Regex(idx) => &self.regex_matches[idx].1,
-    //     }
-    // }
 
     /// Returns all matches and global vars that were defined in the given paths.
     ///
@@ -119,7 +115,7 @@ impl MatchStore {
 }
 
 fn query_matches_for_paths<'store, 'vec>(
-    indexed_files: &'store HashMap<MatchFileRef, IndexedMatchFile>,
+    indexed_files: &'store HashMap<MatchFileRef, ResolvedMatchFile>,
     visited_paths: &mut HashSet<MatchFileRef>,
     visited_trigger_matches: &'vec mut Vec<&'store TriggerMatch>,
     visited_regex_matches: &'vec mut Vec<&'store RegexMatch>,
@@ -296,13 +292,14 @@ mod tests {
             )
             .unwrap();
 
-            let (match_store, map, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
+            let (match_store, file_map, non_fatal_error_sets) =
+                MatchStore::load(&[base_file.clone()]);
             assert_eq!(non_fatal_error_sets.len(), 0);
             assert_eq!(match_store.indexed_files.len(), 3);
 
             let base_group = &match_store
                 .indexed_files
-                .get(map.get(&base_file).unwrap())
+                .get(file_map.get(&base_file).unwrap())
                 .unwrap()
                 .content
                 .trigger_matches;
@@ -311,7 +308,7 @@ mod tests {
 
             let another_group = &match_store
                 .indexed_files
-                .get(map.get(&another_file).unwrap())
+                .get(file_map.get(&another_file).unwrap())
                 .unwrap()
                 .content
                 .trigger_matches;
@@ -322,7 +319,7 @@ mod tests {
 
             let sub_group = &match_store
                 .indexed_files
-                .get(map.get(&sub_file).unwrap())
+                .get(file_map.get(&sub_file).unwrap())
                 .unwrap()
                 .content
                 .trigger_matches;
@@ -442,11 +439,12 @@ mod tests {
             )
             .unwrap();
 
-            let (match_store, map, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
+            let (match_store, file_map, non_fatal_error_sets) =
+                MatchStore::load(&[base_file.clone()]);
             assert_eq!(non_fatal_error_sets.len(), 0);
 
             let match_set =
-                match_store.collect_matches_and_global_vars(&[*map.get(&base_file).unwrap()]);
+                match_store.collect_matches_and_global_vars(&[*file_map.get(&base_file).unwrap()]);
 
             let mut matches = match_set
                 .trigger_matches
@@ -534,11 +532,12 @@ mod tests {
             )
             .unwrap();
 
-            let (match_store, map, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
+            let (match_store, file_map, non_fatal_error_sets) =
+                MatchStore::load(&[base_file.clone()]);
             assert_eq!(non_fatal_error_sets.len(), 0);
 
             let match_set =
-                match_store.collect_matches_and_global_vars(&[*map.get(&base_file).unwrap()]);
+                match_store.collect_matches_and_global_vars(&[*file_map.get(&base_file).unwrap()]);
             let mut matches = match_set
                 .trigger_matches
                 .into_iter()
@@ -620,12 +619,12 @@ mod tests {
             .unwrap();
 
             let paths = [base_file, sub_file];
-            let (match_store, map, non_fatal_error_sets) = MatchStore::load(&paths);
+            let (match_store, file_map, non_fatal_error_sets) = MatchStore::load(&paths);
             assert_eq!(non_fatal_error_sets.len(), 0);
 
             let match_set = match_store.collect_matches_and_global_vars(&[
-                *map.get(&paths[0]).unwrap(),
-                *map.get(&paths[1]).unwrap(),
+                *file_map.get(&paths[0]).unwrap(),
+                *file_map.get(&paths[1]).unwrap(),
             ]);
             let mut matches = match_set
                 .trigger_matches
@@ -710,12 +709,13 @@ mod tests {
             )
             .unwrap();
 
-            let (match_store, map, non_fatal_error_sets) = MatchStore::load(&[base_file.clone()]);
+            let (match_store, file_map, non_fatal_error_sets) =
+                MatchStore::load(&[base_file.clone()]);
             assert_eq!(non_fatal_error_sets.len(), 0);
 
             let match_set = match_store.collect_matches_and_global_vars(&[
-                *map.get(&base_file).unwrap(),
-                *map.get(&sub_file).unwrap(),
+                *file_map.get(&base_file).unwrap(),
+                *file_map.get(&sub_file).unwrap(),
             ]);
             let mut matches = match_set
                 .trigger_matches

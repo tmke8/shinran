@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 use shinran_config::config::ProfileRef;
 use shinran_render::{CasingStyle, Context, RenderOptions};
-use shinran_types::{MatchEffect, MatchIdx, Params, UpperCasingStyle, Value, VarType, Variable};
+use shinran_types::{MatchEffect, MatchRef, Params, UpperCasingStyle, Value, VarType, Variable};
 
 use crate::{
     config::Configuration,
@@ -62,13 +62,13 @@ impl<'store> RendererAdapter<'store> {
 
     pub fn render(
         &self,
-        match_id: MatchIdx,
+        match_id: MatchRef,
         trigger: Option<&str>,
         trigger_vars: HashMap<String, String>,
         active_profile: ProfileRef,
     ) -> anyhow::Result<String> {
         let (effect, propagate_case, preferred_uppercasing_style) = match match_id {
-            MatchIdx::Trigger(m) => {
+            MatchRef::Trigger(m) => {
                 let expected_triggers = &m.triggers;
                 if let Some(trigger) = trigger {
                     // If we are not propagating case, we have to make sure that the trigger matches
@@ -83,8 +83,8 @@ impl<'store> RendererAdapter<'store> {
                     Some(m.uppercase_style),
                 )
             }
-            MatchIdx::Regex(m) => (&m.base_match.effect, false, None),
-            MatchIdx::BuiltIn(_) => {
+            MatchRef::Regex(m) => (&m.base_match.effect, false, None),
+            MatchRef::BuiltIn(_) => {
                 unreachable!()
             }
         };

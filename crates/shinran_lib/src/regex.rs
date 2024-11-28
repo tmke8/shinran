@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 use log::error;
 use regex::{Regex, RegexSet};
-use shinran_types::{MatchIdx, RegexMatch};
+use shinran_types::{MatchRef, RegexMatch};
 
 use crate::engine::DetectedMatch;
 
@@ -97,7 +97,7 @@ impl<'store> RegexMatcher<'store> {
                     .collect();
 
                 let result = DetectedMatch {
-                    id: MatchIdx::Regex(*id),
+                    id: MatchRef::Regex(*id),
                     trigger: full_match.to_string(),
                     left_separator: None,
                     right_separator: None,
@@ -140,7 +140,7 @@ impl<'store> RegexMatcher<'store> {
 
 #[cfg(test)]
 mod tests {
-    use shinran_types::{BaseMatch, MatchIdx};
+    use shinran_types::{BaseMatch, MatchRef};
 
     use super::*;
 
@@ -177,7 +177,7 @@ mod tests {
             .collect();
 
         DetectedMatch {
-            id: MatchIdx::Regex(id),
+            id: MatchRef::Regex(id),
             trigger: trigger.to_string(),
             left_separator: None,
             right_separator: None,

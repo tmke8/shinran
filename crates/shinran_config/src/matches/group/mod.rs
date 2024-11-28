@@ -28,6 +28,9 @@ use super::Variable;
 pub(crate) mod loader;
 mod path;
 
+/// Content of a match file.
+///
+/// This struct owns the variables and matches, and is used to store the content of a match file.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct MatchFile {
     pub global_vars: Vec<Variable>,
@@ -37,8 +40,8 @@ pub struct MatchFile {
 
 /// A `LoadedMatchFile` describes one file in the `match` directory.
 ///
-/// Such a file has a list of imports, a list of global [`Variable`]s and a list of [`Match`]es.
-/// The imports have been resolved to paths, but they haven't been loaded yet.
+/// Such a file has a list of imports, and the content, which is the matches and variables.
+/// The imports have been converted to paths, but they haven't been loaded yet.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct LoadedMatchFile {
     pub imports: Vec<PathBuf>,

@@ -33,7 +33,5 @@ pub fn load(
     HashMap<PathBuf, MatchFileRef>,
     Vec<NonFatalErrorSet>,
 ) {
-    // TODO: here we can replace the MatchStore with a caching wrapper
-    // that returns the same response for the given "paths" query
     default::MatchStore::load(paths)
 }
