@@ -19,6 +19,7 @@
 
 use anyhow::Result;
 use lazy_static::lazy_static;
+use shinran_types::StrArena;
 use std::path::Path;
 use thiserror::Error;
 
@@ -39,7 +40,10 @@ lazy_static! {
     static ref IMPORTER: YAMLImporter = YAMLImporter::new();
 }
 
-pub(crate) fn load_match_file(path: &Path) -> Result<(LoadedMatchFile, Option<NonFatalErrorSet>)> {
+pub(crate) fn load_match_file(
+    path: &Path,
+    str_arena: &mut StrArena,
+) -> Result<(LoadedMatchFile, Option<NonFatalErrorSet>)> {
     let Some(extension) = path.extension() else {
         return Err(LoadError::MissingExtension.into());
     };
@@ -48,7 +52,7 @@ pub(crate) fn load_match_file(path: &Path) -> Result<(LoadedMatchFile, Option<No
         return Err(LoadError::InvalidFormat.into());
     }
 
-    match IMPORTER.load_file(path) {
+    match IMPORTER.load_file(path, str_arena) {
         Ok((group, non_fatal_error_set)) => Ok((group, non_fatal_error_set)),
         Err(err) => Err(LoadError::ParsingError(err).into()),
     }
@@ -78,8 +82,9 @@ mod tests {
             let file = match_dir.join("base.invalid");
             std::fs::write(&file, "test").unwrap();
 
+            let mut str_arena = StrArena::new();
             assert!(matches!(
-                load_match_file(&file)
+                load_match_file(&file, &mut str_arena)
                     .unwrap_err()
                     .downcast::<LoadError>()
                     .unwrap(),
@@ -94,8 +99,9 @@ mod tests {
             let file = match_dir.join("base");
             std::fs::write(&file, "test").unwrap();
 
+            let mut str_arena = StrArena::new();
             assert!(matches!(
-                load_match_file(&file)
+                load_match_file(&file, &mut str_arena)
                     .unwrap_err()
                     .downcast::<LoadError>()
                     .unwrap(),
@@ -110,8 +116,9 @@ mod tests {
             let file = match_dir.join("base.yml");
             std::fs::write(&file, "test").unwrap();
 
+            let mut str_arena = StrArena::new();
             assert!(matches!(
-                load_match_file(&file)
+                load_match_file(&file, &mut str_arena)
                     .unwrap_err()
                     .downcast::<LoadError>()
                     .unwrap(),
@@ -134,8 +141,9 @@ mod tests {
             )
             .unwrap();
 
+            let mut str_arena = StrArena::new();
             assert_eq!(
-                load_match_file(&file)
+                load_match_file(&file, &mut str_arena)
                     .unwrap()
                     .0
                     .content
@@ -160,8 +168,9 @@ mod tests {
             )
             .unwrap();
 
+            let mut str_arena = StrArena::new();
             assert_eq!(
-                load_match_file(&file)
+                load_match_file(&file, &mut str_arena)
                     .unwrap()
                     .0
                     .content
@@ -186,8 +195,9 @@ mod tests {
             )
             .unwrap();
 
+            let mut str_arena = StrArena::new();
             assert_eq!(
-                load_match_file(&file)
+                load_match_file(&file, &mut str_arena)
                     .unwrap()
                     .0
                     .content

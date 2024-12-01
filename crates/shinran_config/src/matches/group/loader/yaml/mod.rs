@@ -28,9 +28,9 @@ use lazy_static::lazy_static;
 use parse::YAMLMatchFile;
 use regex::{Captures, Regex};
 use shinran_types::{
-    BaseMatch, ImageEffect, MatchCause, MatchEffect, Params, RegexCause, RegexMatch, TextEffect,
-    TextFormat, TextInjectMode, TriggerCause, TriggerMatch, UpperCasingStyle, Value, VarType,
-    Variable, WordBoundary,
+    BaseMatch, ImageEffect, MatchCause, MatchEffect, Params, RegexCause, RegexMatch, StrArena,
+    TextEffect, TextFormat, TextInjectMode, TriggerCause, TriggerMatch, UpperCasingStyle, Value,
+    VarType, Variable, WordBoundary,
 };
 
 use self::{
@@ -68,6 +68,7 @@ impl YAMLImporter {
     pub fn load_file(
         &self,
         path: &std::path::Path,
+        str_arena: &mut StrArena,
     ) -> anyhow::Result<(
         crate::matches::group::LoadedMatchFile,
         Option<NonFatalErrorSet>,
@@ -96,6 +97,7 @@ impl YAMLImporter {
         for yaml_match in yaml_loaded.matches.unwrap_or_default() {
             match try_convert_into_match(
                 yaml_match,
+                str_arena,
                 &mut trigger_matches,
                 &mut regex_matches,
                 &mut non_fatal_errors,
@@ -136,10 +138,12 @@ impl YAMLImporter {
 /// Convert a YAMLMatch into a Match.
 pub fn try_convert_into_match(
     yaml_match: YAMLMatch,
+    str_arena: &mut StrArena,
     trigger_matches: &mut Vec<TriggerMatch>,
     regex_matches: &mut Vec<RegexMatch>,
     non_fatal_errors: &mut Vec<ErrorRecord>,
 ) -> Result<()> {
+    let mut yaml_match = yaml_match;
     let mut warnings = Vec::new();
 
     if yaml_match.uppercase_style.is_some() && yaml_match.propagate_case.is_none() {
@@ -154,22 +158,22 @@ pub fn try_convert_into_match(
         yaml_match.triggers
     };
 
-    let uppercase_style = match yaml_match
-        .uppercase_style
-        .map(|s| s.to_lowercase())
-        .as_deref()
-    {
-        Some("uppercase") => UpperCasingStyle::Uppercase,
-        Some("capitalize") => UpperCasingStyle::Capitalize,
-        Some("capitalize_words") => UpperCasingStyle::CapitalizeWords,
-        Some(style) => {
+    let uppercase_style = if let Some(uppercase_style) = yaml_match.uppercase_style {
+        if uppercase_style.eq_ignore_ascii_case("uppercaes") {
+            UpperCasingStyle::Uppercase
+        } else if uppercase_style.eq_ignore_ascii_case("capitalize") {
+            UpperCasingStyle::Capitalize
+        } else if uppercase_style.eq_ignore_ascii_case("capitalize_words") {
+            UpperCasingStyle::CapitalizeWords
+        } else {
             warnings.push(anyhow!(
                 "unrecognized uppercase_style: {:?}, falling back to the default",
-                style
+                uppercase_style
             ));
             TriggerCause::default().uppercase_style
         }
-        _ => TriggerCause::default().uppercase_style,
+    } else {
+        TriggerCause::default().uppercase_style
     };
 
     let cause = if let Some(triggers) = triggers {
@@ -235,8 +239,10 @@ pub fn try_convert_into_match(
             vars.push(var);
         }
 
+        let body = str_arena.alloc(replace.as_ref());
+
         MatchEffect::Text(TextEffect {
-            body: replace.into_owned(),
+            body,
             vars,
             format,
             force_mode,
@@ -279,8 +285,9 @@ pub fn try_convert_into_match(
             ..Default::default()
         }];
 
+        let body = str_arena.alloc(&resolved_replace);
         MatchEffect::Text(TextEffect {
-            body: resolved_replace,
+            body,
             vars,
             format: TextFormat::Plain,
             force_mode,
@@ -372,11 +379,13 @@ mod tests {
 
     fn create_match_with_warnings(yaml: &str) -> Result<(TriggerMatch, Vec<ErrorRecord>)> {
         let yaml_match: YAMLMatch = serde_yaml_ng::from_str(yaml)?;
+        let mut str_arena = StrArena::new();
         let mut trigger_matches = Vec::new();
         let mut regex_matches = Vec::new();
         let mut non_fatal_errors = Vec::new();
         try_convert_into_match(
             yaml_match,
+            &mut str_arena,
             &mut trigger_matches,
             &mut regex_matches,
             &mut non_fatal_errors,
@@ -849,7 +858,9 @@ mod tests {
             std::fs::write(&sub_file, "").unwrap();
 
             let importer = YAMLImporter::new();
-            let (file, non_fatal_error_set) = importer.load_file(&base_file).unwrap();
+            let mut str_arena = StrArena::new();
+            let (file, non_fatal_error_set) =
+                importer.load_file(&base_file, &mut str_arena).unwrap();
             // The invalid import path should be reported as error
             assert_eq!(non_fatal_error_set.unwrap().errors.len(), 1);
 
@@ -899,7 +910,8 @@ mod tests {
             .unwrap();
 
             let importer = YAMLImporter::new();
-            assert!(importer.load_file(&base_file).is_err());
+            let mut str_arena = StrArena::new();
+            assert!(importer.load_file(&base_file, &mut str_arena).is_err());
         });
     }
 }

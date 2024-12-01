@@ -18,7 +18,7 @@
  */
 
 use anyhow::Result;
-use shinran_types::{RegexMatch, TriggerMatch, Variable};
+use shinran_types::{RegexMatch, StrArena, TriggerMatch, Variable};
 use std::path::{Path, PathBuf};
 
 use crate::error::NonFatalErrorSet;
@@ -48,8 +48,11 @@ pub struct LoadedMatchFile {
 
 impl LoadedMatchFile {
     // TODO: test
-    pub fn load(file_path: &Path) -> Result<(Self, Option<NonFatalErrorSet>)> {
-        loader::load_match_file(file_path)
+    pub fn load(
+        file_path: &Path,
+        str_arena: &mut StrArena,
+    ) -> Result<(Self, Option<NonFatalErrorSet>)> {
+        loader::load_match_file(file_path, str_arena)
     }
 }
 

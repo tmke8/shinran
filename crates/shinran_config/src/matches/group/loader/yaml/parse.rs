@@ -20,12 +20,12 @@
 use std::borrow::Cow;
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_yaml_ng::Mapping;
 
 use crate::util::is_yaml_empty;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Deserialize)]
 pub struct YAMLMatchFile<'buffer> {
     #[serde(default)]
     pub imports: Option<Vec<Cow<'buffer, str>>>,
@@ -50,7 +50,7 @@ impl<'buffer> YAMLMatchFile<'buffer> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Deserialize)]
 pub struct YAMLMatch<'buffer> {
     #[serde(default)]
     pub label: Option<Cow<'buffer, str>>,
@@ -64,7 +64,7 @@ pub struct YAMLMatch<'buffer> {
     #[serde(default)]
     pub regex: Option<Cow<'buffer, str>>,
 
-    #[serde(default, borrow)]
+    #[serde(default)]
     pub replace: Option<Cow<'buffer, str>>,
 
     #[serde(default)]
@@ -100,20 +100,20 @@ pub struct YAMLMatch<'buffer> {
     #[serde(default)]
     pub force_mode: Option<Cow<'buffer, str>>,
 
-    #[serde(default, borrow)]
+    #[serde(default)]
     pub markdown: Option<Cow<'buffer, str>>,
 
     #[serde(default)]
     pub paragraph: Option<bool>,
 
-    #[serde(default, borrow)]
+    #[serde(default)]
     pub html: Option<Cow<'buffer, str>>,
 
     #[serde(default)]
     pub search_terms: Option<Vec<Cow<'buffer, str>>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct YAMLVariable<'buffer> {
     pub name: Cow<'buffer, str>,
 
