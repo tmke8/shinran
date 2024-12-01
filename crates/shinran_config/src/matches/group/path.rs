@@ -18,14 +18,17 @@
  */
 
 use anyhow::{anyhow, Context, Result};
-use std::path::{Path, PathBuf};
+use std::{
+    borrow::Cow,
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
 
 use crate::error::ErrorRecord;
 
-pub fn resolve_imports(
+pub fn canonicalize_imports(
     group_path: &Path,
-    imports: &[String],
+    imports: Vec<Cow<'_, str>>,
 ) -> Result<(Vec<PathBuf>, Vec<ErrorRecord>)> {
     let mut paths = Vec::new();
 
@@ -46,7 +49,7 @@ pub fn resolve_imports(
     let mut non_fatal_errors = Vec::new();
 
     for import in imports {
-        let import_path = PathBuf::from(import);
+        let import_path = PathBuf::from(import.into_owned());
 
         // Absolute or relative import
         let full_path = if import_path.is_relative() {
@@ -72,11 +75,6 @@ pub fn resolve_imports(
             Err(error) => non_fatal_errors.push(ErrorRecord::error(error)),
         }
     }
-
-    // let string_paths = paths
-    //     .into_iter()
-    //     .map(|path| path.to_string_lossy().to_string())
-    //     .collect();
 
     Ok((paths, non_fatal_errors))
 }
@@ -113,13 +111,13 @@ pub mod tests {
             std::fs::write(&absolute_file, "test").unwrap();
 
             let imports = vec![
-                "another.yml".to_string(),
-                "sub/sub.yml".to_string(),
-                absolute_file.to_string_lossy().to_string(),
-                "sub/invalid.yml".to_string(), // Should be skipped
+                Cow::Borrowed("another.yml"),
+                Cow::Borrowed("sub/sub.yml"),
+                Cow::Owned(absolute_file.to_string_lossy().to_string()),
+                Cow::Borrowed("sub/invalid.yml"), // Should be skipped
             ];
 
-            let (resolved_imports, errors) = resolve_imports(&base_file, &imports).unwrap();
+            let (resolved_imports, errors) = canonicalize_imports(&base_file, imports).unwrap();
 
             assert_eq!(
                 resolved_imports,
@@ -143,9 +141,9 @@ pub mod tests {
             let sub_file = sub_dir.join("sub.yml");
             std::fs::write(&sub_file, "test").unwrap();
 
-            let imports = vec!["../base.yml".to_string()];
+            let imports = vec![Cow::Borrowed("../base.yml")];
 
-            let (resolved_imports, errors) = resolve_imports(&sub_file, &imports).unwrap();
+            let (resolved_imports, errors) = canonicalize_imports(&sub_file, imports).unwrap();
 
             assert_eq!(resolved_imports, vec![base_file]);
 

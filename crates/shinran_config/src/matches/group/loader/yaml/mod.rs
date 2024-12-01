@@ -21,7 +21,7 @@ use std::ffi::OsStr;
 
 use crate::{
     error::{ErrorRecord, NonFatalErrorSet},
-    matches::group::{path::resolve_imports, LoadedMatchFile, MatchFile},
+    matches::group::{path::canonicalize_imports, LoadedMatchFile, MatchFile},
 };
 use anyhow::{anyhow, bail, Context, Result};
 use lazy_static::lazy_static;
@@ -72,13 +72,14 @@ impl YAMLImporter {
         crate::matches::group::LoadedMatchFile,
         Option<NonFatalErrorSet>,
     )> {
+        let content = std::fs::read_to_string(path)?;
         let yaml_loaded =
-            YAMLMatchFile::parse_from_file(path).context("failed to parse YAML match group")?;
+            YAMLMatchFile::parse_from_str(&content).context("failed to parse YAML match group")?;
 
         let mut non_fatal_errors = Vec::new();
 
         let mut global_vars = Vec::new();
-        for yaml_global_var in yaml_loaded.global_vars.clone().unwrap_or_default() {
+        for yaml_global_var in yaml_loaded.global_vars.unwrap_or_default() {
             match try_convert_into_variable(yaml_global_var, false) {
                 Ok((var, warnings)) => {
                     global_vars.push(var);
@@ -92,7 +93,7 @@ impl YAMLImporter {
 
         let mut trigger_matches = Vec::new();
         let mut regex_matches = Vec::new();
-        for yaml_match in yaml_loaded.matches.clone().unwrap_or_default() {
+        for yaml_match in yaml_loaded.matches.unwrap_or_default() {
             match try_convert_into_match(
                 yaml_match,
                 &mut trigger_matches,
@@ -106,9 +107,9 @@ impl YAMLImporter {
             }
         }
 
-        // Resolve imports
-        let (resolved_imports, import_errors) =
-            resolve_imports(path, &yaml_loaded.imports.unwrap_or_default())
+        // Canonicalize imports
+        let (canonicalized_imports, import_errors) =
+            canonicalize_imports(path, yaml_loaded.imports.unwrap_or_default())
                 .context("failed to resolve YAML match file imports")?;
         non_fatal_errors.extend(import_errors);
 
@@ -120,7 +121,7 @@ impl YAMLImporter {
 
         Ok((
             LoadedMatchFile {
-                imports: resolved_imports,
+                imports: canonicalized_imports,
                 content: MatchFile {
                     global_vars,
                     trigger_matches,
@@ -181,7 +182,7 @@ pub fn try_convert_into_match(
             (false, false) => WordBoundary::None,
         };
         MatchCause::Trigger(TriggerCause {
-            triggers,
+            triggers: triggers.into_iter().map(|x| x.into_owned()).collect(),
             word_boundary,
             propagate_case: yaml_match
                 .propagate_case
@@ -190,7 +191,9 @@ pub fn try_convert_into_match(
         })
     } else if let Some(regex) = yaml_match.regex {
         // TODO: add test case
-        MatchCause::Regex(RegexCause { regex })
+        MatchCause::Regex(RegexCause {
+            regex: regex.into_owned(),
+        })
     } else {
         bail!("match must have either 'trigger' or 'regex' field; both are missing");
     };
@@ -233,7 +236,7 @@ pub fn try_convert_into_match(
         }
 
         MatchEffect::Text(TextEffect {
-            body: replace,
+            body: replace.into_owned(),
             vars,
             format,
             force_mode,
@@ -259,7 +262,10 @@ pub fn try_convert_into_match(
 
         // Convert the form data to valid variables
         let mut params = Params::new();
-        params.insert("layout".to_string(), Value::String(resolved_layout));
+        params.insert(
+            "layout".to_string(),
+            Value::String(resolved_layout.into_owned()),
+        );
 
         if let Some(fields) = yaml_match.form_fields {
             params.insert("fields".to_string(), Value::Object(convert_params(fields)?));
@@ -281,7 +287,9 @@ pub fn try_convert_into_match(
         })
     } else if let Some(image_path) = yaml_match.image_path {
         // TODO: test image case
-        MatchEffect::Image(ImageEffect { path: image_path })
+        MatchEffect::Image(ImageEffect {
+            path: image_path.into_owned(),
+        })
     } else {
         MatchEffect::None
     };
@@ -295,8 +303,13 @@ pub fn try_convert_into_match(
 
     let base = BaseMatch {
         effect,
-        label: yaml_match.label,
-        search_terms: yaml_match.search_terms.unwrap_or_default(),
+        label: yaml_match.label.map(|x| x.into_owned()),
+        search_terms: yaml_match
+            .search_terms
+            .unwrap_or_default()
+            .into_iter()
+            .map(|x| x.into_owned())
+            .collect(),
     };
     match cause {
         MatchCause::Regex(regex) => regex_matches.push(RegexMatch {
@@ -335,11 +348,15 @@ pub fn try_convert_into_variable(
     };
     Ok((
         Variable {
-            name: yaml_var.name,
+            name: yaml_var.name.into_owned(),
             var_type,
             params: convert_params(yaml_var.params)?,
             inject_vars: !use_compatibility_mode && yaml_var.inject_vars.unwrap_or(true),
-            depends_on: yaml_var.depends_on,
+            depends_on: yaml_var
+                .depends_on
+                .into_iter()
+                .map(|x| x.into_owned())
+                .collect(),
         },
         Vec::new(),
     ))

@@ -17,7 +17,7 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::path::Path;
+use std::borrow::Cow;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -26,19 +26,19 @@ use serde_yaml_ng::Mapping;
 use crate::util::is_yaml_empty;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct YAMLMatchFile {
+pub struct YAMLMatchFile<'buffer> {
     #[serde(default)]
-    pub imports: Option<Vec<String>>,
+    pub imports: Option<Vec<Cow<'buffer, str>>>,
 
     #[serde(default)]
-    pub global_vars: Option<Vec<YAMLVariable>>,
+    pub global_vars: Option<Vec<YAMLVariable<'buffer>>>,
 
-    #[serde(default)]
-    pub matches: Option<Vec<YAMLMatch>>,
+    #[serde(default, borrow)]
+    pub matches: Option<Vec<YAMLMatch<'buffer>>>,
 }
 
-impl YAMLMatchFile {
-    pub fn parse_from_str(yaml: &str) -> Result<Self> {
+impl<'buffer> YAMLMatchFile<'buffer> {
+    pub fn parse_from_str(yaml: &'buffer str) -> Result<Self> {
         // Because an empty string is not valid YAML but we want to support it anyway
         if is_yaml_empty(yaml) {
             return Ok(serde_yaml_ng::from_str(
@@ -48,42 +48,36 @@ impl YAMLMatchFile {
 
         Ok(serde_yaml_ng::from_str(yaml)?)
     }
-
-    // TODO: test
-    pub fn parse_from_file(path: &Path) -> Result<Self> {
-        let content = std::fs::read_to_string(path)?;
-        Self::parse_from_str(&content)
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct YAMLMatch {
+pub struct YAMLMatch<'buffer> {
     #[serde(default)]
-    pub label: Option<String>,
+    pub label: Option<Cow<'buffer, str>>,
 
     #[serde(default)]
-    pub trigger: Option<String>,
+    pub trigger: Option<Cow<'buffer, str>>,
 
     #[serde(default)]
-    pub triggers: Option<Vec<String>>,
+    pub triggers: Option<Vec<Cow<'buffer, str>>>,
 
     #[serde(default)]
-    pub regex: Option<String>,
+    pub regex: Option<Cow<'buffer, str>>,
+
+    #[serde(default, borrow)]
+    pub replace: Option<Cow<'buffer, str>>,
 
     #[serde(default)]
-    pub replace: Option<String>,
+    pub image_path: Option<Cow<'buffer, str>>,
 
     #[serde(default)]
-    pub image_path: Option<String>,
-
-    #[serde(default)]
-    pub form: Option<String>,
+    pub form: Option<Cow<'buffer, str>>,
 
     #[serde(default)]
     pub form_fields: Option<Mapping>,
 
     #[serde(default)]
-    pub vars: Option<Vec<YAMLVariable>>,
+    pub vars: Option<Vec<YAMLVariable<'buffer>>>,
 
     #[serde(default)]
     pub word: Option<bool>,
@@ -98,33 +92,33 @@ pub struct YAMLMatch {
     pub propagate_case: Option<bool>,
 
     #[serde(default)]
-    pub uppercase_style: Option<String>,
+    pub uppercase_style: Option<Cow<'buffer, str>>,
 
     #[serde(default)]
     pub force_clipboard: Option<bool>,
 
     #[serde(default)]
-    pub force_mode: Option<String>,
+    pub force_mode: Option<Cow<'buffer, str>>,
 
-    #[serde(default)]
-    pub markdown: Option<String>,
+    #[serde(default, borrow)]
+    pub markdown: Option<Cow<'buffer, str>>,
 
     #[serde(default)]
     pub paragraph: Option<bool>,
 
-    #[serde(default)]
-    pub html: Option<String>,
+    #[serde(default, borrow)]
+    pub html: Option<Cow<'buffer, str>>,
 
     #[serde(default)]
-    pub search_terms: Option<Vec<String>>,
+    pub search_terms: Option<Vec<Cow<'buffer, str>>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub struct YAMLVariable {
-    pub name: String,
+pub struct YAMLVariable<'buffer> {
+    pub name: Cow<'buffer, str>,
 
     #[serde(rename = "type")]
-    pub var_type: String,
+    pub var_type: Cow<'buffer, str>,
 
     #[serde(default = "default_params")]
     pub params: Mapping,
@@ -133,7 +127,7 @@ pub struct YAMLVariable {
     pub inject_vars: Option<bool>,
 
     #[serde(default)]
-    pub depends_on: Vec<String>,
+    pub depends_on: Vec<Cow<'buffer, str>>,
 }
 
 fn default_params() -> Mapping {
