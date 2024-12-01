@@ -18,7 +18,7 @@
  */
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_yaml_ng::Mapping;
 use std::convert::TryFrom;
 
@@ -26,7 +26,7 @@ use crate::util::is_yaml_empty;
 
 use super::ParsedConfig;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 pub(crate) struct YAMLConfig {
     #[serde(default)]
     pub label: Option<String>,

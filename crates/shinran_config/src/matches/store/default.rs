@@ -22,7 +22,7 @@ use crate::{
     matches::group::{LoadedMatchFile, MatchFile, MatchFileRef, MatchFileStore},
 };
 use anyhow::Context;
-use shinran_types::{MatchesAndGlobalVars, RegexMatch, TriggerMatch, Variable};
+use shinran_types::{MatchesAndGlobalVars, RegexMatch, StrArena, TriggerMatch, Variable};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -43,6 +43,7 @@ pub struct ResolvedMatchFile {
 pub struct MatchStore {
     // TODO: This HashMap should be a Vec, with the index being the MatchFileRef.
     indexed_files: HashMap<MatchFileRef, ResolvedMatchFile>,
+    str_arena: StrArena,
 }
 
 impl MatchStore {
@@ -52,11 +53,13 @@ impl MatchStore {
         let mut non_fatal_error_sets = Vec::new();
         let mut match_file_map = HashMap::new();
         let mut loaded_files = MatchFileStore::new();
+        let mut str_arena = StrArena::new();
 
         // Because match files can import other match files,
         // we have to load them recursively starting from the top-level ones.
         load_match_files_recursively(
             &mut loaded_files,
+            &mut str_arena,
             &mut match_file_map,
             paths,
             &mut non_fatal_error_sets,
@@ -78,7 +81,14 @@ impl MatchStore {
             indexed_files.insert(path, indexed_file);
         }
 
-        (Self { indexed_files }, match_file_map, non_fatal_error_sets)
+        (
+            Self {
+                indexed_files,
+                str_arena,
+            },
+            match_file_map,
+            non_fatal_error_sets,
+        )
     }
 
     /// Returns all matches and global vars that were defined in the given paths.
@@ -150,6 +160,7 @@ fn query_matches_for_paths<'store>(
 /// This function fills up the `groups` HashMap with the loaded match groups.
 fn load_match_files_recursively(
     loaded_files: &mut MatchFileStore,
+    str_arena: &mut StrArena,
     match_file_map: &mut HashMap<PathBuf, MatchFileRef>,
     paths: &[PathBuf],
     non_fatal_error_sets: &mut Vec<NonFatalErrorSet>,
@@ -159,7 +170,7 @@ fn load_match_files_recursively(
             continue; // Already loaded
         }
 
-        match LoadedMatchFile::load(match_file_path)
+        match LoadedMatchFile::load(match_file_path, str_arena)
             .with_context(|| format!("unable to load match group {match_file_path:?}"))
         {
             Ok((group, non_fatal_error_set)) => {
@@ -174,6 +185,7 @@ fn load_match_files_recursively(
 
                 load_match_files_recursively(
                     loaded_files,
+                    str_arena,
                     match_file_map,
                     imports,
                     non_fatal_error_sets,

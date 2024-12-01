@@ -2,6 +2,10 @@ use std::collections::HashMap;
 
 use enum_as_inner::EnumAsInner;
 
+mod str_arena;
+
+pub use str_arena::{StrArena, StrRef, StrVecRef};
+
 pub type StructId = i32;
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -152,7 +156,7 @@ impl Default for MatchEffect {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextEffect {
-    pub body: String,
+    pub body: StrRef,
     pub vars: Vec<Variable>,
     pub format: TextFormat,
     pub force_mode: Option<TextInjectMode>,
@@ -174,7 +178,7 @@ pub enum TextInjectMode {
 impl Default for TextEffect {
     fn default() -> Self {
         Self {
-            body: String::new(),
+            body: unsafe { StrRef::new(0, 0) },
             vars: Vec::new(),
             format: TextFormat::Plain,
             force_mode: None,
