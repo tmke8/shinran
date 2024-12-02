@@ -119,9 +119,9 @@ pub mod tests {
                 "sub/invalid.yml".to_string(), // Should be skipped
             ];
 
-            let (resolve_paths, errors) = resolve_paths(&base_file, &imports).unwrap();
+            let (resolved_paths, errors) = resolve_paths(&base_file, &imports).unwrap();
 
-            assert_eq!(resolve_paths, vec![another_file, sub_file, absolute_file,]);
+            assert_eq!(resolved_paths, vec![another_file, sub_file, absolute_file,]);
 
             // The "sub/invalid.yml" should generate an error
             assert_eq!(errors.len(), 1);
