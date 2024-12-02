@@ -18,6 +18,7 @@
  */
 
 use anyhow::Result;
+use compact_str::CompactString;
 use serde::Deserialize;
 use serde_yaml_ng::Mapping;
 
@@ -54,10 +55,10 @@ pub struct YAMLMatch {
     pub label: Option<String>,
 
     #[serde(default)]
-    pub trigger: Option<String>,
+    pub trigger: Option<CompactString>,
 
     #[serde(default)]
-    pub triggers: Option<Vec<String>>,
+    pub triggers: Option<Vec<CompactString>>,
 
     #[serde(default)]
     pub regex: Option<String>,

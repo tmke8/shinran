@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 enum-as-inner.workspace = true
+compact_str.workspace = true
 
 [lints]
 workspace = true

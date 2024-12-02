@@ -273,6 +273,7 @@ pub enum RendererError {
 #[cfg(test)]
 mod tests {
 
+    use compact_str::CompactString;
     use shinran_types::{BaseMatch, Params, TextFormat, TriggerMatch, Variable};
 
     use super::*;
@@ -755,7 +756,7 @@ mod tests {
             ..Default::default()
         };
         let match1 = &TriggerMatch {
-            triggers: vec!["nested".to_string()],
+            triggers: vec![CompactString::const_new("nested")],
             base_match: BaseMatch {
                 effect: MatchEffect::Text(nested_template),
                 ..Default::default()

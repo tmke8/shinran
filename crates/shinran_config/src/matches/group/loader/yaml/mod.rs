@@ -338,6 +338,7 @@ pub fn try_convert_into_variable(
 
 #[cfg(test)]
 mod tests {
+    use compact_str::CompactString;
     use shinran_helpers::use_test_directory;
     use shinran_types::TextEffect;
 
@@ -382,7 +383,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
                         body: "world".to_string(),
@@ -406,7 +407,10 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string(), "john".to_string()],
+                triggers: vec![
+                    CompactString::const_new("Hello"),
+                    CompactString::const_new("john")
+                ],
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
                         body: "world".to_string(),
@@ -431,7 +435,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 word_boundary: WordBoundary::Both,
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
@@ -457,7 +461,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 word_boundary: WordBoundary::Left,
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
@@ -483,7 +487,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 word_boundary: WordBoundary::Right,
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
@@ -509,7 +513,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 propagate_case: true,
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
@@ -610,7 +614,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
                         body: "Hi {{form1.name}}!".to_string(),
@@ -647,7 +651,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
                         body: "Hi {{form1.name}}! {{signature}}".to_string(),
@@ -691,7 +695,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
                         body: "world".to_string(),
@@ -737,7 +741,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
                         body: "world".to_string(),
@@ -771,7 +775,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
                         body: "world".to_string(),
@@ -840,7 +844,7 @@ mod tests {
                     content: MatchFile {
                         global_vars: vars,
                         trigger_matches: vec![TriggerMatch {
-                            triggers: vec!["hello".to_string()],
+                            triggers: vec![CompactString::const_new("hello")],
                             base_match: BaseMatch {
                                 effect: MatchEffect::Text(TextEffect {
                                     body: "world".to_string(),

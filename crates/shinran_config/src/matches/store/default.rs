@@ -196,7 +196,7 @@ mod tests {
 
     fn create_match(trigger: &str, replace: &str) -> TriggerMatch {
         TriggerMatch {
-            triggers: vec![trigger.to_string()],
+            triggers: vec![trigger.into()],
             base_match: BaseMatch {
                 effect: MatchEffect::Text(TextEffect {
                     body: replace.to_string(),
