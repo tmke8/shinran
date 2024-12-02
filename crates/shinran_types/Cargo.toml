@@ -6,6 +6,8 @@ edition.workspace = true
 [dependencies]
 enum-as-inner.workspace = true
 compact_str.workspace = true
+rkyv.workspace = true
+regex.workspace = true
 
 [lints]
 workspace = true

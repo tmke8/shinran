@@ -29,6 +29,7 @@ use crate::{
 };
 use log::{error, warn};
 use regex::{Captures, Regex};
+use rkyv::{Archive, CheckBytes, Serialize};
 use shinran_types::{MatchEffect, Params, TextEffect, Value, VarType, Variable};
 use thiserror::Error;
 
@@ -41,7 +42,9 @@ pub(crate) static VAR_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\{\{\s*((?P<name>\w+)(\.(?P<subname>(\w+)))?)\s*\}\}").unwrap());
 static WORD_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\w+)").unwrap());
 
-pub struct Renderer<M: Extension = NoOpExtension> {
+#[derive(Archive, Serialize)]
+#[archive(check_bytes)]
+pub struct Renderer<M: Archive + Extension = NoOpExtension> {
     date_extension: DateExtension,
     echo_extension: EchoExtension,
     shell_extension: ShellExtension,
@@ -50,6 +53,8 @@ pub struct Renderer<M: Extension = NoOpExtension> {
     mock_extension: M,
 }
 
+#[derive(Archive, Serialize)]
+#[archive(check_bytes)]
 pub struct NoOpExtension;
 
 impl Extension for NoOpExtension {
@@ -75,7 +80,7 @@ impl Renderer<NoOpExtension> {
     }
 }
 
-impl<M: Extension> Renderer<M> {
+impl<M: Extension + Archive> Renderer<M> {
     pub fn render_template(
         &self,
         template: &TextEffect,
@@ -279,6 +284,8 @@ mod tests {
     use super::*;
     use std::{collections::HashMap, iter::FromIterator};
 
+    #[derive(Archive, Serialize)]
+    #[archive(check_bytes)]
     struct MockExtension {}
 
     impl Extension for MockExtension {

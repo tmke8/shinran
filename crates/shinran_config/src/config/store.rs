@@ -28,7 +28,10 @@ use crate::{config::resolve::LoadedProfileFile, matches::group::MatchFileRef};
 use super::{ConfigStoreError, ProfileFile};
 use anyhow::{Context, Result};
 use log::{debug, error};
+use rkyv::{Archive, Serialize};
 
+#[derive(Archive, Serialize)]
+#[archive(check_bytes)]
 #[repr(transparent)]
 pub struct ProfileStore {
     profiles: Vec<ProfileFile>,
@@ -165,6 +168,7 @@ impl LoadedProfileStore {
 #[cfg(test)]
 mod tests {
     use regex::Regex;
+    use shinran_types::RegexWrapper;
 
     use crate::config::parse::ParsedConfig;
 
@@ -191,7 +195,7 @@ mod tests {
         let default = new_mock("default");
         let custom1 = new_mock("custom1");
         let mut custom2 = new_mock("custom2");
-        custom2.filter.class = Some(Regex::new("foo").unwrap());
+        custom2.filter.class = Some(RegexWrapper::new(Regex::new("foo").unwrap()));
 
         let store = ProfileStore {
             profiles: vec![default, custom1, custom2],

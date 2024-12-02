@@ -2,10 +2,16 @@ use std::collections::HashMap;
 
 use compact_str::CompactString;
 use enum_as_inner::EnumAsInner;
+use rkyv::{Archive, Serialize};
+
+mod regex_wrapper;
+
+pub use regex_wrapper::RegexWrapper;
 
 pub type StructId = i32;
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Archive, Serialize)]
+#[archive(check_bytes)]
 pub enum VarType {
     Date,
     Mock,
@@ -20,7 +26,8 @@ pub enum VarType {
     Unresolved,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Archive, Serialize)]
+#[archive(check_bytes)]
 pub struct Variable {
     pub name: String,
     pub var_type: VarType,
@@ -43,17 +50,32 @@ impl Default for Variable {
 
 pub type Params = HashMap<String, Value>;
 
-#[derive(Debug, Clone, PartialEq, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, EnumAsInner, Archive, Serialize)]
+// We have a recursive type, which requires some special handling
+#[archive(bound(serialize = "__S: rkyv::ser::ScratchSpace + rkyv::ser::Serializer"))]
+#[archive(check_bytes)]
+#[archive_attr(check_bytes(
+    bound = "__C: rkyv::validation::ArchiveContext, <__C as rkyv::Fallible>::Error: std::error::Error"
+))]
 pub enum Value {
     Null,
     Bool(bool),
     Number(Number),
     String(String),
-    Array(Vec<Value>),
-    Object(Params),
+    Array(
+        #[omit_bounds]
+        #[archive_attr(omit_bounds)]
+        Vec<Value>,
+    ),
+    Object(
+        #[omit_bounds]
+        #[archive_attr(omit_bounds)]
+        Params,
+    ),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Archive, Serialize)]
+#[archive(check_bytes)]
 pub enum Number {
     Integer(i64),
     // Float(OrderedFloat<f64>),
@@ -108,7 +130,8 @@ impl MatchCause {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Archive, Serialize)]
+#[archive(check_bytes)]
 pub enum WordBoundary {
     #[default]
     None,
@@ -127,7 +150,8 @@ pub struct TriggerCause {
     pub uppercase_style: UpperCasingStyle,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Archive, Serialize)]
+#[archive(check_bytes)]
 pub enum UpperCasingStyle {
     #[default]
     Uppercase,
@@ -142,7 +166,8 @@ pub struct RegexCause {
 
 // Effects
 
-#[derive(Debug, Clone, PartialEq, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, EnumAsInner, Archive, Serialize)]
+#[archive(check_bytes)]
 pub enum MatchEffect {
     None,
     Text(TextEffect),
@@ -155,7 +180,8 @@ impl Default for MatchEffect {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Archive, Serialize)]
+#[archive(check_bytes)]
 pub struct TextEffect {
     pub body: String,
     pub vars: Vec<Variable>,
@@ -163,14 +189,16 @@ pub struct TextEffect {
     pub force_mode: Option<TextInjectMode>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Archive, Serialize)]
+#[archive(check_bytes)]
 pub enum TextFormat {
     Plain,
     Markdown,
     Html,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Archive, Serialize)]
+#[archive(check_bytes)]
 pub enum TextInjectMode {
     Keys,
     Clipboard,
@@ -187,12 +215,14 @@ impl Default for TextEffect {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Archive, Serialize)]
+#[archive(check_bytes)]
 pub struct ImageEffect {
     pub path: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Archive, Serialize)]
+#[archive(check_bytes)]
 pub struct BaseMatch {
     // pub id: i32,
     pub effect: MatchEffect,
@@ -202,7 +232,8 @@ pub struct BaseMatch {
     pub search_terms: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Archive, Serialize)]
+#[archive(check_bytes)]
 pub struct TriggerMatch {
     pub base_match: BaseMatch,
     pub triggers: Vec<CompactString>,
@@ -212,7 +243,8 @@ pub struct TriggerMatch {
     pub word_boundary: WordBoundary,
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Archive, Serialize)]
+#[archive(check_bytes)]
 pub struct RegexMatch {
     pub base_match: BaseMatch,
     pub regex: String,
