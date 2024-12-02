@@ -1,7 +1,10 @@
 [package]
 name = "shinran_config"
 version = "0.1.0"
-authors = ["Thomas MK <tmke8@posteo.net>", "Federico Terzi <federico-terzi@users.noreply.github.com>"]
+authors = [
+    "Thomas MK <tmke8@posteo.net>",
+    "Federico Terzi <federico-terzi@users.noreply.github.com>",
+]
 edition = "2021"
 
 [dependencies]
@@ -11,7 +14,6 @@ log.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 regex.workspace = true
-lazy_static.workspace = true
 enum-as-inner.workspace = true
 serde = { version = "1.0.123", features = ["derive"] }
 serde_yaml_ng = "0.10"

@@ -17,6 +17,8 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::sync::LazyLock;
+
 pub enum MacShell {
     Bash,
     Nu,
@@ -57,7 +59,6 @@ pub fn determine_default_macos_shell() -> Option<MacShell> {
     if cfg!(not(target_os = "macos")) {
         return None;
     }
-    use lazy_static::lazy_static;
     use regex::Regex;
     use std::process::Command;
 
@@ -66,10 +67,9 @@ pub fn determine_default_macos_shell() -> Option<MacShell> {
         .output()
         .ok()?;
 
-    lazy_static! {
-        static ref EXTRACT_SHELL_REGEX: Regex = Regex::new(r"UserShell:\s(.*)$")
-            .expect("unable to generate regex to extract default shell");
-    }
+    static EXTRACT_SHELL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"UserShell:\s(.*)$").expect("unable to generate regex to extract default shell")
+    });
 
     if !output.status.success() {
         return None;

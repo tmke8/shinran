@@ -17,7 +17,7 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{borrow::Cow, path::Path};
+use std::{borrow::Cow, path::Path, sync::LazyLock};
 
 use crate::{
     extension::{
@@ -27,7 +27,6 @@ use crate::{
     CasingStyle, Context, Extension, ExtensionOutput, ExtensionResult, RenderOptions, RenderResult,
     Scope,
 };
-use lazy_static::lazy_static;
 use log::{error, warn};
 use regex::{Captures, Regex};
 use shinran_types::{MatchEffect, Params, TextEffect, Value, VarType, Variable};
@@ -38,11 +37,9 @@ use self::util::{inject_variables_into_params, render_variables};
 mod resolve;
 mod util;
 
-lazy_static! {
-    pub(crate) static ref VAR_REGEX: Regex =
-        Regex::new(r"\{\{\s*((?P<name>\w+)(\.(?P<subname>(\w+)))?)\s*\}\}").unwrap();
-    static ref WORD_REGEX: Regex = Regex::new(r"(\w+)").unwrap();
-}
+pub(crate) static VAR_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\{\{\s*((?P<name>\w+)(\.(?P<subname>(\w+)))?)\s*\}\}").unwrap());
+static WORD_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\w+)").unwrap());
 
 pub struct Renderer<M: Extension = NoOpExtension> {
     date_extension: DateExtension,

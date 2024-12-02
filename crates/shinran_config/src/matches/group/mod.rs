@@ -16,12 +16,9 @@
  * You should have received a copy of the GNU General Public License
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
+use std::path::PathBuf;
 
-use anyhow::Result;
 use shinran_types::{RegexMatch, TriggerMatch, Variable};
-use std::path::{Path, PathBuf};
-
-use crate::error::NonFatalErrorSet;
 
 pub(crate) mod loader;
 mod path;
@@ -42,15 +39,8 @@ pub struct MatchFile {
 /// The imports have been converted to paths, but they haven't been loaded yet.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct LoadedMatchFile {
-    pub imports: Vec<PathBuf>,
+    pub import_paths: Vec<PathBuf>,
     pub content: MatchFile,
-}
-
-impl LoadedMatchFile {
-    // TODO: test
-    pub fn load(file_path: &Path) -> Result<(Self, Option<NonFatalErrorSet>)> {
-        loader::load_match_file(file_path)
-    }
 }
 
 #[repr(transparent)]
