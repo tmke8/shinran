@@ -35,19 +35,28 @@ use anyhow::Result;
 use indoc::formatdoc;
 use log::error;
 use regex::Regex;
+use rkyv::{
+    with::{AsString, Map},
+    Archive, Serialize,
+};
+use shinran_types::RegexWrapper;
 use thiserror::Error;
 
 const STANDARD_INCLUDES: &[&str] = &["../match/**/[!_]*.yml"];
 pub type ProfileId = i32;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Archive, Serialize)]
+#[archive(check_bytes)]
 pub struct Filters {
     // TODO: Any config file with non-None filters should probably be ignored on Wayland.
     // TODO: Should we throw an error if the user specifies filters in the default file?
     //       (We're currently implicitly ignoring filters in the default file.)
-    pub(crate) title: Option<Regex>,
-    pub(crate) class: Option<Regex>,
-    pub(crate) exec: Option<Regex>,
+    #[with(Map<AsString>)]
+    pub(crate) title: Option<RegexWrapper>,
+    #[with(Map<AsString>)]
+    pub(crate) class: Option<RegexWrapper>,
+    #[with(Map<AsString>)]
+    pub(crate) exec: Option<RegexWrapper>,
 }
 
 impl Filters {
@@ -150,9 +159,9 @@ impl LoadedProfileFile {
             source_path: path.to_owned(),
             match_file_paths: match_paths,
             filter: Filters {
-                title: filter_title,
-                class: filter_class,
-                exec: filter_exec,
+                title: filter_title.map(RegexWrapper::new),
+                class: filter_class.map(RegexWrapper::new),
+                exec: filter_exec.map(RegexWrapper::new),
             },
         })
     }
@@ -171,12 +180,12 @@ impl LoadedProfileFile {
 }
 
 /// Struct representing one loaded configuration file.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Archive, Serialize)]
+#[archive(check_bytes)]
 pub struct ProfileFile {
     pub(crate) content: ParsedConfig,
 
-    pub(crate) source_path: PathBuf,
-
+    // pub(crate) source_path: PathBuf,
     pub(crate) match_file_paths: Vec<MatchFileRef>,
 
     pub(crate) filter: Filters,
@@ -198,7 +207,7 @@ impl ProfileFile {
 
         Self {
             content: loaded.content,
-            source_path: loaded.source_path,
+            // source_path: loaded.source_path,
             match_file_paths,
             filter: loaded.filter,
         }
@@ -209,9 +218,9 @@ impl ProfileFile {
             return label;
         }
 
-        if let Some(source_path) = self.source_path.to_str() {
-            return source_path;
-        }
+        // if let Some(source_path) = self.source_path.to_str() {
+        //     return source_path;
+        // }
 
         "none"
     }

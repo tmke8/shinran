@@ -22,6 +22,7 @@ use crate::{
     matches::group::{loader, MatchFile, MatchFileRef, MatchFileStore},
 };
 use anyhow::Context;
+use rkyv::{Archive, Serialize};
 use shinran_types::{MatchesAndGlobalVars, RegexMatch, TriggerMatch, Variable};
 use std::{
     collections::{HashMap, HashSet},
@@ -31,7 +32,8 @@ use std::{
 /// Struct representing a match file, where all imports have been resolved.
 ///
 /// In contrast, a [`LoadedMatchFile`] contains unresolved imports.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Archive, Serialize)]
+#[archive(check_bytes)]
 pub struct ResolvedMatchFile {
     imports: Vec<MatchFileRef>,
     content: MatchFile,
@@ -40,6 +42,8 @@ pub struct ResolvedMatchFile {
 /// The MatchStore contains all matches that we have loaded.
 ///
 /// We have a hash map of all match files, indexed by their file system path.
+#[derive(Archive, Serialize)]
+#[archive(check_bytes)]
 pub struct MatchStore {
     // TODO: This HashMap should be a Vec, with the index being the MatchFileRef.
     indexed_files: HashMap<MatchFileRef, ResolvedMatchFile>,

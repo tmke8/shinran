@@ -18,6 +18,7 @@
  */
 use std::path::PathBuf;
 
+use rkyv::{Archive, Serialize};
 use shinran_types::{RegexMatch, TriggerMatch, Variable};
 
 pub(crate) mod loader;
@@ -26,7 +27,8 @@ mod path;
 /// Content of a match file.
 ///
 /// This struct owns the variables and matches, and is used to store the content of a match file.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Archive, Serialize)]
+#[archive(check_bytes)]
 pub struct MatchFile {
     pub global_vars: Vec<Variable>,
     pub trigger_matches: Vec<TriggerMatch>,
@@ -48,7 +50,9 @@ pub struct MatchFileStore {
     files: Vec<LoadedMatchFile>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash, Archive, Serialize)]
+#[archive(check_bytes)]
+#[archive_attr(derive(Hash, PartialEq, Eq))]
 #[repr(transparent)]
 pub struct MatchFileRef {
     idx: usize,
