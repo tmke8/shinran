@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use compact_str::CompactString;
 use enum_as_inner::EnumAsInner;
 
 pub type StructId = i32;
@@ -79,7 +80,7 @@ impl MatchCause {
     pub fn description(&self) -> Option<&str> {
         match &self {
             MatchCause::Trigger(trigger_cause) => {
-                trigger_cause.triggers.first().map(String::as_str)
+                trigger_cause.triggers.first().map(CompactString::as_str)
             }
             MatchCause::Regex(trigger_cause) => Some(trigger_cause.regex.as_str()),
         }
@@ -96,7 +97,11 @@ impl MatchCause {
 
     pub fn search_terms(&self) -> Vec<&str> {
         if let MatchCause::Trigger(trigger_cause) = &self {
-            trigger_cause.triggers.iter().map(String::as_str).collect()
+            trigger_cause
+                .triggers
+                .iter()
+                .map(CompactString::as_str)
+                .collect()
         } else {
             vec![]
         }
@@ -114,7 +119,7 @@ pub enum WordBoundary {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct TriggerCause {
-    pub triggers: Vec<String>,
+    pub triggers: Vec<CompactString>,
 
     pub word_boundary: WordBoundary,
 
@@ -200,7 +205,7 @@ pub struct BaseMatch {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TriggerMatch {
     pub base_match: BaseMatch,
-    pub triggers: Vec<String>,
+    pub triggers: Vec<CompactString>,
 
     pub propagate_case: bool,
     pub uppercase_style: UpperCasingStyle,
@@ -236,7 +241,7 @@ mod tests {
 
     fn trigger_cause() -> TriggerCause {
         TriggerCause {
-            triggers: vec![":greet".to_string()],
+            triggers: vec![CompactString::const_new(":greet")],
             ..TriggerCause::default()
         }
     }

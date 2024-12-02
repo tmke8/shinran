@@ -17,15 +17,14 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::path::Path;
-
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use compact_str::CompactString;
+use serde::Deserialize;
 use serde_yaml_ng::Mapping;
 
 use crate::util::is_yaml_empty;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Deserialize)]
 pub struct YAMLMatchFile {
     #[serde(default)]
     pub imports: Option<Vec<String>>,
@@ -48,24 +47,18 @@ impl YAMLMatchFile {
 
         Ok(serde_yaml_ng::from_str(yaml)?)
     }
-
-    // TODO: test
-    pub fn parse_from_file(path: &Path) -> Result<Self> {
-        let content = std::fs::read_to_string(path)?;
-        Self::parse_from_str(&content)
-    }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct YAMLMatch {
     #[serde(default)]
     pub label: Option<String>,
 
     #[serde(default)]
-    pub trigger: Option<String>,
+    pub trigger: Option<CompactString>,
 
     #[serde(default)]
-    pub triggers: Option<Vec<String>>,
+    pub triggers: Option<Vec<CompactString>>,
 
     #[serde(default)]
     pub regex: Option<String>,
@@ -119,7 +112,7 @@ pub struct YAMLMatch {
     pub search_terms: Option<Vec<String>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct YAMLVariable {
     pub name: String,
 

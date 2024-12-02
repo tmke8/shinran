@@ -17,12 +17,12 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use lazy_static::lazy_static;
 use shinran_types::{Params, Value};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     process::{Command, Output},
+    sync::LazyLock,
 };
 
 use super::exec_util::{determine_default_macos_shell, MacShell};
@@ -173,9 +173,8 @@ impl Default for Shell {
         if cfg!(target_os = "windows") {
             Shell::Powershell
         } else if cfg!(target_os = "macos") {
-            lazy_static! {
-                static ref DEFAULT_MACOS_SHELL: Option<MacShell> = determine_default_macos_shell();
-            }
+            static DEFAULT_MACOS_SHELL: LazyLock<Option<MacShell>> =
+                LazyLock::new(|| determine_default_macos_shell());
 
             match *DEFAULT_MACOS_SHELL {
                 Some(MacShell::Bash) => Shell::Bash,

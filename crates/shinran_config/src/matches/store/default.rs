@@ -19,7 +19,7 @@
 
 use crate::{
     error::NonFatalErrorSet,
-    matches::group::{LoadedMatchFile, MatchFile, MatchFileRef, MatchFileStore},
+    matches::group::{loader, MatchFile, MatchFileRef, MatchFileStore},
 };
 use anyhow::Context;
 use shinran_types::{MatchesAndGlobalVars, RegexMatch, TriggerMatch, Variable};
@@ -66,7 +66,7 @@ impl MatchStore {
 
         for (path, match_file) in loaded_files.into_enumerate() {
             let imports = match_file
-                .imports
+                .import_paths
                 .iter()
                 .filter_map(|path| match_file_map.get(path).copied())
                 .collect::<_>();
@@ -159,12 +159,12 @@ fn load_match_files_recursively(
             continue; // Already loaded
         }
 
-        match LoadedMatchFile::load(match_file_path)
+        match loader::load_match_file(match_file_path)
             .with_context(|| format!("unable to load match group {match_file_path:?}"))
         {
             Ok((group, non_fatal_error_set)) => {
                 // TODO: Restructure code to avoid cloning here.
-                let imports = &group.imports.clone();
+                let imports = &group.import_paths.clone();
                 let file_ref = loaded_files.add(group);
                 match_file_map.insert(match_file_path.clone(), file_ref);
 
@@ -196,7 +196,7 @@ mod tests {
 
     fn create_match(trigger: &str, replace: &str) -> TriggerMatch {
         TriggerMatch {
-            triggers: vec![trigger.to_string()],
+            triggers: vec![trigger.into()],
             base_match: BaseMatch {
                 effect: MatchEffect::Text(TextEffect {
                     body: replace.to_string(),

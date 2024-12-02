@@ -23,30 +23,35 @@ use thiserror::Error;
 
 use crate::error::ErrorRecord;
 
-pub fn resolve_imports(
-    group_path: &Path,
-    imports: &[String],
+/// Resolve the given paths by turning relative paths into absolute paths and canonicalizing them.
+///
+/// The paths are resolved starting from the given match file path.
+///
+/// Note that this function does not check yet whether the resolved paths are valid files.
+pub fn resolve_paths(
+    match_file_path: &Path,
+    paths: &[String],
 ) -> Result<(Vec<PathBuf>, Vec<ErrorRecord>)> {
-    let mut paths = Vec::new();
+    let mut resolved_paths = Vec::new();
 
     // Get the containing directory
-    let current_dir = if group_path.is_file() {
-        if let Some(parent) = group_path.parent() {
+    let current_dir = if match_file_path.is_file() {
+        if let Some(parent) = match_file_path.parent() {
             parent
         } else {
-            return Err(ResolveImportError::Failed(format!(
-          "unable to resolve imports for match group starting from current path: {group_path:?}"
+            return Err(ResolvePathError::Failed(format!(
+          "unable to resolve imports for match file starting from current path: {match_file_path:?}"
         ))
             .into());
         }
     } else {
-        group_path
+        match_file_path
     };
 
     let mut non_fatal_errors = Vec::new();
 
-    for import in imports {
-        let import_path = PathBuf::from(import);
+    for path in paths {
+        let import_path = PathBuf::from(path);
 
         // Absolute or relative import
         let full_path = if import_path.is_relative() {
@@ -60,7 +65,7 @@ pub fn resolve_imports(
         {
             Ok(canonical_path) => {
                 if canonical_path.exists() && canonical_path.is_file() {
-                    paths.push(canonical_path);
+                    resolved_paths.push(canonical_path);
                 } else {
                     // Best effort imports
                     non_fatal_errors.push(ErrorRecord::error(anyhow!(
@@ -73,17 +78,12 @@ pub fn resolve_imports(
         }
     }
 
-    // let string_paths = paths
-    //     .into_iter()
-    //     .map(|path| path.to_string_lossy().to_string())
-    //     .collect();
-
-    Ok((paths, non_fatal_errors))
+    Ok((resolved_paths, non_fatal_errors))
 }
 
 #[derive(Error, Debug)]
-pub enum ResolveImportError {
-    #[error("resolve import failed: `{0}`")]
+pub enum ResolvePathError {
+    #[error("resolving path failed: `{0}`")]
     Failed(String),
 }
 
@@ -95,7 +95,7 @@ pub mod tests {
     use std::fs::create_dir_all;
 
     #[test]
-    fn resolve_imports_works_correctly() {
+    fn resolve_imports_paths_works_correctly() {
         use_test_directory(|_, match_dir, _| {
             let sub_dir = match_dir.join("sub");
             create_dir_all(&sub_dir).unwrap();
@@ -119,12 +119,9 @@ pub mod tests {
                 "sub/invalid.yml".to_string(), // Should be skipped
             ];
 
-            let (resolved_imports, errors) = resolve_imports(&base_file, &imports).unwrap();
+            let (resolved_paths, errors) = resolve_paths(&base_file, &imports).unwrap();
 
-            assert_eq!(
-                resolved_imports,
-                vec![another_file, sub_file, absolute_file,]
-            );
+            assert_eq!(resolved_paths, vec![another_file, sub_file, absolute_file,]);
 
             // The "sub/invalid.yml" should generate an error
             assert_eq!(errors.len(), 1);
@@ -132,7 +129,7 @@ pub mod tests {
     }
 
     #[test]
-    fn resolve_imports_parent_relative_path() {
+    fn resolve_imports_paths_parent_relative_path() {
         use_test_directory(|_, match_dir, _| {
             let sub_dir = match_dir.join("sub");
             create_dir_all(&sub_dir).unwrap();
@@ -145,9 +142,9 @@ pub mod tests {
 
             let imports = vec!["../base.yml".to_string()];
 
-            let (resolved_imports, errors) = resolve_imports(&sub_file, &imports).unwrap();
+            let (resolved_paths, errors) = resolve_paths(&sub_file, &imports).unwrap();
 
-            assert_eq!(resolved_imports, vec![base_file]);
+            assert_eq!(resolved_paths, vec![base_file]);
 
             assert_eq!(errors.len(), 0);
         });

@@ -18,7 +18,6 @@
  */
 
 use anyhow::Result;
-use lazy_static::lazy_static;
 use std::path::Path;
 use thiserror::Error;
 
@@ -30,15 +29,6 @@ use super::LoadedMatchFile;
 
 pub(crate) mod yaml;
 
-// trait Importer {
-//     fn is_supported(&self, extension: &str) -> bool;
-//     fn load_group(&self, path: &Path) -> Result<(MatchGroup, Option<NonFatalErrorSet>)>;
-// }
-
-lazy_static! {
-    static ref IMPORTER: YAMLImporter = YAMLImporter::new();
-}
-
 pub(crate) fn load_match_file(path: &Path) -> Result<(LoadedMatchFile, Option<NonFatalErrorSet>)> {
     let Some(extension) = path.extension() else {
         return Err(LoadError::MissingExtension.into());
@@ -48,7 +38,7 @@ pub(crate) fn load_match_file(path: &Path) -> Result<(LoadedMatchFile, Option<No
         return Err(LoadError::InvalidFormat.into());
     }
 
-    match IMPORTER.load_file(path) {
+    match YAMLImporter::load_file(path) {
         Ok((group, non_fatal_error_set)) => Ok((group, non_fatal_error_set)),
         Err(err) => Err(LoadError::ParsingError(err).into()),
     }

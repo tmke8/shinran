@@ -17,14 +17,13 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::ffi::OsStr;
+use std::{ffi::OsStr, sync::LazyLock};
 
 use crate::{
     error::{ErrorRecord, NonFatalErrorSet},
-    matches::group::{path::resolve_imports, LoadedMatchFile, MatchFile},
+    matches::group::{path::resolve_paths, LoadedMatchFile, MatchFile},
 };
 use anyhow::{anyhow, bail, Context, Result};
-use lazy_static::lazy_static;
 use parse::YAMLMatchFile;
 use regex::{Captures, Regex};
 use shinran_types::{
@@ -38,27 +37,16 @@ use self::{
     util::convert_params,
 };
 
-// use super::Importer;
-
 pub(crate) mod parse;
 mod util;
 
-lazy_static! {
-    static ref VAR_REGEX: Regex = Regex::new("\\{\\{\\s*(\\w+)(\\.\\w+)?\\s*\\}\\}").unwrap();
-    static ref FORM_CONTROL_REGEX: Regex =
-        Regex::new("\\[\\[\\s*(\\w+)(\\.\\w+)?\\s*\\]\\]").unwrap();
-}
+static FORM_CONTROL_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new("\\[\\[\\s*(\\w+)(\\.\\w+)?\\s*\\]\\]").unwrap());
 
-// Create an alias to make the meaning more explicit
+// Create an alias to make the meaning more explicit.
 type Warning = anyhow::Error;
 
 pub(crate) struct YAMLImporter {}
-
-impl YAMLImporter {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
 
 impl YAMLImporter {
     pub fn is_supported(extension: &OsStr) -> bool {
@@ -66,19 +54,19 @@ impl YAMLImporter {
     }
 
     pub fn load_file(
-        &self,
         path: &std::path::Path,
     ) -> anyhow::Result<(
         crate::matches::group::LoadedMatchFile,
         Option<NonFatalErrorSet>,
     )> {
+        let content = std::fs::read_to_string(path)?;
         let yaml_loaded =
-            YAMLMatchFile::parse_from_file(path).context("failed to parse YAML match group")?;
+            YAMLMatchFile::parse_from_str(&content).context("failed to parse YAML match group")?;
 
         let mut non_fatal_errors = Vec::new();
 
         let mut global_vars = Vec::new();
-        for yaml_global_var in yaml_loaded.global_vars.clone().unwrap_or_default() {
+        for yaml_global_var in yaml_loaded.global_vars.unwrap_or_default() {
             match try_convert_into_variable(yaml_global_var, false) {
                 Ok((var, warnings)) => {
                     global_vars.push(var);
@@ -92,7 +80,7 @@ impl YAMLImporter {
 
         let mut trigger_matches = Vec::new();
         let mut regex_matches = Vec::new();
-        for yaml_match in yaml_loaded.matches.clone().unwrap_or_default() {
+        for yaml_match in yaml_loaded.matches.unwrap_or_default() {
             match try_convert_into_match(
                 yaml_match,
                 &mut trigger_matches,
@@ -106,10 +94,10 @@ impl YAMLImporter {
             }
         }
 
-        // Resolve imports
-        let (resolved_imports, import_errors) =
-            resolve_imports(path, &yaml_loaded.imports.unwrap_or_default())
-                .context("failed to resolve YAML match file imports")?;
+        // Turn the imports into absolute paths.
+        let (import_paths, import_errors) =
+            resolve_paths(path, &yaml_loaded.imports.unwrap_or_default())
+                .context("failed to turn YAML match file imports into valid paths")?;
         non_fatal_errors.extend(import_errors);
 
         let non_fatal_error_set = if non_fatal_errors.is_empty() {
@@ -120,7 +108,7 @@ impl YAMLImporter {
 
         Ok((
             LoadedMatchFile {
-                imports: resolved_imports,
+                import_paths,
                 content: MatchFile {
                     global_vars,
                     trigger_matches,
@@ -139,6 +127,7 @@ pub fn try_convert_into_match(
     regex_matches: &mut Vec<RegexMatch>,
     non_fatal_errors: &mut Vec<ErrorRecord>,
 ) -> Result<()> {
+    let mut yaml_match = yaml_match;
     let mut warnings = Vec::new();
 
     if yaml_match.uppercase_style.is_some() && yaml_match.propagate_case.is_none() {
@@ -153,11 +142,13 @@ pub fn try_convert_into_match(
         yaml_match.triggers
     };
 
-    let uppercase_style = match yaml_match
+    // Make the field "uppercase_style" lower case in-place.
+    yaml_match
         .uppercase_style
-        .map(|s| s.to_lowercase())
-        .as_deref()
-    {
+        .as_mut()
+        .map(|s| s.make_ascii_lowercase());
+
+    let uppercase_style = match yaml_match.uppercase_style.as_deref() {
         Some("uppercase") => UpperCasingStyle::Uppercase,
         Some("capitalize") => UpperCasingStyle::Capitalize,
         Some("capitalize_words") => UpperCasingStyle::CapitalizeWords,
@@ -347,6 +338,7 @@ pub fn try_convert_into_variable(
 
 #[cfg(test)]
 mod tests {
+    use compact_str::CompactString;
     use shinran_helpers::use_test_directory;
     use shinran_types::TextEffect;
 
@@ -391,7 +383,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
                         body: "world".to_string(),
@@ -415,7 +407,10 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string(), "john".to_string()],
+                triggers: vec![
+                    CompactString::const_new("Hello"),
+                    CompactString::const_new("john")
+                ],
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
                         body: "world".to_string(),
@@ -440,7 +435,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 word_boundary: WordBoundary::Both,
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
@@ -466,7 +461,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 word_boundary: WordBoundary::Left,
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
@@ -492,7 +487,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 word_boundary: WordBoundary::Right,
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
@@ -518,7 +513,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 propagate_case: true,
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
@@ -619,7 +614,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
                         body: "Hi {{form1.name}}!".to_string(),
@@ -656,7 +651,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
                         body: "Hi {{form1.name}}! {{signature}}".to_string(),
@@ -700,7 +695,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
                         body: "world".to_string(),
@@ -746,7 +741,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
                         body: "world".to_string(),
@@ -780,7 +775,7 @@ mod tests {
             )
             .unwrap(),
             TriggerMatch {
-                triggers: vec!["Hello".to_string()],
+                triggers: vec![CompactString::const_new("Hello")],
                 base_match: BaseMatch {
                     effect: MatchEffect::Text(TextEffect {
                         body: "world".to_string(),
@@ -831,8 +826,7 @@ mod tests {
             let sub_file = sub_dir.join("sub.yml");
             std::fs::write(&sub_file, "").unwrap();
 
-            let importer = YAMLImporter::new();
-            let (file, non_fatal_error_set) = importer.load_file(&base_file).unwrap();
+            let (file, non_fatal_error_set) = YAMLImporter::load_file(&base_file).unwrap();
             // The invalid import path should be reported as error
             assert_eq!(non_fatal_error_set.unwrap().errors.len(), 1);
 
@@ -846,11 +840,11 @@ mod tests {
             assert_eq!(
                 file,
                 LoadedMatchFile {
-                    imports: vec![sub_file],
+                    import_paths: vec![sub_file],
                     content: MatchFile {
                         global_vars: vars,
                         trigger_matches: vec![TriggerMatch {
-                            triggers: vec!["hello".to_string()],
+                            triggers: vec![CompactString::const_new("hello")],
                             base_match: BaseMatch {
                                 effect: MatchEffect::Text(TextEffect {
                                     body: "world".to_string(),
@@ -881,8 +875,7 @@ mod tests {
             )
             .unwrap();
 
-            let importer = YAMLImporter::new();
-            assert!(importer.load_file(&base_file).is_err());
+            assert!(YAMLImporter::load_file(&base_file).is_err());
         });
     }
 }
