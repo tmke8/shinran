@@ -37,7 +37,7 @@ use log::error;
 use regex::Regex;
 use rkyv::{
     with::{AsString, Map},
-    Archive, Serialize,
+    Archive, Deserialize, Serialize,
 };
 use shinran_types::RegexWrapper;
 use thiserror::Error;
@@ -45,7 +45,7 @@ use thiserror::Error;
 const STANDARD_INCLUDES: &[&str] = &["../match/**/[!_]*.yml"];
 pub type ProfileId = i32;
 
-#[derive(Debug, Clone, Default, Archive, Serialize)]
+#[derive(Debug, Clone, Default, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct Filters {
     // TODO: Any config file with non-None filters should probably be ignored on Wayland.
@@ -180,12 +180,13 @@ impl LoadedProfileFile {
 }
 
 /// Struct representing one loaded configuration file.
-#[derive(Debug, Clone, Default, Archive, Serialize)]
+#[derive(Debug, Clone, Default, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct ProfileFile {
     pub(crate) content: ParsedConfig,
 
-    // pub(crate) source_path: PathBuf,
+    #[with(AsString)]
+    pub(crate) source_path: PathBuf,
     pub(crate) match_file_paths: Vec<MatchFileRef>,
 
     pub(crate) filter: Filters,
@@ -207,7 +208,7 @@ impl ProfileFile {
 
         Self {
             content: loaded.content,
-            // source_path: loaded.source_path,
+            source_path: loaded.source_path,
             match_file_paths,
             filter: loaded.filter,
         }
@@ -218,9 +219,9 @@ impl ProfileFile {
             return label;
         }
 
-        // if let Some(source_path) = self.source_path.to_str() {
-        //     return source_path;
-        // }
+        if let Some(source_path) = self.source_path.to_str() {
+            return source_path;
+        }
 
         "none"
     }

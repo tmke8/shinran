@@ -18,13 +18,13 @@
  */
 
 use anyhow::Result;
-use rkyv::{Archive, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 use std::{collections::BTreeMap, convert::TryInto, path::Path};
 use thiserror::Error;
 
 mod yaml;
 
-#[derive(Debug, Clone, PartialEq, Default, Archive, Serialize)]
+#[derive(Debug, Clone, PartialEq, Default, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub(crate) struct ParsedConfig {
     pub label: Option<String>,

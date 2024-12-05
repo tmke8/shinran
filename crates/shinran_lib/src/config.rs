@@ -4,14 +4,14 @@ use log::info;
 use rkyv::{
     ser::{serializers::AllocSerializer, ScratchSpace, Serializer},
     with::AsStringError,
-    Archive, Fallible, Serialize,
+    Archive, Deserialize, Fallible, Serialize,
 };
 use shinran_config::{config::ProfileStore, matches::store::MatchStore};
 
 use crate::{get_path_override, load, path};
 
 /// A struct containing all the information that was loaded from match files and config files.
-#[derive(Archive, Serialize)]
+#[derive(Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct Configuration {
     pub profile_store: ProfileStore,
@@ -56,7 +56,13 @@ impl Configuration {
         serializer.serialize_value(&cfg).unwrap();
         // and finally, dig all the way down to our byte buffer
         let bytes = serializer.into_inner().into_serializer().into_inner();
+
+        // Retrieve source paths from the archived configuration.
         let archived = rkyv::check_archived_root::<Configuration>(&bytes[..]).unwrap();
+        let mut paths = Vec::new();
+        paths.extend(archived.profile_store.get_source_paths());
+        paths.extend(archived.match_store.get_source_paths());
+
         cfg
     }
 }

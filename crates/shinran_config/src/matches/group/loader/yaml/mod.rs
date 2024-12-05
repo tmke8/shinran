@@ -17,7 +17,7 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{ffi::OsStr, sync::LazyLock};
+use std::{ffi::OsStr, path::PathBuf, sync::LazyLock};
 
 use crate::{
     error::{ErrorRecord, NonFatalErrorSet},
@@ -54,12 +54,12 @@ impl YAMLImporter {
     }
 
     pub fn load_file(
-        path: &std::path::Path,
+        path: PathBuf,
     ) -> anyhow::Result<(
         crate::matches::group::LoadedMatchFile,
         Option<NonFatalErrorSet>,
     )> {
-        let content = std::fs::read_to_string(path)?;
+        let content = std::fs::read_to_string(&path)?;
         let yaml_loaded =
             YAMLMatchFile::parse_from_str(&content).context("failed to parse YAML match group")?;
 
@@ -96,14 +96,14 @@ impl YAMLImporter {
 
         // Turn the imports into absolute paths.
         let (import_paths, import_errors) =
-            resolve_paths(path, &yaml_loaded.imports.unwrap_or_default())
+            resolve_paths(&path, &yaml_loaded.imports.unwrap_or_default())
                 .context("failed to turn YAML match file imports into valid paths")?;
         non_fatal_errors.extend(import_errors);
 
         let non_fatal_error_set = if non_fatal_errors.is_empty() {
             None
         } else {
-            Some(NonFatalErrorSet::new(path, non_fatal_errors))
+            Some(NonFatalErrorSet::new(&path, non_fatal_errors))
         };
 
         Ok((
@@ -114,6 +114,7 @@ impl YAMLImporter {
                     trigger_matches,
                     regex_matches,
                 },
+                source_path: path,
             },
             non_fatal_error_set,
         ))
@@ -826,7 +827,7 @@ mod tests {
             let sub_file = sub_dir.join("sub.yml");
             std::fs::write(&sub_file, "").unwrap();
 
-            let (file, non_fatal_error_set) = YAMLImporter::load_file(&base_file).unwrap();
+            let (file, non_fatal_error_set) = YAMLImporter::load_file(base_file.clone()).unwrap();
             // The invalid import path should be reported as error
             assert_eq!(non_fatal_error_set.unwrap().errors.len(), 1);
 
@@ -840,6 +841,7 @@ mod tests {
             assert_eq!(
                 file,
                 LoadedMatchFile {
+                    source_path: base_file,
                     import_paths: vec![sub_file],
                     content: MatchFile {
                         global_vars: vars,
@@ -875,7 +877,7 @@ mod tests {
             )
             .unwrap();
 
-            assert!(YAMLImporter::load_file(&base_file).is_err());
+            assert!(YAMLImporter::load_file(base_file).is_err());
         });
     }
 }

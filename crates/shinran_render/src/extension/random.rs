@@ -19,11 +19,11 @@
 
 use crate::{Extension, ExtensionOutput, ExtensionResult};
 use rand::seq::SliceRandom;
-use rkyv::{Archive, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 use shinran_types::{Params, Value};
 use thiserror::Error;
 
-#[derive(Archive, Serialize)]
+#[derive(Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct RandomExtension {}
 

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use compact_str::CompactString;
 use enum_as_inner::EnumAsInner;
-use rkyv::{Archive, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 
 mod regex_wrapper;
 
@@ -10,7 +10,7 @@ pub use regex_wrapper::RegexWrapper;
 
 pub type StructId = i32;
 
-#[derive(Debug, Clone, PartialEq, Default, Archive, Serialize)]
+#[derive(Debug, Clone, PartialEq, Default, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub enum VarType {
     Date,
@@ -26,7 +26,7 @@ pub enum VarType {
     Unresolved,
 }
 
-#[derive(Debug, Clone, PartialEq, Archive, Serialize)]
+#[derive(Debug, Clone, PartialEq, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct Variable {
     pub name: String,
@@ -50,7 +50,7 @@ impl Default for Variable {
 
 pub type Params = HashMap<String, Value>;
 
-#[derive(Debug, Clone, PartialEq, EnumAsInner, Archive, Serialize)]
+#[derive(Debug, Clone, PartialEq, EnumAsInner, Archive, Serialize, Deserialize)]
 // We have a recursive type, which requires some special handling
 #[archive(bound(serialize = "__S: rkyv::ser::ScratchSpace + rkyv::ser::Serializer"))]
 #[archive(check_bytes)]
@@ -74,7 +74,7 @@ pub enum Value {
     ),
 }
 
-#[derive(Debug, Clone, PartialEq, Archive, Serialize)]
+#[derive(Debug, Clone, PartialEq, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub enum Number {
     Integer(i64),
@@ -130,7 +130,7 @@ impl MatchCause {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Archive, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub enum WordBoundary {
     #[default]
@@ -150,7 +150,7 @@ pub struct TriggerCause {
     pub uppercase_style: UpperCasingStyle,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Archive, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub enum UpperCasingStyle {
     #[default]
@@ -166,7 +166,7 @@ pub struct RegexCause {
 
 // Effects
 
-#[derive(Debug, Clone, PartialEq, EnumAsInner, Archive, Serialize)]
+#[derive(Debug, Clone, PartialEq, EnumAsInner, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub enum MatchEffect {
     None,
@@ -180,7 +180,7 @@ impl Default for MatchEffect {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Archive, Serialize)]
+#[derive(Debug, Clone, PartialEq, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct TextEffect {
     pub body: String,
@@ -189,7 +189,7 @@ pub struct TextEffect {
     pub force_mode: Option<TextInjectMode>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Archive, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub enum TextFormat {
     Plain,
@@ -197,7 +197,7 @@ pub enum TextFormat {
     Html,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Archive, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub enum TextInjectMode {
     Keys,
@@ -215,13 +215,13 @@ impl Default for TextEffect {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Archive, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct ImageEffect {
     pub path: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Archive, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct BaseMatch {
     // pub id: i32,
@@ -232,7 +232,7 @@ pub struct BaseMatch {
     pub search_terms: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Archive, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct TriggerMatch {
     pub base_match: BaseMatch,
@@ -243,7 +243,7 @@ pub struct TriggerMatch {
     pub word_boundary: WordBoundary,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Archive, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct RegexMatch {
     pub base_match: BaseMatch,

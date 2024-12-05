@@ -17,7 +17,7 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use rkyv::{with::AsString, Archive, Serialize};
+use rkyv::{with::AsString, Archive, Deserialize, Serialize};
 use shinran_types::{Params, Value};
 use std::{
     collections::HashMap,
@@ -193,7 +193,7 @@ impl Default for Shell {
     }
 }
 
-#[derive(Archive, Serialize)]
+#[derive(Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct ShellExtension {
     #[with(AsString)]

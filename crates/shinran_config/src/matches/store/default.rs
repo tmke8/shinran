@@ -22,27 +22,35 @@ use crate::{
     matches::group::{loader, MatchFile, MatchFileRef, MatchFileStore},
 };
 use anyhow::Context;
-use rkyv::{Archive, Serialize};
+use rkyv::{with::AsString, Archive, Deserialize, Serialize};
 use shinran_types::{MatchesAndGlobalVars, RegexMatch, TriggerMatch, Variable};
 use std::{
     collections::{HashMap, HashSet},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 /// Struct representing a match file, where all imports have been resolved.
 ///
 /// In contrast, a [`LoadedMatchFile`] contains unresolved imports.
-#[derive(Debug, Clone, PartialEq, Default, Archive, Serialize)]
+#[derive(Debug, Clone, PartialEq, Default, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct ResolvedMatchFile {
     imports: Vec<MatchFileRef>,
     content: MatchFile,
+    #[with(AsString)]
+    source_path: PathBuf,
+}
+
+impl ArchivedResolvedMatchFile {
+    pub fn get_source_path(&self) -> &Path {
+        Path::new(self.source_path.as_str())
+    }
 }
 
 /// The MatchStore contains all matches that we have loaded.
 ///
 /// We have a hash map of all match files, indexed by their file system path.
-#[derive(Archive, Serialize)]
+#[derive(Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct MatchStore {
     // TODO: This HashMap should be a Vec, with the index being the MatchFileRef.
@@ -78,6 +86,7 @@ impl MatchStore {
             let indexed_file = ResolvedMatchFile {
                 imports,
                 content: match_file.content,
+                source_path: match_file.source_path,
             };
             indexed_files.insert(path, indexed_file);
         }
@@ -115,6 +124,14 @@ impl MatchStore {
 
     pub fn loaded_paths(&self) -> Vec<MatchFileRef> {
         self.indexed_files.keys().copied().collect()
+    }
+}
+
+impl ArchivedMatchStore {
+    pub fn get_source_paths(&self) -> impl Iterator<Item = &Path> {
+        self.indexed_files
+            .iter()
+            .map(|(_, file)| file.get_source_path())
     }
 }
 
@@ -163,7 +180,8 @@ fn load_match_files_recursively(
             continue; // Already loaded
         }
 
-        match loader::load_match_file(match_file_path)
+        let file_path = match_file_path.to_owned();
+        match loader::load_match_file(file_path)
             .with_context(|| format!("unable to load match group {match_file_path:?}"))
         {
             Ok((group, non_fatal_error_set)) => {

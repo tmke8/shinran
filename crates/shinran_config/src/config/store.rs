@@ -28,9 +28,13 @@ use crate::{config::resolve::LoadedProfileFile, matches::group::MatchFileRef};
 use super::{ConfigStoreError, ProfileFile};
 use anyhow::{Context, Result};
 use log::{debug, error};
-use rkyv::{Archive, Serialize};
+use rkyv::{
+    string::ArchivedString,
+    with::{AsString, DeserializeWith},
+    Archive, Deserialize, Infallible, Serialize,
+};
 
-#[derive(Archive, Serialize)]
+#[derive(Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 #[repr(transparent)]
 pub struct ProfileStore {
@@ -83,6 +87,14 @@ impl ProfileStore {
         (0..self.profiles.len())
             .map(|idx| ProfileRef { idx })
             .collect()
+    }
+}
+
+impl ArchivedProfileStore {
+    pub fn get_source_paths(&self) -> impl Iterator<Item = &Path> {
+        self.profiles
+            .iter()
+            .map(|p| Path::new(p.source_path.as_str()))
     }
 }
 

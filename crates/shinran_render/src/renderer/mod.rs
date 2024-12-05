@@ -29,7 +29,7 @@ use crate::{
 };
 use log::{error, warn};
 use regex::{Captures, Regex};
-use rkyv::{Archive, CheckBytes, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 use shinran_types::{MatchEffect, Params, TextEffect, Value, VarType, Variable};
 use thiserror::Error;
 
@@ -42,7 +42,7 @@ pub(crate) static VAR_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\{\{\s*((?P<name>\w+)(\.(?P<subname>(\w+)))?)\s*\}\}").unwrap());
 static WORD_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\w+)").unwrap());
 
-#[derive(Archive, Serialize)]
+#[derive(Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct Renderer<M: Archive + Extension = NoOpExtension> {
     date_extension: DateExtension,
@@ -53,7 +53,7 @@ pub struct Renderer<M: Archive + Extension = NoOpExtension> {
     mock_extension: M,
 }
 
-#[derive(Archive, Serialize)]
+#[derive(Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct NoOpExtension;
 
@@ -284,7 +284,7 @@ mod tests {
     use super::*;
     use std::{collections::HashMap, iter::FromIterator};
 
-    #[derive(Archive, Serialize)]
+    #[derive(Archive, Serialize, Deserialize)]
     #[archive(check_bytes)]
     struct MockExtension {}
 

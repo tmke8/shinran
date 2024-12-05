@@ -18,7 +18,7 @@
  */
 
 use chrono::{DateTime, Duration, Local, Locale};
-use rkyv::{Archive, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 use shinran_types::{Number, Params, Value};
 
 use crate::{Extension, ExtensionOutput, ExtensionResult};
@@ -27,7 +27,7 @@ use crate::{Extension, ExtensionOutput, ExtensionResult};
 //     fn get_system_locale(&self) -> String;
 // }
 
-#[derive(Archive, Serialize)]
+#[derive(Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct DateExtension {
     // fixed_date: Option<DateTime<Local>>,
