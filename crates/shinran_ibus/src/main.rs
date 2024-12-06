@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 
+use async_std::task;
 use event_listener::{Event, Listener};
 use log::{error, info};
 use shinran_lib::{Backend, Configuration};
@@ -53,10 +54,15 @@ async fn main() -> zbus::Result<()> {
     // Set up the logger.
     env_logger::init();
     info!("Program started!");
+
     // Save config in cache file.
     let bytes = CONFIG.0.serialize();
-    std::fs::write(&CONFIG.1, &bytes)
-        .unwrap_or_else(|err| error!("Failed to save cache: {:?}", err));
+    task::spawn(async move {
+        async_std::fs::write(&CONFIG.1, &bytes)
+            .await
+            .unwrap_or_else(|err| error!("Failed to save cache: {:?}", err))
+    });
+
     // Set up the backend.
     let backend = Backend::new(&CONFIG.0).unwrap();
     // Set up the factory.
