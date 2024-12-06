@@ -175,7 +175,7 @@ impl Default for Shell {
             Shell::Powershell
         } else if cfg!(target_os = "macos") {
             static DEFAULT_MACOS_SHELL: LazyLock<Option<MacShell>> =
-                LazyLock::new(|| determine_default_macos_shell());
+                LazyLock::new(determine_default_macos_shell);
 
             match *DEFAULT_MACOS_SHELL {
                 Some(MacShell::Bash) => Shell::Bash,

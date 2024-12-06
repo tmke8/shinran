@@ -119,20 +119,16 @@ pub struct LoadedProfileFile {
 }
 
 impl LoadedProfileFile {
-    pub fn load_from_path(path: &Path, parent: Option<&Self>) -> Result<Self> {
-        let mut config = ParsedConfig::load(path)?;
+    pub fn load_from_path(source_path: &Path, parent: Option<&Self>) -> Result<Self> {
+        let mut config = ParsedConfig::load(source_path)?;
 
         // Inherit from the parent config if present
         if let Some(parent) = parent {
             inherit(&mut config, &parent.content);
         }
 
-        // Extract the base directory
-        let base_dir = path
-            .parent()
-            .ok_or_else(ResolveError::ParentResolveFailed)?;
-
-        let match_paths = generate_match_paths(&config, base_dir)
+        let match_paths = generate_match_paths(&config, source_path)
+            .ok_or_else(ResolveError::ParentResolveFailed)?
             .into_iter()
             .collect();
 
@@ -156,7 +152,7 @@ impl LoadedProfileFile {
 
         Ok(Self {
             content: config,
-            source_path: path.to_owned(),
+            source_path: source_path.to_owned(),
             match_file_paths: match_paths,
             filter: Filters {
                 title: filter_title.map(RegexWrapper::new),
@@ -183,10 +179,10 @@ impl LoadedProfileFile {
 #[derive(Debug, Clone, Default, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct ProfileFile {
-    pub(crate) content: ParsedConfig,
+    pub content: ParsedConfig,
 
     #[with(AsString)]
-    pub(crate) source_path: PathBuf,
+    pub source_path: PathBuf,
     pub(crate) match_file_paths: Vec<MatchFileRef>,
 
     pub(crate) filter: Filters,
@@ -625,7 +621,7 @@ fn inherit(child: &mut ParsedConfig, parent: &ParsedConfig) {
 fn aggregate_includes(config: &ParsedConfig) -> HashSet<String> {
     let mut includes = HashSet::new();
 
-    if config.use_standard_includes.is_none() || config.use_standard_includes.unwrap() {
+    if config.use_standard_includes.is_none_or(|x| x) {
         for include in STANDARD_INCLUDES {
             includes.insert((*include).to_string());
         }
@@ -664,7 +660,10 @@ fn aggregate_excludes(config: &ParsedConfig) -> HashSet<String> {
     excludes
 }
 
-fn generate_match_paths(config: &ParsedConfig, base_dir: &Path) -> HashSet<PathBuf> {
+pub fn generate_match_paths(config: &ParsedConfig, source_path: &Path) -> Option<HashSet<PathBuf>> {
+    // Extract the base directory
+    let base_dir = source_path.parent()?;
+
     let includes = aggregate_includes(config);
     let excludes = aggregate_excludes(config);
 
@@ -672,10 +671,12 @@ fn generate_match_paths(config: &ParsedConfig, base_dir: &Path) -> HashSet<PathB
     let exclude_paths = calculate_paths(base_dir, excludes.iter());
     let include_paths = calculate_paths(base_dir, includes.iter());
 
-    include_paths
-        .difference(&exclude_paths)
-        .cloned()
-        .collect::<HashSet<_>>()
+    Some(
+        include_paths
+            .difference(&exclude_paths)
+            .cloned()
+            .collect::<HashSet<_>>(),
+    )
 }
 
 #[derive(Error, Debug)]

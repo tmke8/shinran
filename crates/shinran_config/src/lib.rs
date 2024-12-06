@@ -17,8 +17,8 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use anyhow::Result;
-use std::path::Path;
+use anyhow::{Context, Result};
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 pub mod config;
@@ -27,7 +27,7 @@ pub mod matches;
 mod util;
 
 use config::ProfileStore;
-use matches::store::MatchStore;
+use matches::{group::loader::yaml::YAMLImporter, store::MatchStore};
 
 type LoadableConfig = (ProfileStore, MatchStore, Vec<error::NonFatalErrorSet>);
 
@@ -43,7 +43,7 @@ pub fn load(base_path: &Path) -> Result<LoadableConfig> {
         .into_iter()
         .collect();
 
-    let (match_store, file_map, non_fatal_match_errors) = matches::store::load(&root_paths);
+    let (match_store, file_map, non_fatal_match_errors) = MatchStore::load(&root_paths);
 
     let profile_store = ProfileStore::resolve_paths(profile_store, &file_map);
 
@@ -52,6 +52,21 @@ pub fn load(base_path: &Path) -> Result<LoadableConfig> {
     non_fatal_errors.extend(non_fatal_match_errors);
 
     Ok((profile_store, match_store, non_fatal_errors))
+}
+
+pub fn all_config_files(config_dir: &Path) -> Result<impl Iterator<Item = PathBuf>> {
+    let iter = std::fs::read_dir(config_dir)
+        .with_context(|| format!("Failed to read directory {:?}", config_dir))?
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            let extension = path.extension()?;
+            if path.is_file() && YAMLImporter::is_supported(extension) {
+                Some(path)
+            } else {
+                None
+            }
+        });
+    Ok(iter)
 }
 
 // pub fn load_legacy(

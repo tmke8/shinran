@@ -56,7 +56,13 @@ pub struct MatchFileStore {
 #[archive_attr(derive(Hash, PartialEq, Eq))]
 #[repr(transparent)]
 pub struct MatchFileRef {
-    idx: usize,
+    pub idx: usize,
+}
+
+impl PartialEq<usize> for MatchFileRef {
+    fn eq(&self, other: &usize) -> bool {
+        self.idx == *other
+    }
 }
 
 impl MatchFileStore {
@@ -78,5 +84,10 @@ impl MatchFileStore {
             .into_iter()
             .enumerate()
             .map(|(idx, elem)| (MatchFileRef { idx }, elem))
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.files.len()
     }
 }

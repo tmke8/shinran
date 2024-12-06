@@ -1,8 +1,9 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 
 use event_listener::{Event, Listener};
-use log::info;
+use log::{error, info};
 use shinran_lib::{Backend, Configuration};
 use zbus::zvariant::{ObjectPath, OwnedObjectPath};
 use zbus::{connection, fdo, Address, ObjectServer};
@@ -42,7 +43,7 @@ impl Factory {
 }
 
 // TODO: Replace with a `OnceLock` when we want to actually parse CLI arguments.
-static CONFIG: LazyLock<Configuration> = LazyLock::new(|| {
+static CONFIG: LazyLock<(Configuration, PathBuf)> = LazyLock::new(|| {
     let cli_overrides = HashMap::new();
     Configuration::new(&cli_overrides)
 });
@@ -52,8 +53,12 @@ async fn main() -> zbus::Result<()> {
     // Set up the logger.
     env_logger::init();
     info!("Program started!");
+    // Save config in cache file.
+    let bytes = CONFIG.0.serialize();
+    std::fs::write(&CONFIG.1, &bytes)
+        .unwrap_or_else(|err| error!("Failed to save cache: {:?}", err));
     // Set up the backend.
-    let backend = Backend::new(&CONFIG).unwrap();
+    let backend = Backend::new(&CONFIG.0).unwrap();
     // Set up the factory.
     let event = Arc::new(Event::new());
     let factory = Factory {

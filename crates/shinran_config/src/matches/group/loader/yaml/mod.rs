@@ -144,10 +144,9 @@ pub fn try_convert_into_match(
     };
 
     // Make the field "uppercase_style" lower case in-place.
-    yaml_match
-        .uppercase_style
-        .as_mut()
-        .map(|s| s.make_ascii_lowercase());
+    if let Some(style) = yaml_match.uppercase_style.as_mut() {
+        style.make_ascii_lowercase()
+    };
 
     let uppercase_style = match yaml_match.uppercase_style.as_deref() {
         Some("uppercase") => UpperCasingStyle::Uppercase,

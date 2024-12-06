@@ -4,7 +4,9 @@
 // https://github.com/emersion/wlhangul/blob/bd2758227779d7748dea185c38cab11665d55502/include/wlhangul.h
 // https://github.com/emersion/wlhangul/blob/bd2758227779d7748dea185c38cab11665d55502/main.c
 
-use std::{collections::HashMap, os::unix::io::AsFd, rc::Rc, sync::LazyLock, time::Duration};
+use std::{
+    collections::HashMap, os::unix::io::AsFd, path::PathBuf, rc::Rc, sync::LazyLock, time::Duration,
+};
 
 use calloop::{timer::Timer, Dispatcher, EventLoop, LoopHandle};
 use calloop_wayland_source::WaylandSource;
@@ -42,7 +44,7 @@ mod input_context;
 use input_context::{InputContext, RepeatTimer};
 
 // TODO: Replace with a `OnceLock` when we want to actually parse CLI arguments.
-static CONFIG: LazyLock<Configuration> = LazyLock::new(|| {
+static CONFIG: LazyLock<(Configuration, PathBuf)> = LazyLock::new(|| {
     let cli_overrides = HashMap::new();
     Configuration::new(&cli_overrides)
 });
@@ -51,8 +53,13 @@ fn main() {
     // Set up the logger.
     env_logger::init();
 
+    // Save config in cache file.
+    let bytes = CONFIG.0.serialize();
+    std::fs::write(&CONFIG.1, &bytes)
+        .unwrap_or_else(|err| error!("Failed to save cache: {:?}", err));
+
     // Set up the backend.
-    let backend = Backend::new(&CONFIG).unwrap();
+    let backend = Backend::new(&CONFIG.0).unwrap();
 
     // Set up the Wayland connection.
     let conn = Connection::connect_to_env()
