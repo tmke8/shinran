@@ -18,6 +18,7 @@
  */
 use std::path::PathBuf;
 
+use rkyv::{Archive, Deserialize, Serialize};
 use shinran_types::{RegexMatch, TriggerMatch, Variable};
 
 pub(crate) mod loader;
@@ -26,7 +27,8 @@ mod path;
 /// Content of a match file.
 ///
 /// This struct owns the variables and matches, and is used to store the content of a match file.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Archive, Serialize, Deserialize)]
+#[archive(check_bytes)]
 pub struct MatchFile {
     pub global_vars: Vec<Variable>,
     pub trigger_matches: Vec<TriggerMatch>,
@@ -41,6 +43,7 @@ pub struct MatchFile {
 pub struct LoadedMatchFile {
     pub import_paths: Vec<PathBuf>,
     pub content: MatchFile,
+    pub source_path: PathBuf,
 }
 
 #[repr(transparent)]
@@ -48,10 +51,18 @@ pub struct MatchFileStore {
     files: Vec<LoadedMatchFile>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash, Archive, Serialize, Deserialize)]
+#[archive(check_bytes)]
+#[archive_attr(derive(Hash, PartialEq, Eq))]
 #[repr(transparent)]
 pub struct MatchFileRef {
-    idx: usize,
+    pub idx: usize,
+}
+
+impl PartialEq<usize> for MatchFileRef {
+    fn eq(&self, other: &usize) -> bool {
+        self.idx == *other
+    }
 }
 
 impl MatchFileStore {
@@ -73,5 +84,10 @@ impl MatchFileStore {
             .into_iter()
             .enumerate()
             .map(|(idx, elem)| (MatchFileRef { idx }, elem))
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.files.len()
     }
 }

@@ -18,13 +18,15 @@
  */
 
 use anyhow::Result;
+use rkyv::{Archive, Deserialize, Serialize};
 use std::{collections::BTreeMap, convert::TryInto, path::Path};
 use thiserror::Error;
 
 mod yaml;
 
-#[derive(Debug, Clone, PartialEq, Default)]
-pub(crate) struct ParsedConfig {
+#[derive(Debug, Clone, PartialEq, Default, Archive, Serialize, Deserialize)]
+#[archive(check_bytes)]
+pub struct ParsedConfig {
     pub label: Option<String>,
 
     pub backend: Option<String>,
@@ -77,8 +79,8 @@ pub(crate) struct ParsedConfig {
 }
 
 impl ParsedConfig {
-    pub fn load(path: &Path) -> Result<Self> {
-        let content = std::fs::read_to_string(path)?;
+    pub fn load(source_path: &Path) -> Result<Self> {
+        let content = std::fs::read_to_string(source_path)?;
         match yaml::YAMLConfig::parse_from_str(&content) {
             Ok(config) => Ok(config.try_into()?),
             Err(err) => Err(ParsedConfigError::LoadFailed(err).into()),

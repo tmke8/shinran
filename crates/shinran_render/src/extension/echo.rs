@@ -18,31 +18,35 @@
  */
 
 use crate::{Extension, ExtensionOutput, ExtensionResult};
+use rkyv::{Archive, Deserialize, Serialize};
 use shinran_types::{Params, Value};
 use thiserror::Error;
 
+#[derive(Archive, Serialize, Deserialize)]
+#[archive(check_bytes)]
 pub struct EchoExtension {
-    alias: String,
+    // alias: String,
 }
 
 #[allow(clippy::new_without_default)]
 impl EchoExtension {
     pub fn new() -> Self {
         Self {
-            alias: "echo".to_string(),
+            // alias: "echo".to_string(),
         }
     }
 
-    pub fn new_with_alias(alias: &str) -> Self {
-        Self {
-            alias: alias.to_string(),
-        }
-    }
+    // pub fn new_with_alias(alias: &str) -> Self {
+    //     Self {
+    //         alias: alias.to_string(),
+    //     }
+    // }
 }
 
 impl Extension for EchoExtension {
     fn name(&self) -> &str {
-        self.alias.as_str()
+        // self.alias.as_str()
+        "echo"
     }
 
     fn calculate(&self, _: &crate::Scope, params: &Params) -> crate::ExtensionResult {
@@ -95,12 +99,12 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn alias() {
-        let extension_with_alias = EchoExtension::new_with_alias("dummy");
-        let extension = EchoExtension::new();
+    // #[test]
+    // fn alias() {
+    //     let extension_with_alias = EchoExtension::new_with_alias("dummy");
+    //     let extension = EchoExtension::new();
 
-        assert_eq!(extension.name(), "echo");
-        assert_eq!(extension_with_alias.name(), "dummy");
-    }
+    //     assert_eq!(extension.name(), "echo");
+    //     assert_eq!(extension_with_alias.name(), "dummy");
+    // }
 }

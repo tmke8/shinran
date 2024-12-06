@@ -25,10 +25,13 @@ use crate::error::NonFatalErrorSet;
 use crate::matches::group::loader::yaml::YAMLImporter;
 use crate::{config::resolve::LoadedProfileFile, matches::group::MatchFileRef};
 
-use super::{ConfigStoreError, ProfileFile};
+use super::{resolve::ArchivedProfileFile, ConfigStoreError, ProfileFile};
 use anyhow::{Context, Result};
 use log::{debug, error};
+use rkyv::{Archive, Deserialize, Serialize};
 
+#[derive(Archive, Serialize, Deserialize)]
+#[archive(check_bytes)]
 #[repr(transparent)]
 pub struct ProfileStore {
     profiles: Vec<ProfileFile>,
@@ -83,6 +86,18 @@ impl ProfileStore {
     }
 }
 
+impl ArchivedProfileStore {
+    pub fn get_source_paths(&self) -> impl Iterator<Item = &Path> {
+        self.profiles
+            .iter()
+            .map(|p| Path::new(p.source_path.as_str()))
+    }
+
+    pub fn get_parsed_configs(&self) -> impl Iterator<Item = &ArchivedProfileFile> {
+        self.profiles.iter()
+    }
+}
+
 #[repr(transparent)]
 pub struct LoadedProfileStore {
     profiles: Vec<LoadedProfileFile>,
@@ -118,9 +133,9 @@ impl LoadedProfileStore {
 
         let mut non_fatal_errors = Vec::new();
 
+        debug!("loading default config at path: {:?}", default_file);
         let default = LoadedProfileFile::load_from_path(&default_file, None)
             .context("failed to load default.yml configuration")?;
-        debug!("loaded default config at path: {:?}", default_file);
 
         // Then the others
         let mut profiles: Vec<LoadedProfileFile> = vec![default];
@@ -135,10 +150,11 @@ impl LoadedProfileStore {
                 && config_file != default_file
                 && YAMLImporter::is_supported(extension)
             {
+                debug!("loading config at path: {:?}", config_file);
+                // TODO: Move `config_file` into `load_from_path` instead of passing it by reference
                 match LoadedProfileFile::load_from_path(&config_file, Some(&profiles[0])) {
                     Ok(config) => {
                         profiles.push(config);
-                        debug!("loaded config at path: {:?}", config_file);
                     }
                     Err(err) => {
                         error!(
@@ -165,6 +181,7 @@ impl LoadedProfileStore {
 #[cfg(test)]
 mod tests {
     use regex::Regex;
+    use shinran_types::RegexWrapper;
 
     use crate::config::parse::ParsedConfig;
 
@@ -191,7 +208,7 @@ mod tests {
         let default = new_mock("default");
         let custom1 = new_mock("custom1");
         let mut custom2 = new_mock("custom2");
-        custom2.filter.class = Some(Regex::new("foo").unwrap());
+        custom2.filter.class = Some(RegexWrapper::new(Regex::new("foo").unwrap()));
 
         let store = ProfileStore {
             profiles: vec![default, custom1, custom2],

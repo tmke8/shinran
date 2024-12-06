@@ -17,21 +17,5 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, path::PathBuf};
-
-use crate::error::NonFatalErrorSet;
-
 mod default;
 pub use default::MatchStore;
-
-use super::group::MatchFileRef;
-
-pub fn load(
-    paths: &[PathBuf],
-) -> (
-    MatchStore,
-    HashMap<PathBuf, MatchFileRef>,
-    Vec<NonFatalErrorSet>,
-) {
-    default::MatchStore::load(paths)
-}

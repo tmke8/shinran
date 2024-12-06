@@ -24,12 +24,18 @@ use std::{
 
 use crate::{Extension, ExtensionOutput, ExtensionResult};
 use log::{info, warn};
+use rkyv::{with::AsString, Archive, Deserialize, Serialize};
 use shinran_types::{Params, Value};
 use thiserror::Error;
 
+#[derive(Archive, Serialize, Deserialize)]
+#[archive(check_bytes)]
 pub struct ScriptExtension {
+    #[with(AsString)]
     home_path: PathBuf,
+    #[with(AsString)]
     config_path: PathBuf,
+    #[with(AsString)]
     packages_path: PathBuf,
 }
 

@@ -71,7 +71,8 @@ impl ShinranEngine {
         let backend = self.backend.clone();
         // TODO: Investigate whether this can be done without cloning the text.
         let trigger = self.text.clone();
-        // `fuzzy_match` is a long-running CPU-bound operation, so we use `spawn_blocking`.
+        // `fuzzy_match` is a long-running CPU-bound operation, so we use `spawn_blocking`,
+        // because we don't want to block the async runtime.
         let candidates = task::spawn_blocking(move || backend.fuzzy_match(&trigger)).await;
 
         if !candidates.is_empty() {

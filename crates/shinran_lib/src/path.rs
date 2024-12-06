@@ -17,11 +17,14 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::{debug, info};
 use std::{
     fs::create_dir_all,
     path::{Path, PathBuf},
+    time::SystemTime,
 };
+
+use anyhow::{Context, Result};
+use log::{debug, info};
 
 #[derive(Debug, Clone)]
 pub struct Paths {
@@ -225,4 +228,56 @@ fn is_portable_mode() -> bool {
         }
     }
     false
+}
+
+/// Get the most recent modification time of the provided paths.
+///
+/// # Errors
+/// - If no paths are provided.
+/// - If a path is not a regular file.
+/// - If the metadata of a path cannot be read.
+/// - If the modification time of a path cannot be read.
+pub fn most_recent_modification(paths: &[&Path]) -> Result<SystemTime> {
+    if paths.is_empty() {
+        return Err(anyhow::anyhow!(
+            "No paths provided to check modification time"
+        ));
+    }
+
+    paths
+        .iter()
+        .try_fold(None, |max_time, &path| {
+            if !path.is_file() {
+                return Err(anyhow::anyhow!(
+                    "Path is not a regular file: {}",
+                    path.display()
+                ));
+            }
+
+            let time = path
+                .metadata()
+                .with_context(|| format!("Failed to read metadata for {}", path.display()))?
+                .modified()
+                .with_context(|| {
+                    format!("Failed to get modification time for {}", path.display())
+                })?;
+
+            Ok(Some(max_time.map_or(time, |max: SystemTime| max.max(time))))
+        })?
+        .ok_or_else(|| anyhow::anyhow!("No valid files found to check modification time"))
+}
+
+pub fn load_and_mod_time(path: &Path) -> Result<(Vec<u8>, SystemTime)> {
+    let content = std::fs::read(path)
+        .with_context(|| format!("Failed to read file contents from {}", path.display()))?;
+
+    let metadata = path
+        .metadata()
+        .with_context(|| format!("Failed to read metadata for {}", path.display()))?;
+
+    let mod_time = metadata
+        .modified()
+        .with_context(|| format!("Failed to get modification time for {}", path.display()))?;
+
+    Ok((content, mod_time))
 }

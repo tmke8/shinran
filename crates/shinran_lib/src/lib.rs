@@ -164,7 +164,7 @@ mod tests {
             "config_dir".to_string(),
             base_path.to_str().unwrap().to_string(),
         );
-        Configuration::new(&cli_overrides)
+        Configuration::new(&cli_overrides).0
     }
 
     #[test]

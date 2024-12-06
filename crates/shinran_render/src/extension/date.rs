@@ -18,6 +18,7 @@
  */
 
 use chrono::{DateTime, Duration, Local, Locale};
+use rkyv::{Archive, Deserialize, Serialize};
 use shinran_types::{Number, Params, Value};
 
 use crate::{Extension, ExtensionOutput, ExtensionResult};
@@ -26,14 +27,17 @@ use crate::{Extension, ExtensionOutput, ExtensionResult};
 //     fn get_system_locale(&self) -> String;
 // }
 
+#[derive(Archive, Serialize, Deserialize)]
+#[archive(check_bytes)]
 pub struct DateExtension {
-    fixed_date: Option<DateTime<Local>>,
+    // fixed_date: Option<DateTime<Local>>,
 }
 
 #[allow(clippy::new_without_default)]
 impl DateExtension {
     pub fn new() -> Self {
-        Self { fixed_date: None }
+        // Self { fixed_date: None }
+        Self {}
     }
 }
 
@@ -43,8 +47,17 @@ impl Extension for DateExtension {
     }
 
     fn calculate(&self, _: &crate::Scope, params: &Params) -> crate::ExtensionResult {
-        let mut now = self.get_date();
+        self.calculate_with_date(&crate::Scope::default(), params, Local::now())
+    }
+}
 
+impl DateExtension {
+    fn calculate_with_date(
+        &self,
+        _: &crate::Scope,
+        params: &Params,
+        mut now: DateTime<Local>,
+    ) -> crate::ExtensionResult {
         // Compute the given offset
         let offset = params.get("offset");
         if let Some(Value::Number(Number::Integer(offset))) = offset {
@@ -65,16 +78,6 @@ impl Extension for DateExtension {
         };
 
         ExtensionResult::Success(ExtensionOutput::Single(date))
-    }
-}
-
-impl DateExtension {
-    fn get_date(&self) -> DateTime<Local> {
-        if let Some(fixed_date) = self.fixed_date {
-            fixed_date
-        } else {
-            Local::now()
-        }
     }
 
     fn format_date_with_locale(date: DateTime<Local>, format: &str, locale: Locale) -> String {
@@ -413,16 +416,15 @@ mod tests {
 
     #[test]
     fn date_formatted_correctly() {
-        let mut extension = DateExtension::new();
-        // extension.fixed_date = Some(Local.ymd(2014, 7, 8).and_hms(9, 10, 11));
-        extension.fixed_date = Some(Local.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap());
+        let extension = DateExtension::new();
+        let now = Local.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap();
 
         let param = vec![("format".to_string(), Value::String("%H:%M:%S".to_string()))]
             .into_iter()
             .collect::<Params>();
         assert_eq!(
             extension
-                .calculate(&HashMap::default(), &param)
+                .calculate_with_date(&HashMap::default(), &param, now)
                 .into_success()
                 .unwrap(),
             ExtensionOutput::Single("09:10:11".to_string())
@@ -431,9 +433,8 @@ mod tests {
 
     #[test]
     fn offset_works_correctly() {
-        let mut extension = DateExtension::new();
-        // extension.fixed_date = Some(Local.ymd(2014, 7, 8).and_hms(9, 10, 11));
-        extension.fixed_date = Some(Local.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap());
+        let extension = DateExtension::new();
+        let now = Local.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap();
 
         let param = vec![
             ("format".to_string(), Value::String("%H:%M:%S".to_string())),
@@ -444,7 +445,7 @@ mod tests {
         .collect::<Params>();
         assert_eq!(
             extension
-                .calculate(&HashMap::default(), &param)
+                .calculate_with_date(&HashMap::default(), &param, now)
                 .into_success()
                 .unwrap(),
             ExtensionOutput::Single("10:10:11".to_string())
@@ -453,9 +454,8 @@ mod tests {
 
     #[test]
     fn default_locale_works_correctly() {
-        let mut extension = DateExtension::new();
-        // extension.fixed_date = Some(Local.ymd(2014, 7, 8).and_hms(9, 10, 11));
-        extension.fixed_date = Some(Local.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap());
+        let extension = DateExtension::new();
+        let now = Local.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap();
 
         let param = vec![
             ("format".to_string(), Value::String("%A".to_string())),
@@ -465,7 +465,7 @@ mod tests {
         .collect::<Params>();
         assert_eq!(
             extension
-                .calculate(&HashMap::default(), &param)
+                .calculate_with_date(&HashMap::default(), &param, now)
                 .into_success()
                 .unwrap(),
             ExtensionOutput::Single("martedì".to_string())
@@ -474,9 +474,8 @@ mod tests {
 
     #[test]
     fn invalid_locale_should_default_to_en_us() {
-        let mut extension = DateExtension::new();
-        // extension.fixed_date = Some(Local.ymd(2014, 7, 8).and_hms(9, 10, 11));
-        extension.fixed_date = Some(Local.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap());
+        let extension = DateExtension::new();
+        let now = Local.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap();
 
         let param = vec![
             ("format".to_string(), Value::String("%A".to_string())),
@@ -486,7 +485,7 @@ mod tests {
         .collect::<Params>();
         assert_eq!(
             extension
-                .calculate(&HashMap::default(), &param)
+                .calculate_with_date(&HashMap::default(), &param, now)
                 .into_success()
                 .unwrap(),
             ExtensionOutput::Single("Tuesday".to_string())
@@ -495,9 +494,8 @@ mod tests {
 
     #[test]
     fn override_locale() {
-        let mut extension = DateExtension::new();
-        // extension.fixed_date = Some(Local.ymd(2014, 7, 8).and_hms(9, 10, 11));
-        extension.fixed_date = Some(Local.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap());
+        let extension = DateExtension::new();
+        let now = Local.with_ymd_and_hms(2014, 7, 8, 9, 10, 11).unwrap();
 
         let param = vec![
             ("format".to_string(), Value::String("%A".to_string())),
@@ -507,7 +505,7 @@ mod tests {
         .collect::<Params>();
         assert_eq!(
             extension
-                .calculate(&HashMap::default(), &param)
+                .calculate_with_date(&HashMap::default(), &param, now)
                 .into_success()
                 .unwrap(),
             ExtensionOutput::Single("martedì".to_string())

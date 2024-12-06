@@ -28,7 +28,8 @@ mod resolve;
 pub(crate) mod store;
 mod util;
 
-pub use resolve::{ProfileFile, ProfileId};
+pub use parse::{ArchivedParsedConfig, ParsedConfig};
+pub use resolve::{generate_match_paths, ProfileFile, ProfileId};
 pub use store::{LoadedProfileStore, ProfileRef, ProfileStore};
 
 // #[cfg(test)]

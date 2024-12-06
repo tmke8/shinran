@@ -16,3 +16,4 @@ enum-as-inner = "0.6.0"
 tempdir = "0.3.7"
 dunce = "1.0.1"
 compact_str = { version = "0.8.0", features = ["serde", "rkyv"] }
+rkyv = { version = "0.7", features = ["size_32", "alloc", "std", "validation"] }

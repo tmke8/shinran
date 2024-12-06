@@ -17,6 +17,7 @@
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use rkyv::{with::AsString, Archive, Deserialize, Serialize};
 use shinran_types::{Params, Value};
 use std::{
     collections::HashMap,
@@ -174,7 +175,7 @@ impl Default for Shell {
             Shell::Powershell
         } else if cfg!(target_os = "macos") {
             static DEFAULT_MACOS_SHELL: LazyLock<Option<MacShell>> =
-                LazyLock::new(|| determine_default_macos_shell());
+                LazyLock::new(determine_default_macos_shell);
 
             match *DEFAULT_MACOS_SHELL {
                 Some(MacShell::Bash) => Shell::Bash,
@@ -192,7 +193,10 @@ impl Default for Shell {
     }
 }
 
+#[derive(Archive, Serialize, Deserialize)]
+#[archive(check_bytes)]
 pub struct ShellExtension {
+    #[with(AsString)]
     config_path: PathBuf,
 }
 

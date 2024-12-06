@@ -18,7 +18,7 @@
  */
 
 use anyhow::Result;
-use std::path::Path;
+use std::path::PathBuf;
 use thiserror::Error;
 
 use crate::error::NonFatalErrorSet;
@@ -29,7 +29,9 @@ use super::LoadedMatchFile;
 
 pub(crate) mod yaml;
 
-pub(crate) fn load_match_file(path: &Path) -> Result<(LoadedMatchFile, Option<NonFatalErrorSet>)> {
+pub(crate) fn load_match_file(
+    path: PathBuf,
+) -> Result<(LoadedMatchFile, Option<NonFatalErrorSet>)> {
     let Some(extension) = path.extension() else {
         return Err(LoadError::MissingExtension.into());
     };
@@ -69,7 +71,7 @@ mod tests {
             std::fs::write(&file, "test").unwrap();
 
             assert!(matches!(
-                load_match_file(&file)
+                load_match_file(file)
                     .unwrap_err()
                     .downcast::<LoadError>()
                     .unwrap(),
@@ -85,7 +87,7 @@ mod tests {
             std::fs::write(&file, "test").unwrap();
 
             assert!(matches!(
-                load_match_file(&file)
+                load_match_file(file)
                     .unwrap_err()
                     .downcast::<LoadError>()
                     .unwrap(),
@@ -101,7 +103,7 @@ mod tests {
             std::fs::write(&file, "test").unwrap();
 
             assert!(matches!(
-                load_match_file(&file)
+                load_match_file(file)
                     .unwrap_err()
                     .downcast::<LoadError>()
                     .unwrap(),
@@ -125,7 +127,7 @@ mod tests {
             .unwrap();
 
             assert_eq!(
-                load_match_file(&file)
+                load_match_file(file)
                     .unwrap()
                     .0
                     .content
@@ -151,7 +153,7 @@ mod tests {
             .unwrap();
 
             assert_eq!(
-                load_match_file(&file)
+                load_match_file(file)
                     .unwrap()
                     .0
                     .content
@@ -177,7 +179,7 @@ mod tests {
             .unwrap();
 
             assert_eq!(
-                load_match_file(&file)
+                load_match_file(file)
                     .unwrap()
                     .0
                     .content
