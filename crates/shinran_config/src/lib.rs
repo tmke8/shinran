@@ -151,7 +151,7 @@ mod tests {
             let (config_store, match_store, errors) = load(base).unwrap();
 
             assert_eq!(errors.len(), 0);
-            assert_eq!(config_store.default_config().match_file_paths().len(), 2);
+            assert_eq!(config_store.default_profile.match_file_paths().len(), 2);
             assert_eq!(
                 config_store
                     .active_config(&AppProperties {
@@ -167,7 +167,7 @@ mod tests {
             assert_eq!(
                 match_store
                     .collect_matches_and_global_vars(
-                        config_store.default_config().match_file_paths()
+                        config_store.default_profile.match_file_paths()
                     )
                     .trigger_matches
                     .len(),
@@ -282,7 +282,7 @@ mod tests {
             assert_eq!(
                 match_store
                     .collect_matches_and_global_vars(
-                        config_store.default_config().match_file_paths()
+                        config_store.default_profile.match_file_paths()
                     )
                     .trigger_matches
                     .len(),

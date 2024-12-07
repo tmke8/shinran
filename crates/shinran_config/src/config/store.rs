@@ -32,9 +32,9 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 #[derive(Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
-#[repr(transparent)]
 pub struct ProfileStore {
-    profiles: Vec<ProfileFile>,
+    pub default_profile: ProfileFile,
+    custom_profiles: Box<[ProfileFile]>,
 }
 
 impl ProfileStore {
@@ -42,22 +42,20 @@ impl ProfileStore {
         loaded: LoadedProfileStore,
         file_map: &HashMap<PathBuf, MatchFileRef>,
     ) -> Self {
-        let profiles = loaded
-            .profiles
-            .into_iter()
-            .map(|loaded| ProfileFile::from_loaded_profile(loaded, file_map))
-            .collect::<_>();
-        ProfileStore { profiles }
-    }
+        let num_profiles = loaded.profiles.len();
+        let mut profiles = loaded.profiles.into_iter();
 
-    #[inline]
-    pub(crate) fn default_config(&self) -> &ProfileFile {
-        &self.profiles[0]
-    }
+        // First profile is the default one.
+        let default_config = ProfileFile::from_loaded_profile(profiles.next().unwrap(), file_map);
 
-    #[inline]
-    fn custom_configs(&self) -> &[ProfileFile] {
-        &self.profiles[1..]
+        let mut custom_configs = Vec::with_capacity(num_profiles - 1);
+        for custom_config in profiles {
+            custom_configs.push(ProfileFile::from_loaded_profile(custom_config, file_map));
+        }
+        ProfileStore {
+            default_profile: default_config,
+            custom_profiles: custom_configs.into_boxed_slice(),
+        }
     }
 
     /// Get the active configuration for the given app.
@@ -65,28 +63,27 @@ impl ProfileStore {
     /// This will return the *first* custom configuration that matches the app properties.
     pub fn active_config(&self, app: &super::AppProperties) -> &ProfileFile {
         // Find a custom config that matches or fallback to the default one
-        for custom in self.custom_configs().iter() {
+        for custom in self.custom_profiles.iter() {
             if custom.filter.is_match(app) {
                 return custom;
             }
         }
-        self.default_config()
+        &self.default_profile
     }
 
     pub fn len(&self) -> usize {
-        self.profiles.len()
+        self.custom_profiles.len() + 1
     }
 }
 
 impl ArchivedProfileStore {
     pub fn get_source_paths(&self) -> impl Iterator<Item = &Path> {
-        self.profiles
-            .iter()
+        self.get_parsed_configs()
             .map(|p| Path::new(p.source_path.as_str()))
     }
 
     pub fn get_parsed_configs(&self) -> impl Iterator<Item = &ArchivedProfileFile> {
-        self.profiles.iter()
+        std::iter::once(&self.default_profile).chain(self.custom_profiles.iter())
     }
 }
 
@@ -198,10 +195,11 @@ mod tests {
         custom2.filter.class = Some(RegexWrapper::new(Regex::new("foo").unwrap()));
 
         let store = ProfileStore {
-            profiles: vec![default, custom1, custom2],
+            default_profile: default,
+            custom_profiles: Box::new([custom1, custom2]),
         };
 
-        assert_eq!(store.default_config().label(), "default");
+        assert_eq!(store.default_profile.label(), "default");
         assert_eq!(
             store
                 .active_config(&crate::config::AppProperties {
@@ -221,10 +219,11 @@ mod tests {
         let custom2 = new_mock("custom2");
 
         let store = ProfileStore {
-            profiles: vec![default, custom1, custom2],
+            default_profile: default,
+            custom_profiles: Box::new([custom1, custom2]),
         };
 
-        assert_eq!(store.default_config().label(), "default");
+        assert_eq!(store.default_profile.label(), "default");
         assert_eq!(
             store
                 .active_config(&crate::config::AppProperties {
