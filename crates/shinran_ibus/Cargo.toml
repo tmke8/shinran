@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 ibus_utils = { path = "../ibus_utils" }
-shinran_lib = { path = "../shinran_lib" }
+shinran_backend = { path = "../shinran_backend" }
 
 async-std = { version = "1.12.0", features = ["attributes"] }
 event-listener = "5.2.0"

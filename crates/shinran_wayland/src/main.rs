@@ -37,7 +37,7 @@ use wayland_protocols_misc::{
 };
 use xkbcommon::xkb;
 
-use shinran_lib::{Backend, Configuration};
+use shinran_backend::{Backend, Configuration};
 
 mod input_context;
 

@@ -339,7 +339,7 @@ pub fn try_convert_into_variable(
 #[cfg(test)]
 mod tests {
     use compact_str::CompactString;
-    use shinran_helpers::use_test_directory;
+    use shinran_test_helpers::use_test_directory;
     use shinran_types::TextEffect;
 
     use super::*;

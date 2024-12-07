@@ -15,7 +15,7 @@ use log::{debug, info};
 use xkeysym::Keysym;
 use zbus::{fdo, interface, object_server::SignalContext};
 
-use shinran_lib::Backend;
+use shinran_backend::Backend;
 
 pub(crate) struct ShinranEngine {
     done: Arc<Event>,

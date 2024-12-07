@@ -89,7 +89,7 @@ pub enum ResolvePathError {
 
 #[cfg(test)]
 pub mod tests {
-    use shinran_helpers::use_test_directory;
+    use shinran_test_helpers::use_test_directory;
 
     use super::*;
     use std::fs::create_dir_all;

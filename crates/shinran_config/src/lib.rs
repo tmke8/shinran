@@ -89,7 +89,7 @@ pub enum ConfigError {
 #[cfg(test)]
 mod tests {
     use config::AppProperties;
-    use shinran_helpers::use_test_directory;
+    use shinran_test_helpers::use_test_directory;
 
     use super::*;
     // use config::AppProperties;

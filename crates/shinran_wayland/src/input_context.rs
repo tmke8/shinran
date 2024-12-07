@@ -15,7 +15,7 @@ use wayland_protocols_misc::{
 };
 use xkbcommon::xkb::{self, Keysym};
 
-use shinran_lib::Backend;
+use shinran_backend::Backend;
 
 pub(crate) struct InputContext<S> {
     pub(crate) seat_id: u32,

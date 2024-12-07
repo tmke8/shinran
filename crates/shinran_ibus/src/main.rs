@@ -5,7 +5,7 @@ use std::sync::{Arc, LazyLock};
 use async_std::task;
 use event_listener::{Event, Listener};
 use log::{error, info};
-use shinran_lib::{Backend, Configuration};
+use shinran_backend::{Backend, Configuration};
 use zbus::zvariant::{ObjectPath, OwnedObjectPath};
 use zbus::{connection, fdo, Address, ObjectServer};
 use zbus::{interface, AuthMechanism};

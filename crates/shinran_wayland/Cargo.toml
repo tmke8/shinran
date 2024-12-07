@@ -4,7 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
-shinran_lib = { path = "../shinran_lib" }
+shinran_backend = { path = "../shinran_backend" }
 
 memmap2 = "0.9.4"
 tempfile = "3.10.1"

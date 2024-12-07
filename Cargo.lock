@@ -1612,6 +1612,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "shinran_backend"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "log",
+ "nucleo-matcher",
+ "regex",
+ "rkyv",
+ "serde",
+ "serde_yaml_ng",
+ "shinran_config",
+ "shinran_render",
+ "shinran_test_helpers",
+ "shinran_types",
+ "thiserror",
+ "time",
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "shinran_config"
 version = "0.1.0"
 dependencies = [
@@ -1628,20 +1649,12 @@ dependencies = [
  "rkyv",
  "serde",
  "serde_yaml_ng",
- "shinran_helpers",
+ "shinran_test_helpers",
  "shinran_types",
  "tempdir",
  "tempfile",
  "thiserror",
  "walkdir",
-]
-
-[[package]]
-name = "shinran_helpers"
-version = "0.1.0"
-dependencies = [
- "dunce",
- "tempdir",
 ]
 
 [[package]]
@@ -1653,30 +1666,9 @@ dependencies = [
  "event-listener 5.3.0",
  "ibus_utils",
  "log",
- "shinran_lib",
+ "shinran_backend",
  "xkeysym",
  "zbus",
-]
-
-[[package]]
-name = "shinran_lib"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "dirs",
- "log",
- "nucleo-matcher",
- "regex",
- "rkyv",
- "serde",
- "serde_yaml_ng",
- "shinran_config",
- "shinran_helpers",
- "shinran_render",
- "shinran_types",
- "thiserror",
- "time",
- "unicode-segmentation",
 ]
 
 [[package]]
@@ -1694,6 +1686,14 @@ dependencies = [
  "shinran_types",
  "sys-locale",
  "thiserror",
+]
+
+[[package]]
+name = "shinran_test_helpers"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "tempdir",
 ]
 
 [[package]]
@@ -1715,7 +1715,7 @@ dependencies = [
  "env_logger",
  "log",
  "memmap2 0.9.4",
- "shinran_lib",
+ "shinran_backend",
  "slotmap",
  "tempfile",
  "wayland-client",
