@@ -28,12 +28,14 @@ pub struct Backend<'store> {
 
 impl<'store> Backend<'store> {
     pub fn new(configuration: &'store Configuration) -> anyhow::Result<Self> {
-        let match_cache =
-            match_cache::MatchCache::load(&configuration.profile_store, &configuration.match_store);
+        let match_cache = match_cache::ProfileCache::new(configuration);
 
         let builtin_matches = builtin::get_builtin_matches();
         let combined_cache = match_cache::CombinedMatchCache::load(match_cache, builtin_matches);
-        let adapter = render::RendererAdapter::new(combined_cache, configuration);
+        let adapter = render::RendererAdapter {
+            combined_cache,
+            configuration,
+        };
 
         let matcher = nucleo_matcher::Matcher::new(nucleo_matcher::Config::DEFAULT);
         Ok(Backend {
@@ -43,18 +45,11 @@ impl<'store> Backend<'store> {
     }
 
     pub fn check_trigger(&self, trigger: &str) -> anyhow::Result<Option<String>> {
-        let active_profile = self.adapter.active_profile();
-        let matches = self
-            .adapter
-            .find_matches_from_trigger(trigger, active_profile);
+        let matches = self.adapter.find_matches_from_trigger(trigger);
         let match_ = if let Some(match_) = matches.into_iter().next() {
             match_
         } else {
-            let matches = self
-                .adapter
-                .find_regex_matches(trigger, active_profile)
-                .into_iter()
-                .next();
+            let matches = self.adapter.find_regex_matches(trigger).into_iter().next();
             if let Some(matches) = matches {
                 matches
             } else {
@@ -62,17 +57,16 @@ impl<'store> Backend<'store> {
             }
         };
         self.adapter
-            .render(match_.id, Some(trigger), match_.args, active_profile)
+            .render(match_.id, Some(trigger), match_.args)
             .map(|body| Some(cursor::process_cursor_hint(body).0))
     }
 
     pub fn fuzzy_match(&self, trigger: &str) -> Vec<(TriggerAndRef<'store>, u16)> {
-        let active_profile = self.adapter.active_profile();
         let user_matches = self
             .adapter
             .combined_cache
             .user_match_cache
-            .trigger_matches(active_profile);
+            .trigger_matches();
 
         let atom = get_simple_atom(trigger);
         let mut matcher = self.fuzzy_matcher.lock().unwrap();

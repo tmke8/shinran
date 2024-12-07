@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use compact_str::CompactString;
 use enum_as_inner::EnumAsInner;
-use rkyv::{Archive, Deserialize, Serialize};
+use rkyv::{with::AsVec, Archive, Deserialize, Serialize};
 
 mod regex_wrapper;
 
@@ -26,11 +26,14 @@ pub enum VarType {
     Unresolved,
 }
 
+pub type Params = HashMap<String, Value>;
+
 #[derive(Debug, Clone, PartialEq, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct Variable {
     pub name: String,
     pub var_type: VarType,
+    #[with(AsVec)]
     pub params: Params,
     pub inject_vars: bool,
     pub depends_on: Vec<String>,
@@ -47,8 +50,6 @@ impl Default for Variable {
         }
     }
 }
-
-pub type Params = HashMap<String, Value>;
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner, Archive, Serialize, Deserialize)]
 // We have a recursive type, which requires some special handling
@@ -70,7 +71,7 @@ pub enum Value {
     Object(
         #[omit_bounds]
         #[archive_attr(omit_bounds)]
-        Params,
+        HashMap<String, Value>,
     ),
 }
 

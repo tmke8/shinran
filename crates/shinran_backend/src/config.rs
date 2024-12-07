@@ -14,7 +14,7 @@ use rkyv::{
 };
 use shinran_config::{
     all_config_files,
-    config::{generate_match_paths, ParsedConfig, ProfileStore},
+    config::{generate_match_paths, ParsedConfig, ProfileRef, ProfileStore},
     matches::store::MatchStore,
 };
 
@@ -95,6 +95,20 @@ impl Configuration {
         serializer.serialize_value(self).unwrap();
         // and finally, dig all the way down to our byte buffer
         serializer.into_inner().into_serializer().into_inner()
+    }
+
+    /// Get the active configuration file according to the current app.
+    ///
+    /// This functionality is not implemented yet.
+    pub fn active_profile(&self) -> ProfileRef {
+        // let current_app = self.app_info_provider.get_info();
+        // let info = to_app_properties(&current_app);
+        let info = shinran_config::config::AppProperties {
+            title: None,
+            class: None,
+            exec: None,
+        };
+        self.profile_store.active_config(&info)
     }
 }
 
