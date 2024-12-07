@@ -89,7 +89,7 @@ pub enum ConfigError {
 #[cfg(test)]
 mod tests {
     use config::AppProperties;
-    use shinran_helpers::use_test_directory;
+    use shinran_test_helpers::use_test_directory;
 
     use super::*;
     // use config::AppProperties;
@@ -151,20 +151,14 @@ mod tests {
             let (config_store, match_store, errors) = load(base).unwrap();
 
             assert_eq!(errors.len(), 0);
+            assert_eq!(config_store.default_profile.match_file_paths().len(), 2);
             assert_eq!(
                 config_store
-                    .get(config_store.default_config())
-                    .match_file_paths()
-                    .len(),
-                2
-            );
-            assert_eq!(
-                config_store
-                    .get(config_store.active_config(&AppProperties {
+                    .active_config(&AppProperties {
                         title: Some("Google Chrome"),
                         class: None,
                         exec: None,
-                    }))
+                    })
                     .match_file_paths()
                     .len(),
                 1
@@ -173,9 +167,7 @@ mod tests {
             assert_eq!(
                 match_store
                     .collect_matches_and_global_vars(
-                        config_store
-                            .get(config_store.default_config())
-                            .match_file_paths()
+                        config_store.default_profile.match_file_paths()
                     )
                     .trigger_matches
                     .len(),
@@ -185,11 +177,11 @@ mod tests {
                 match_store
                     .collect_matches_and_global_vars(
                         config_store
-                            .get(config_store.active_config(&AppProperties {
+                            .active_config(&AppProperties {
                                 title: Some("Chrome"),
                                 class: None,
                                 exec: None,
-                            }))
+                            })
                             .match_file_paths()
                     )
                     .trigger_matches
@@ -257,7 +249,7 @@ mod tests {
 
             assert_eq!(errors.len(), 3);
             // It shouldn't have loaded the "config.yml" one because of the YAML error
-            assert_eq!(config_store.all_configs().len(), 1);
+            assert_eq!(config_store.len(), 1);
             // It shouldn't load "base.yml" and "_sub.yml" due to YAML errors
             assert_eq!(match_store.loaded_paths().len(), 1);
         });
@@ -290,9 +282,7 @@ mod tests {
             assert_eq!(
                 match_store
                     .collect_matches_and_global_vars(
-                        config_store
-                            .get(config_store.default_config())
-                            .match_file_paths()
+                        config_store.default_profile.match_file_paths()
                     )
                     .trigger_matches
                     .len(),

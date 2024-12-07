@@ -216,7 +216,7 @@ fn load_match_files_recursively(
 
 #[cfg(test)]
 mod tests {
-    use shinran_helpers::use_test_directory;
+    use shinran_test_helpers::use_test_directory;
     use shinran_types::{BaseMatch, MatchEffect, TextEffect, VarType, Variable};
 
     use super::*;

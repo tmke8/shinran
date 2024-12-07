@@ -37,7 +37,7 @@ use wayland_protocols_misc::{
 };
 use xkbcommon::xkb;
 
-use shinran_lib::{Backend, Configuration};
+use shinran_backend::{Backend, Configuration};
 
 mod input_context;
 
@@ -53,10 +53,12 @@ fn main() {
     // Set up the logger.
     env_logger::init();
 
-    // Save config in cache file.
-    let bytes = CONFIG.0.serialize();
-    std::fs::write(&CONFIG.1, &bytes)
-        .unwrap_or_else(|err| error!("Failed to save cache: {:?}", err));
+    if !CONFIG.0.loaded_from_cache {
+        debug!("Save config in cache file {}.", CONFIG.1.display());
+        let bytes = CONFIG.0.serialize();
+        std::fs::write(&CONFIG.1, &bytes)
+            .unwrap_or_else(|err| error!("Failed to save cache: {:?}", err));
+    }
 
     // Set up the backend.
     let backend = Backend::new(&CONFIG.0).unwrap();

@@ -4,8 +4,8 @@ use std::sync::{Arc, LazyLock};
 
 use async_std::task;
 use event_listener::{Event, Listener};
-use log::{error, info};
-use shinran_lib::{Backend, Configuration};
+use log::{debug, error, info};
+use shinran_backend::{Backend, Configuration};
 use zbus::zvariant::{ObjectPath, OwnedObjectPath};
 use zbus::{connection, fdo, Address, ObjectServer};
 use zbus::{interface, AuthMechanism};
@@ -55,13 +55,18 @@ async fn main() -> zbus::Result<()> {
     env_logger::init();
     info!("Program started!");
 
-    // Save config in cache file.
-    let bytes = CONFIG.0.serialize();
-    task::spawn(async move {
-        async_std::fs::write(&CONFIG.1, &bytes)
-            .await
-            .unwrap_or_else(|err| error!("Failed to save cache: {:?}", err))
-    });
+    // Save config in cache file if it wasn't loaded from cache.
+    let cache_write_handle = if !CONFIG.0.loaded_from_cache {
+        Some(task::spawn(async {
+            let bytes = CONFIG.0.serialize(); // (this is blocking)
+            match async_std::fs::write(&CONFIG.1, &bytes).await {
+                Ok(()) => debug!("Cache written successfully to '{}'.", CONFIG.1.display()),
+                Err(err) => error!("Failed to write cache: {:?}", err),
+            }
+        }))
+    } else {
+        None
+    };
 
     // Set up the backend.
     let backend = Backend::new(&CONFIG.0).unwrap();
@@ -83,6 +88,11 @@ async fn main() -> zbus::Result<()> {
         .await?;
 
     done_listener.wait();
+
+    // Wait for the cache write to finish.
+    if let Some(handle) = cache_write_handle {
+        handle.await;
+    }
 
     Ok(())
 }

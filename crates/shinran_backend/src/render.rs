@@ -19,53 +19,22 @@
 
 use std::collections::HashMap;
 
-use shinran_config::config::ProfileRef;
 use shinran_render::{CasingStyle, Context, RenderOptions};
 use shinran_types::{MatchEffect, MatchRef, Params, UpperCasingStyle, Value, VarType, Variable};
 
-use crate::{
-    config::Configuration,
-    engine::RendererError,
-    match_cache::{self},
-};
+use crate::{config::Configuration, engine::RendererError, profile_cache};
 
 pub struct RendererAdapter<'store> {
-    pub combined_cache: match_cache::CombinedMatchCache<'store>,
-    /// Configuration of the shinran instance.
+    pub combined_cache: profile_cache::CombinedMatchCache<'store>,
     pub configuration: &'store Configuration,
 }
 
 impl<'store> RendererAdapter<'store> {
-    pub fn new(
-        combined_cache: crate::match_cache::CombinedMatchCache<'store>,
-        configuration: &'store Configuration,
-    ) -> Self {
-        Self {
-            configuration,
-            combined_cache,
-        }
-    }
-
-    /// Get the active configuration file according to the current app.
-    ///
-    /// This functionality is not implemented yet.
-    pub fn active_profile(&self) -> ProfileRef {
-        // let current_app = self.app_info_provider.get_info();
-        // let info = to_app_properties(&current_app);
-        let info = shinran_config::config::AppProperties {
-            title: None,
-            class: None,
-            exec: None,
-        };
-        self.configuration.profile_store.active_config(&info)
-    }
-
     pub fn render(
         &self,
         match_id: MatchRef,
         trigger: Option<&str>,
         trigger_vars: HashMap<String, String>,
-        active_profile: ProfileRef,
     ) -> anyhow::Result<String> {
         let (effect, propagate_case, preferred_uppercasing_style) = match match_id {
             MatchRef::Trigger(m) => {
@@ -133,14 +102,8 @@ impl<'store> RendererAdapter<'store> {
         };
 
         let context = Context {
-            matches_map: self
-                .combined_cache
-                .user_match_cache
-                .trigger_matches(active_profile),
-            global_vars_map: self
-                .combined_cache
-                .user_match_cache
-                .global_vars(active_profile),
+            matches_map: self.combined_cache.user_match_cache.trigger_matches(),
+            global_vars_map: self.combined_cache.user_match_cache.global_vars(),
         };
 
         match self
@@ -157,24 +120,13 @@ impl<'store> RendererAdapter<'store> {
     }
 
     #[inline]
-    pub fn find_matches_from_trigger(
-        &self,
-        trigger: &str,
-        active_profile: ProfileRef,
-    ) -> Vec<crate::engine::DetectedMatch> {
-        self.combined_cache
-            .find_matches_from_trigger(trigger, active_profile)
+    pub fn find_matches_from_trigger(&self, trigger: &str) -> Vec<crate::engine::DetectedMatch> {
+        self.combined_cache.find_matches_from_trigger(trigger)
     }
 
     #[inline]
-    pub fn find_regex_matches(
-        &self,
-        trigger: &str,
-        active_profile: ProfileRef,
-    ) -> Vec<crate::engine::DetectedMatch> {
-        self.combined_cache
-            .regex_matcher(active_profile)
-            .find_matches(trigger)
+    pub fn find_regex_matches(&self, trigger: &str) -> Vec<crate::engine::DetectedMatch> {
+        self.combined_cache.regex_matcher().find_matches(trigger)
     }
 }
 

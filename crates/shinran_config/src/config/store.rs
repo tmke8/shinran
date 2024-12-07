@@ -32,88 +32,71 @@ use rkyv::{Archive, Deserialize, Serialize};
 
 #[derive(Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
-#[repr(transparent)]
 pub struct ProfileStore {
-    profiles: Vec<ProfileFile>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
-#[repr(transparent)]
-pub struct ProfileRef {
-    idx: usize,
+    pub default_profile: ProfileFile,
+    custom_profiles: Box<[ProfileFile]>,
 }
 
 impl ProfileStore {
-    #[inline]
-    pub fn default_config(&self) -> ProfileRef {
-        ProfileRef { idx: 0 }
-    }
+    pub(crate) fn resolve_paths(
+        loaded: LoadedProfileStore,
+        file_map: &HashMap<PathBuf, MatchFileRef>,
+    ) -> Self {
+        let default_profile = ProfileFile::from_loaded_profile(loaded.default_profile, file_map);
 
-    #[inline]
-    pub fn get(&self, ref_: ProfileRef) -> &ProfileFile {
-        &self.profiles[ref_.idx]
+        let custom_profiles = loaded
+            .custom_profiles
+            .into_iter()
+            .map(|loaded| ProfileFile::from_loaded_profile(loaded, file_map))
+            .collect::<Vec<_>>();
+        ProfileStore {
+            default_profile,
+            custom_profiles: custom_profiles.into_boxed_slice(),
+        }
     }
 
     /// Get the active configuration for the given app.
     ///
     /// This will return the *first* custom configuration that matches the app properties.
-    pub fn active_config(&self, app: &super::AppProperties) -> ProfileRef {
+    pub fn active_config(&self, app: &super::AppProperties) -> &ProfileFile {
         // Find a custom config that matches or fallback to the default one
-        for (idx, custom) in self.profiles[1..].iter().enumerate() {
+        for custom in self.custom_profiles.iter() {
             if custom.filter.is_match(app) {
-                return ProfileRef { idx: idx + 1 };
+                return custom;
             }
         }
-        self.default_config()
+        &self.default_profile
     }
 
-    pub fn resolve_paths(
-        loaded: LoadedProfileStore,
-        file_map: &HashMap<PathBuf, MatchFileRef>,
-    ) -> Self {
-        let profiles = loaded
-            .profiles
-            .into_iter()
-            .map(|loaded| ProfileFile::from_loaded_profile(loaded, file_map))
-            .collect::<_>();
-        ProfileStore { profiles }
-    }
-
-    pub fn all_configs(&self) -> Vec<ProfileRef> {
-        (0..self.profiles.len())
-            .map(|idx| ProfileRef { idx })
-            .collect()
+    pub fn len(&self) -> usize {
+        self.custom_profiles.len() + 1
     }
 }
 
 impl ArchivedProfileStore {
     pub fn get_source_paths(&self) -> impl Iterator<Item = &Path> {
-        self.profiles
-            .iter()
+        self.get_parsed_configs()
             .map(|p| Path::new(p.source_path.as_str()))
     }
 
     pub fn get_parsed_configs(&self) -> impl Iterator<Item = &ArchivedProfileFile> {
-        self.profiles.iter()
+        std::iter::once(&self.default_profile).chain(self.custom_profiles.iter())
     }
 }
 
-#[repr(transparent)]
-pub struct LoadedProfileStore {
-    profiles: Vec<LoadedProfileFile>,
+pub(crate) struct LoadedProfileStore {
+    default_profile: LoadedProfileFile,
+    custom_profiles: Vec<LoadedProfileFile>,
 }
 
 impl LoadedProfileStore {
-    #[inline]
-    pub fn get(&self, ref_: ProfileRef) -> &LoadedProfileFile {
-        &self.profiles[ref_.idx]
-    }
-
     // TODO: test
     pub fn get_all_match_file_paths(&self) -> HashSet<PathBuf> {
         let mut paths = HashSet::new();
 
-        for profile in &self.profiles {
+        paths.extend(self.default_profile.match_file_paths.iter().cloned());
+
+        for profile in &self.custom_profiles {
             paths.extend(profile.match_file_paths.iter().cloned());
         }
 
@@ -134,11 +117,11 @@ impl LoadedProfileStore {
         let mut non_fatal_errors = Vec::new();
 
         debug!("loading default config at path: {:?}", default_file);
-        let default = LoadedProfileFile::load_from_path(&default_file, None)
+        let default_profile = LoadedProfileFile::load_from_path(&default_file, None)
             .context("failed to load default.yml configuration")?;
 
         // Then the others
-        let mut profiles: Vec<LoadedProfileFile> = vec![default];
+        let mut custom_profiles: Vec<LoadedProfileFile> = vec![];
         for entry in std::fs::read_dir(config_dir).map_err(ConfigStoreError::IOError)? {
             let config_file = entry?.path();
             let Some(extension) = config_file.extension() else {
@@ -152,9 +135,9 @@ impl LoadedProfileStore {
             {
                 debug!("loading config at path: {:?}", config_file);
                 // TODO: Move `config_file` into `load_from_path` instead of passing it by reference
-                match LoadedProfileFile::load_from_path(&config_file, Some(&profiles[0])) {
+                match LoadedProfileFile::load_from_path(&config_file, Some(&default_profile)) {
                     Ok(config) => {
-                        profiles.push(config);
+                        custom_profiles.push(config);
                     }
                     Err(err) => {
                         error!(
@@ -167,15 +150,14 @@ impl LoadedProfileStore {
             }
         }
 
-        Ok((Self { profiles }, non_fatal_errors))
+        Ok((
+            Self {
+                default_profile,
+                custom_profiles,
+            },
+            non_fatal_errors,
+        ))
     }
-
-    // pub fn from_configs(
-    //   default: Arc<dyn Config>,
-    //   customs: Vec<Arc<dyn Config>>,
-    // ) -> DefaultConfigStore {
-    //   Self { default, customs }
-    // }
 }
 
 #[cfg(test)]
@@ -211,17 +193,18 @@ mod tests {
         custom2.filter.class = Some(RegexWrapper::new(Regex::new("foo").unwrap()));
 
         let store = ProfileStore {
-            profiles: vec![default, custom1, custom2],
+            default_profile: default,
+            custom_profiles: Box::new([custom1, custom2]),
         };
 
-        assert_eq!(store.get(store.default_config()).label(), "default");
+        assert_eq!(store.default_profile.label(), "default");
         assert_eq!(
             store
-                .get(store.active_config(&crate::config::AppProperties {
+                .active_config(&crate::config::AppProperties {
                     title: None,
                     class: Some("foo"),
                     exec: None,
-                }))
+                })
                 .label(),
             "custom2"
         );
@@ -234,17 +217,18 @@ mod tests {
         let custom2 = new_mock("custom2");
 
         let store = ProfileStore {
-            profiles: vec![default, custom1, custom2],
+            default_profile: default,
+            custom_profiles: Box::new([custom1, custom2]),
         };
 
-        assert_eq!(store.get(store.default_config()).label(), "default");
+        assert_eq!(store.default_profile.label(), "default");
         assert_eq!(
             store
-                .get(store.active_config(&crate::config::AppProperties {
+                .active_config(&crate::config::AppProperties {
                     title: None,
                     class: None,
                     exec: None,
-                }))
+                })
                 .label(),
             "default"
         );

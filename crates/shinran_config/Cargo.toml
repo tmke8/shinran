@@ -26,7 +26,7 @@ compact_str.workspace = true
 rkyv.workspace = true
 
 [dev-dependencies]
-shinran_helpers = { path = "../shinran_helpers" }
+shinran_test_helpers = { path = "../shinran_test_helpers" }
 
 tempdir.workspace = true
 tempfile = "3.2.0"

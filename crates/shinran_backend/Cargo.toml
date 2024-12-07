@@ -1,5 +1,5 @@
 [package]
-name = "shinran_lib"
+name = "shinran_backend"
 version = "0.1.0"
 edition.workspace = true
 
@@ -21,4 +21,4 @@ nucleo-matcher = "0.3.1"
 rkyv = { workspace = true }
 
 [dev-dependencies]
-shinran_helpers = { path = "../shinran_helpers" }
+shinran_test_helpers = { path = "../shinran_test_helpers" }

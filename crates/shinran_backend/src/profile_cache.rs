@@ -19,57 +19,53 @@
 
 use std::collections::HashMap;
 
-use shinran_config::{
-    config::ProfileFile, config::ProfileRef, config::ProfileStore, matches::store::MatchStore,
-};
+use shinran_config::{config::ProfileFile, matches::store::MatchStore};
 use shinran_types::{MatchRef, RegexMatch, TriggerMatch, Variable};
 
 use crate::engine::DetectedMatch;
 use crate::regex::RegexMatcher;
+use crate::Configuration;
 
 use super::builtin::BuiltInMatch;
 
-pub struct MatchCache<'store> {
-    trigger_profiles: HashMap<ProfileRef, HashMap<&'store str, &'store TriggerMatch>>,
-    regex_profiles: HashMap<ProfileRef, RegexMatcher<'store>>,
-    global_var_profiles: HashMap<ProfileRef, HashMap<&'store str, &'store Variable>>,
+/// A cache for the active profile.
+///
+/// - For the trigger-based matches, we have a hash map from the trigger to the match.
+/// - For the regex-based matches, we have a regex set.
+/// - For the global variables, we have a hash map from the variable name to the variable.
+pub struct ProfileCache<'store> {
+    trigger_map: HashMap<&'store str, &'store TriggerMatch>,
+    regex_matcher: RegexMatcher<'store>,
+    global_var_map: HashMap<&'store str, &'store Variable>,
 }
 
-impl<'store> MatchCache<'store> {
-    pub fn load(profile_store: &'store ProfileStore, match_store: &'store MatchStore) -> Self {
-        let mut trigger_profiles = HashMap::new();
-        let mut regex_profiles = HashMap::new();
-        let mut global_var_profiles = HashMap::new();
-
-        for profile_ref in profile_store.all_configs() {
-            let profile = profile_store.get(profile_ref);
-            let (trigger_map, global_var_map, regex_matches) =
-                create_profile_cache(profile, match_store);
-            trigger_profiles.insert(profile_ref, trigger_map);
-            regex_profiles.insert(profile_ref, RegexMatcher::new(regex_matches));
-            global_var_profiles.insert(profile_ref, global_var_map);
-        }
+impl<'store> ProfileCache<'store> {
+    pub fn new(configuration: &'store Configuration) -> Self {
+        let active_profile = configuration.active_profile();
+        let (trigger_map, global_var_map, regex_matches) =
+            create_profile_cache(active_profile, &configuration.match_store);
+        let regex_matcher = RegexMatcher::new(regex_matches);
 
         Self {
-            trigger_profiles,
-            regex_profiles,
-            global_var_profiles,
+            trigger_map,
+            regex_matcher,
+            global_var_map,
         }
     }
 
-    pub fn trigger_matches(
-        &self,
-        profile_ref: ProfileRef,
-    ) -> &HashMap<&'store str, &'store TriggerMatch> {
-        &self.trigger_profiles[&profile_ref]
+    #[inline]
+    pub fn trigger_matches(&self) -> &HashMap<&'store str, &'store TriggerMatch> {
+        &self.trigger_map
     }
 
-    pub fn regex_matches(&self, profile_ref: ProfileRef) -> &RegexMatcher<'store> {
-        &self.regex_profiles[&profile_ref]
+    #[inline]
+    pub fn regex_matches(&self) -> &RegexMatcher<'store> {
+        &self.regex_matcher
     }
 
-    pub fn global_vars(&self, profile_ref: ProfileRef) -> &HashMap<&'store str, &'store Variable> {
-        &self.global_var_profiles[&profile_ref]
+    #[inline]
+    pub fn global_vars(&self) -> &HashMap<&'store str, &'store Variable> {
+        &self.global_var_map
     }
 }
 
@@ -103,18 +99,12 @@ fn create_profile_cache<'store>(
 }
 
 pub struct CombinedMatchCache<'store> {
-    pub user_match_cache: MatchCache<'store>,
+    pub user_match_cache: ProfileCache<'store>,
     builtin_match_cache: HashMap<i32, BuiltInMatch>,
 }
 
-// pub enum MatchVariant<'a> {
-//     Trigger(&'a TriggerMatch),
-//     Regex(&'a BaseMatch),
-//     Builtin(&'a BuiltInMatch),
-// }
-
 impl<'store> CombinedMatchCache<'store> {
-    pub fn load(match_cache: MatchCache<'store>, builtin_matches: Vec<BuiltInMatch>) -> Self {
+    pub fn load(match_cache: ProfileCache<'store>, builtin_matches: Vec<BuiltInMatch>) -> Self {
         let mut builtin_match_cache = HashMap::new();
 
         for m in builtin_matches {
@@ -127,58 +117,14 @@ impl<'store> CombinedMatchCache<'store> {
         }
     }
 
-    pub fn regex_matcher(&self, active_profile: ProfileRef) -> &RegexMatcher<'store> {
-        self.user_match_cache.regex_matches(active_profile)
+    pub fn regex_matcher(&self) -> &RegexMatcher<'store> {
+        self.user_match_cache.regex_matches()
     }
 
-    // pub fn get(&self, match_id: usize) -> Option<MatchVariant<'_>> {
-    //     if let Some(user_match) = self.user_match_cache.cache.get(&match_id) {
-    //         return Some(MatchVariant::User(user_match));
-    //     }
-
-    //     if let Some(builtin_match) = self.builtin_match_cache.get(&match_id) {
-    //         return Some(MatchVariant::Builtin(builtin_match));
-    //     }
-
-    //     None
-    // }
-
-    // fn get_matches<'a>(&'a self, ids: &[i32]) -> Vec<MatchSummary<'a>> {
-    //     ids.iter()
-    //         .filter_map(|id| self.get(*id))
-    //         .map(|m| match m {
-    //             MatchVariant::User(m) => MatchSummary {
-    //                 id: m.id,
-    //                 label: m.description(),
-    //                 tag: m.cause_description(),
-    //                 additional_search_terms: m.search_terms(),
-    //                 is_builtin: false,
-    //             },
-    //             MatchVariant::Builtin(m) => MatchSummary {
-    //                 id: m.id,
-    //                 label: m.label,
-    //                 tag: m.triggers.first().map(String::as_ref),
-    //                 additional_search_terms: vec![],
-    //                 is_builtin: true,
-    //             },
-    //         })
-    //         .collect()
-    // }
-
-    // fn get_all_matches_ids(&self) -> Vec<i32> {
-    //     let mut ids: Vec<i32> = self.builtin_match_cache.keys().copied().collect();
-    //     ids.extend(self.user_match_cache.ids());
-    //     ids
-    // }
-
-    pub(crate) fn find_matches_from_trigger(
-        &self,
-        trigger: &str,
-        active_profile: ProfileRef,
-    ) -> Vec<DetectedMatch> {
+    pub(crate) fn find_matches_from_trigger(&self, trigger: &str) -> Vec<DetectedMatch> {
         let mut user_matches: Option<DetectedMatch> = self
             .user_match_cache
-            .trigger_matches(active_profile)
+            .trigger_matches()
             .get(trigger)
             .map(|&m| DetectedMatch {
                 id: MatchRef::Trigger(m),
@@ -194,7 +140,7 @@ impl<'store> CombinedMatchCache<'store> {
             // This needs to be checked during the rendering.
             user_matches = self
                 .user_match_cache
-                .trigger_matches(active_profile)
+                .trigger_matches()
                 .get(&trigger.to_ascii_lowercase()[..])
                 .map(|&m| DetectedMatch {
                     id: MatchRef::Trigger(m),

@@ -14,8 +14,7 @@ use rkyv::{
 };
 use shinran_config::{
     all_config_files,
-    config::{generate_match_paths, ParsedConfig, ProfileStore},
-    matches::store::MatchStore,
+    config::{generate_match_paths, ParsedConfig, ProfileFile},
 };
 
 use crate::{
@@ -27,10 +26,11 @@ use crate::{
 #[derive(Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct Configuration {
-    pub profile_store: ProfileStore,
-    pub match_store: MatchStore,
+    profile_store: shinran_config::config::ProfileStore,
+    pub match_store: shinran_config::matches::MatchStore,
     /// Renderer for the variables.
     pub renderer: shinran_render::Renderer,
+    pub loaded_from_cache: bool,
 }
 
 impl Configuration {
@@ -55,7 +55,8 @@ impl Configuration {
         let config_path = paths.config.join("config");
 
         match load_cache(&cache_path, &config_path) {
-            Ok(config) => {
+            Ok(mut config) => {
+                config.loaded_from_cache = true;
                 return (config, cache_path);
             }
             Err(e) => {
@@ -80,6 +81,7 @@ impl Configuration {
             profile_store: config_result.profile_store,
             match_store: config_result.match_store,
             renderer,
+            loaded_from_cache: false,
         };
 
         (cfg, cache_path)
@@ -92,6 +94,20 @@ impl Configuration {
         serializer.serialize_value(self).unwrap();
         // and finally, dig all the way down to our byte buffer
         serializer.into_inner().into_serializer().into_inner()
+    }
+
+    /// Get the active configuration file according to the current app.
+    ///
+    /// This functionality is not implemented yet.
+    pub fn active_profile(&self) -> &ProfileFile {
+        // let current_app = self.app_info_provider.get_info();
+        // let info = to_app_properties(&current_app);
+        let info = shinran_config::config::AppProperties {
+            title: None,
+            class: None,
+            exec: None,
+        };
+        self.profile_store.active_config(&info)
     }
 }
 
