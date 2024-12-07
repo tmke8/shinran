@@ -42,19 +42,16 @@ impl ProfileStore {
         loaded: LoadedProfileStore,
         file_map: &HashMap<PathBuf, MatchFileRef>,
     ) -> Self {
-        let num_profiles = loaded.profiles.len();
-        let mut profiles = loaded.profiles.into_iter();
+        let default_profile = ProfileFile::from_loaded_profile(loaded.default_profile, file_map);
 
-        // First profile is the default one.
-        let default_config = ProfileFile::from_loaded_profile(profiles.next().unwrap(), file_map);
-
-        let mut custom_configs = Vec::with_capacity(num_profiles - 1);
-        for custom_config in profiles {
-            custom_configs.push(ProfileFile::from_loaded_profile(custom_config, file_map));
-        }
+        let custom_profiles = loaded
+            .custom_profiles
+            .into_iter()
+            .map(|loaded| ProfileFile::from_loaded_profile(loaded, file_map))
+            .collect::<Vec<_>>();
         ProfileStore {
-            default_profile: default_config,
-            custom_profiles: custom_configs.into_boxed_slice(),
+            default_profile,
+            custom_profiles: custom_profiles.into_boxed_slice(),
         }
     }
 
@@ -87,9 +84,9 @@ impl ArchivedProfileStore {
     }
 }
 
-#[repr(transparent)]
-pub struct LoadedProfileStore {
-    profiles: Vec<LoadedProfileFile>,
+pub(crate) struct LoadedProfileStore {
+    default_profile: LoadedProfileFile,
+    custom_profiles: Vec<LoadedProfileFile>,
 }
 
 impl LoadedProfileStore {
@@ -97,7 +94,9 @@ impl LoadedProfileStore {
     pub fn get_all_match_file_paths(&self) -> HashSet<PathBuf> {
         let mut paths = HashSet::new();
 
-        for profile in &self.profiles {
+        paths.extend(self.default_profile.match_file_paths.iter().cloned());
+
+        for profile in &self.custom_profiles {
             paths.extend(profile.match_file_paths.iter().cloned());
         }
 
@@ -118,11 +117,11 @@ impl LoadedProfileStore {
         let mut non_fatal_errors = Vec::new();
 
         debug!("loading default config at path: {:?}", default_file);
-        let default = LoadedProfileFile::load_from_path(&default_file, None)
+        let default_profile = LoadedProfileFile::load_from_path(&default_file, None)
             .context("failed to load default.yml configuration")?;
 
         // Then the others
-        let mut profiles: Vec<LoadedProfileFile> = vec![default];
+        let mut custom_profiles: Vec<LoadedProfileFile> = vec![];
         for entry in std::fs::read_dir(config_dir).map_err(ConfigStoreError::IOError)? {
             let config_file = entry?.path();
             let Some(extension) = config_file.extension() else {
@@ -136,9 +135,9 @@ impl LoadedProfileStore {
             {
                 debug!("loading config at path: {:?}", config_file);
                 // TODO: Move `config_file` into `load_from_path` instead of passing it by reference
-                match LoadedProfileFile::load_from_path(&config_file, Some(&profiles[0])) {
+                match LoadedProfileFile::load_from_path(&config_file, Some(&default_profile)) {
                     Ok(config) => {
-                        profiles.push(config);
+                        custom_profiles.push(config);
                     }
                     Err(err) => {
                         error!(
@@ -151,15 +150,14 @@ impl LoadedProfileStore {
             }
         }
 
-        Ok((Self { profiles }, non_fatal_errors))
+        Ok((
+            Self {
+                default_profile,
+                custom_profiles,
+            },
+            non_fatal_errors,
+        ))
     }
-
-    // pub fn from_configs(
-    //   default: Arc<dyn Config>,
-    //   customs: Vec<Arc<dyn Config>>,
-    // ) -> DefaultConfigStore {
-    //   Self { default, customs }
-    // }
 }
 
 #[cfg(test)]

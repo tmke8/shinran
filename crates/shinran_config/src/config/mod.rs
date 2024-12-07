@@ -30,7 +30,7 @@ mod util;
 
 pub use parse::{ArchivedParsedConfig, ParsedConfig};
 pub use resolve::{generate_match_paths, ProfileFile, ProfileId};
-pub use store::{LoadedProfileStore, ProfileStore};
+pub use store::ProfileStore;
 
 // #[cfg(test)]
 // use mockall::{automock, predicate::*};
@@ -342,7 +342,9 @@ impl std::fmt::Display for RMLVOConfig {
     }
 }
 
-pub fn load_store(config_dir: &Path) -> Result<(store::LoadedProfileStore, Vec<NonFatalErrorSet>)> {
+pub(crate) fn load_store(
+    config_dir: &Path,
+) -> Result<(store::LoadedProfileStore, Vec<NonFatalErrorSet>)> {
     store::LoadedProfileStore::load(config_dir)
 }
 
