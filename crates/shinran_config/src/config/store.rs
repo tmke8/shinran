@@ -37,37 +37,8 @@ pub struct ProfileStore {
     profiles: Vec<ProfileFile>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
-#[repr(transparent)]
-pub struct ProfileRef {
-    idx: usize,
-}
-
 impl ProfileStore {
-    #[inline]
-    pub fn default_config(&self) -> ProfileRef {
-        ProfileRef { idx: 0 }
-    }
-
-    #[inline]
-    pub fn get(&self, ref_: ProfileRef) -> &ProfileFile {
-        &self.profiles[ref_.idx]
-    }
-
-    /// Get the active configuration for the given app.
-    ///
-    /// This will return the *first* custom configuration that matches the app properties.
-    pub fn active_config(&self, app: &super::AppProperties) -> ProfileRef {
-        // Find a custom config that matches or fallback to the default one
-        for (idx, custom) in self.profiles[1..].iter().enumerate() {
-            if custom.filter.is_match(app) {
-                return ProfileRef { idx: idx + 1 };
-            }
-        }
-        self.default_config()
-    }
-
-    pub fn resolve_paths(
+    pub(crate) fn resolve_paths(
         loaded: LoadedProfileStore,
         file_map: &HashMap<PathBuf, MatchFileRef>,
     ) -> Self {
@@ -79,10 +50,31 @@ impl ProfileStore {
         ProfileStore { profiles }
     }
 
-    pub fn all_configs(&self) -> Vec<ProfileRef> {
-        (0..self.profiles.len())
-            .map(|idx| ProfileRef { idx })
-            .collect()
+    #[inline]
+    pub(crate) fn default_config(&self) -> &ProfileFile {
+        &self.profiles[0]
+    }
+
+    #[inline]
+    fn custom_configs(&self) -> &[ProfileFile] {
+        &self.profiles[1..]
+    }
+
+    /// Get the active configuration for the given app.
+    ///
+    /// This will return the *first* custom configuration that matches the app properties.
+    pub fn active_config(&self, app: &super::AppProperties) -> &ProfileFile {
+        // Find a custom config that matches or fallback to the default one
+        for custom in self.custom_configs().iter() {
+            if custom.filter.is_match(app) {
+                return custom;
+            }
+        }
+        self.default_config()
+    }
+
+    pub fn len(&self) -> usize {
+        self.profiles.len()
     }
 }
 
@@ -104,11 +96,6 @@ pub struct LoadedProfileStore {
 }
 
 impl LoadedProfileStore {
-    #[inline]
-    pub fn get(&self, ref_: ProfileRef) -> &LoadedProfileFile {
-        &self.profiles[ref_.idx]
-    }
-
     // TODO: test
     pub fn get_all_match_file_paths(&self) -> HashSet<PathBuf> {
         let mut paths = HashSet::new();
@@ -214,14 +201,14 @@ mod tests {
             profiles: vec![default, custom1, custom2],
         };
 
-        assert_eq!(store.get(store.default_config()).label(), "default");
+        assert_eq!(store.default_config().label(), "default");
         assert_eq!(
             store
-                .get(store.active_config(&crate::config::AppProperties {
+                .active_config(&crate::config::AppProperties {
                     title: None,
                     class: Some("foo"),
                     exec: None,
-                }))
+                })
                 .label(),
             "custom2"
         );
@@ -237,14 +224,14 @@ mod tests {
             profiles: vec![default, custom1, custom2],
         };
 
-        assert_eq!(store.get(store.default_config()).label(), "default");
+        assert_eq!(store.default_config().label(), "default");
         assert_eq!(
             store
-                .get(store.active_config(&crate::config::AppProperties {
+                .active_config(&crate::config::AppProperties {
                     title: None,
                     class: None,
                     exec: None,
-                }))
+                })
                 .label(),
             "default"
         );

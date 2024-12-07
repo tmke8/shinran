@@ -22,15 +22,10 @@ use std::collections::HashMap;
 use shinran_render::{CasingStyle, Context, RenderOptions};
 use shinran_types::{MatchEffect, MatchRef, Params, UpperCasingStyle, Value, VarType, Variable};
 
-use crate::{
-    config::Configuration,
-    engine::RendererError,
-    match_cache::{self},
-};
+use crate::{config::Configuration, engine::RendererError, profile_cache};
 
 pub struct RendererAdapter<'store> {
-    pub combined_cache: match_cache::CombinedMatchCache<'store>,
-    /// Configuration of the shinran instance.
+    pub combined_cache: profile_cache::CombinedMatchCache<'store>,
     pub configuration: &'store Configuration,
 }
 

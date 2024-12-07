@@ -30,7 +30,7 @@ mod util;
 
 pub use parse::{ArchivedParsedConfig, ParsedConfig};
 pub use resolve::{generate_match_paths, ProfileFile, ProfileId};
-pub use store::{LoadedProfileStore, ProfileRef, ProfileStore};
+pub use store::{LoadedProfileStore, ProfileStore};
 
 // #[cfg(test)]
 // use mockall::{automock, predicate::*};

@@ -14,8 +14,8 @@ mod cursor;
 mod engine;
 mod event;
 mod load;
-mod match_cache;
 mod path;
+mod profile_cache;
 mod regex;
 mod render;
 
@@ -28,10 +28,10 @@ pub struct Backend<'store> {
 
 impl<'store> Backend<'store> {
     pub fn new(configuration: &'store Configuration) -> anyhow::Result<Self> {
-        let match_cache = match_cache::ProfileCache::new(configuration);
+        let match_cache = profile_cache::ProfileCache::new(configuration);
 
         let builtin_matches = builtin::get_builtin_matches();
-        let combined_cache = match_cache::CombinedMatchCache::load(match_cache, builtin_matches);
+        let combined_cache = profile_cache::CombinedMatchCache::load(match_cache, builtin_matches);
         let adapter = render::RendererAdapter {
             combined_cache,
             configuration,

@@ -42,9 +42,8 @@ pub struct ProfileCache<'store> {
 impl<'store> ProfileCache<'store> {
     pub fn new(configuration: &'store Configuration) -> Self {
         let active_profile = configuration.active_profile();
-        let profile = configuration.profile_store.get(active_profile);
         let (trigger_map, global_var_map, regex_matches) =
-            create_profile_cache(profile, &configuration.match_store);
+            create_profile_cache(active_profile, &configuration.match_store);
         let regex_matcher = RegexMatcher::new(regex_matches);
 
         Self {

@@ -14,8 +14,7 @@ use rkyv::{
 };
 use shinran_config::{
     all_config_files,
-    config::{generate_match_paths, ParsedConfig, ProfileRef, ProfileStore},
-    matches::store::MatchStore,
+    config::{generate_match_paths, ParsedConfig, ProfileFile},
 };
 
 use crate::{
@@ -27,8 +26,8 @@ use crate::{
 #[derive(Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct Configuration {
-    pub profile_store: ProfileStore,
-    pub match_store: MatchStore,
+    profile_store: shinran_config::config::ProfileStore,
+    pub match_store: shinran_config::matches::MatchStore,
     /// Renderer for the variables.
     pub renderer: shinran_render::Renderer,
     pub loaded_from_cache: bool,
@@ -100,7 +99,7 @@ impl Configuration {
     /// Get the active configuration file according to the current app.
     ///
     /// This functionality is not implemented yet.
-    pub fn active_profile(&self) -> ProfileRef {
+    pub fn active_profile(&self) -> &ProfileFile {
         // let current_app = self.app_info_provider.get_info();
         // let info = to_app_properties(&current_app);
         let info = shinran_config::config::AppProperties {

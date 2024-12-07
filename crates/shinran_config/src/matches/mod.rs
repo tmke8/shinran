@@ -19,3 +19,5 @@
 
 pub(crate) mod group;
 pub mod store;
+
+pub use store::MatchStore;
