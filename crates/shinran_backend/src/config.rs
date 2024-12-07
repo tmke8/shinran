@@ -31,6 +31,7 @@ pub struct Configuration {
     pub match_store: MatchStore,
     /// Renderer for the variables.
     pub renderer: shinran_render::Renderer,
+    pub loaded_from_cache: bool,
 }
 
 impl Configuration {
@@ -55,7 +56,8 @@ impl Configuration {
         let config_path = paths.config.join("config");
 
         match load_cache(&cache_path, &config_path) {
-            Ok(config) => {
+            Ok(mut config) => {
+                config.loaded_from_cache = true;
                 return (config, cache_path);
             }
             Err(e) => {
@@ -80,6 +82,7 @@ impl Configuration {
             profile_store: config_result.profile_store,
             match_store: config_result.match_store,
             renderer,
+            loaded_from_cache: false,
         };
 
         (cfg, cache_path)
