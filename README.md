@@ -3,6 +3,10 @@ A text expander for Linux.
 
 [shin](https://github.com/p-e-w/shin) + [espanso](https://github.com/espanso/espanso) = **shinran**
 
+## Screencast
+![Demo](assets/screencast.gif)
+
+## Architecture
 There are two frontends for shinran: a native Wayland frontend using [Input method v2](https://wayland.app/protocols/input-method-unstable-v2),
 and an [IBus](https://github.com/ibus/ibus) frontend, that’s mostly intended for GNOME (which likely will never support the Wayland-native method).
 
