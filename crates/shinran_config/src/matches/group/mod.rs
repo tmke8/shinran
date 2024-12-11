@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 /*
  * This file is part of espanso.
  *
@@ -16,8 +17,9 @@
  * You should have received a copy of the GNU General Public License
  * along with espanso.  If not, see <https://www.gnu.org/licenses/>.
  */
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use rkyv::with::AsString;
 use rkyv::{Archive, Deserialize, Serialize};
 use shinran_types::{RegexMatch, TriggerMatch, Variable};
 
@@ -46,17 +48,22 @@ pub struct LoadedMatchFile {
     pub source_path: PathBuf,
 }
 
+/// A wrapper around `Vec` which only allows appending, and which returns a reference to the
+/// appended element.
+#[derive(Debug, Clone, PartialEq, Default, Archive, Serialize, Deserialize)]
+#[archive(check_bytes)]
 #[repr(transparent)]
-pub struct MatchFileStore {
-    files: Vec<LoadedMatchFile>,
+pub struct FileStore<T> {
+    files: Vec<T>,
 }
 
+/// A reference to a file in a `FileStore`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash, Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 #[archive_attr(derive(Hash, PartialEq, Eq))]
 #[repr(transparent)]
 pub struct MatchFileRef {
-    pub idx: usize,
+    idx: usize,
 }
 
 impl PartialEq<usize> for MatchFileRef {
@@ -65,15 +72,22 @@ impl PartialEq<usize> for MatchFileRef {
     }
 }
 
-impl MatchFileStore {
+impl<T> FileStore<T> {
     #[inline]
-    pub fn new() -> Self {
+    pub fn len(&self) -> usize {
+        self.files.len()
+    }
+}
+
+impl FileStore<LoadedMatchFile> {
+    #[inline]
+    pub(crate) fn new() -> Self {
         Self { files: Vec::new() }
     }
 
     #[inline]
-    pub fn add(&mut self, file: LoadedMatchFile) -> MatchFileRef {
-        let idx = self.files.len();
+    pub(crate) fn add(&mut self, file: LoadedMatchFile) -> MatchFileRef {
+        let idx = self.len();
         self.files.push(file);
         MatchFileRef { idx }
     }
@@ -86,8 +100,63 @@ impl MatchFileStore {
             .map(|(idx, elem)| (MatchFileRef { idx }, elem))
     }
 
+    /// Resolve all imports with the given map.
+    ///
+    /// This function consumes the `FileStore` and returns a new one with resolved imports.
+    /// Any [`MatchFileRef`] should remain valid for the new `FileStore`.
+    pub(crate) fn resolve(
+        self,
+        match_file_map: &HashMap<PathBuf, MatchFileRef>,
+    ) -> FileStore<ResolvedMatchFile> {
+        let indexed_files = self
+            .files
+            .into_iter()
+            .map(|match_file| {
+                let resolved_imports = match_file
+                    .import_paths
+                    .into_iter()
+                    .filter_map(|path| match_file_map.get(&path).copied())
+                    .collect::<_>();
+                ResolvedMatchFile {
+                    imports: resolved_imports,
+                    content: match_file.content,
+                    source_path: match_file.source_path,
+                }
+            })
+            .collect();
+        FileStore {
+            files: indexed_files,
+        }
+    }
+}
+
+/// Struct representing a match file, where all imports have been resolved.
+///
+/// In contrast, a [`LoadedMatchFile`] contains unresolved imports.
+#[derive(Debug, Clone, PartialEq, Default, Archive, Serialize, Deserialize)]
+#[archive(check_bytes)]
+pub struct ResolvedMatchFile {
+    pub(crate) imports: Vec<MatchFileRef>,
+    pub(crate) content: MatchFile,
+    #[with(AsString)]
+    pub(crate) source_path: PathBuf,
+}
+
+impl ArchivedResolvedMatchFile {
+    pub fn get_source_path(&self) -> &Path {
+        Path::new(self.source_path.as_str())
+    }
+}
+
+impl FileStore<ResolvedMatchFile> {
     #[inline]
-    pub fn len(&self) -> usize {
-        self.files.len()
+    pub fn get(&self, idx: MatchFileRef) -> &ResolvedMatchFile {
+        &self.files[idx.idx]
+    }
+}
+
+impl ArchivedFileStore<ResolvedMatchFile> {
+    pub fn get_source_paths(&self) -> impl Iterator<Item = &Path> {
+        self.files.iter().map(|file| file.get_source_path())
     }
 }

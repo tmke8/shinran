@@ -251,7 +251,7 @@ mod tests {
             // It shouldn't have loaded the "config.yml" one because of the YAML error
             assert_eq!(config_store.len(), 1);
             // It shouldn't load "base.yml" and "_sub.yml" due to YAML errors
-            assert_eq!(match_store.loaded_paths().len(), 1);
+            assert_eq!(match_store.len(), 1);
         });
     }
 
