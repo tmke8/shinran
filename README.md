@@ -1,6 +1,11 @@
 # shinran
 A text expander for Linux.
 
+Normally, a text expander is essentially be a keylogger, because it has to know what you're typing to know that it should be expanding something.
+But by plugging into the machinery of IMEs, we can implement a text expander that is not a keylogger (or rather, it only logs your keys during the time when it’s absolutely necessary).
+You start shinran only when you are about to type a trigger word (an idea I got from [shin](https://github.com/p-e-w/shin)).
+This has the added benefits that we can show autocompletions.
+
 [shin](https://github.com/p-e-w/shin) + [espanso](https://github.com/espanso/espanso) = **shinran**
 
 ## Screencast
