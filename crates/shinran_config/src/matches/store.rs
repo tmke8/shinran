@@ -19,81 +19,43 @@
 
 use crate::{
     error::NonFatalErrorSet,
-    matches::group::{loader, MatchFile, MatchFileRef, MatchFileStore},
+    matches::group::{loader, FileStore, LoadedMatchFile, MatchFileRef, ResolvedMatchFile},
 };
 use anyhow::Context;
-use rkyv::{with::AsString, Archive, Deserialize, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 use shinran_types::{MatchesAndGlobalVars, RegexMatch, TriggerMatch, Variable};
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
 };
 
-/// Struct representing a match file, where all imports have been resolved.
-///
-/// In contrast, a [`LoadedMatchFile`] contains unresolved imports.
-#[derive(Debug, Clone, PartialEq, Default, Archive, Serialize, Deserialize)]
-#[archive(check_bytes)]
-pub struct ResolvedMatchFile {
-    imports: Vec<MatchFileRef>,
-    content: MatchFile,
-    #[with(AsString)]
-    source_path: PathBuf,
-}
-
-impl ArchivedResolvedMatchFile {
-    pub fn get_source_path(&self) -> &Path {
-        Path::new(self.source_path.as_str())
-    }
-}
-
 /// The MatchStore contains all matches that we have loaded.
-///
-/// We have a hash map of all match files, indexed by their file system path.
 #[derive(Archive, Serialize, Deserialize)]
 #[archive(check_bytes)]
 pub struct MatchStore {
-    indexed_files: Box<[ResolvedMatchFile]>,
+    indexed_files: FileStore<ResolvedMatchFile>,
 }
 
 impl MatchStore {
     pub fn load(
-        paths: &[PathBuf],
+        root_paths: &[PathBuf],
     ) -> (Self, HashMap<PathBuf, MatchFileRef>, Vec<NonFatalErrorSet>) {
         let mut non_fatal_error_sets = Vec::new();
         let mut match_file_map = HashMap::new();
-        let mut loaded_files = MatchFileStore::new();
+        let mut loaded_files = FileStore::<LoadedMatchFile>::new();
 
         // Because match files can import other match files,
         // we have to load them recursively starting from the top-level ones.
         load_match_files_recursively(
             &mut loaded_files,
             &mut match_file_map,
-            paths,
+            root_paths,
             &mut non_fatal_error_sets,
         );
 
-        let mut indexed_files = Vec::with_capacity(loaded_files.len());
-
-        for (path, match_file) in loaded_files.into_enumerate() {
-            let imports = match_file
-                .import_paths
-                .iter()
-                .filter_map(|path| match_file_map.get(path).copied())
-                .collect::<_>();
-
-            let indexed_file = ResolvedMatchFile {
-                imports,
-                content: match_file.content,
-                source_path: match_file.source_path,
-            };
-            assert_eq!(path, indexed_files.len());
-            indexed_files.push(indexed_file);
-        }
-
         (
             Self {
-                indexed_files: indexed_files.into_boxed_slice(),
+                indexed_files: loaded_files.resolve(&match_file_map),
             },
             match_file_map,
             non_fatal_error_sets,
@@ -128,21 +90,20 @@ impl MatchStore {
         }
     }
 
-    pub fn loaded_paths(&self) -> Vec<MatchFileRef> {
-        (0..self.indexed_files.len())
-            .map(|idx| MatchFileRef { idx })
-            .collect()
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.indexed_files.len()
     }
 }
 
 impl ArchivedMatchStore {
     pub fn get_source_paths(&self) -> impl Iterator<Item = &Path> {
-        self.indexed_files.iter().map(|file| file.get_source_path())
+        self.indexed_files.get_source_paths()
     }
 }
 
 fn query_matches_for_paths<'store>(
-    indexed_files: &'store [ResolvedMatchFile],
+    indexed_files: &'store FileStore<ResolvedMatchFile>,
     visited_paths: &mut HashSet<MatchFileRef>,
     visited_trigger_matches: &mut Vec<&'store TriggerMatch>,
     visited_regex_matches: &mut Vec<&'store RegexMatch>,
@@ -156,7 +117,7 @@ fn query_matches_for_paths<'store>(
 
         visited_paths.insert(*path);
 
-        let file = &indexed_files[path.idx];
+        let file = indexed_files.get(*path);
         visited_trigger_matches.extend(file.content.trigger_matches.iter());
         visited_regex_matches.extend(file.content.regex_matches.iter());
         visited_global_vars.extend(file.content.global_vars.iter());
@@ -176,7 +137,7 @@ fn query_matches_for_paths<'store>(
 ///
 /// This function fills up the `groups` HashMap with the loaded match groups.
 fn load_match_files_recursively(
-    loaded_files: &mut MatchFileStore,
+    loaded_files: &mut FileStore<LoadedMatchFile>,
     match_file_map: &mut HashMap<PathBuf, MatchFileRef>,
     paths: &[PathBuf],
     non_fatal_error_sets: &mut Vec<NonFatalErrorSet>,
@@ -314,14 +275,17 @@ mod tests {
             assert_eq!(non_fatal_error_sets.len(), 0);
             assert_eq!(match_store.indexed_files.len(), 3);
 
-            let base_group = &match_store.indexed_files[file_map.get(&base_file).unwrap().idx]
+            let base_group = &match_store
+                .indexed_files
+                .get(*file_map.get(&base_file).unwrap())
                 .content
                 .trigger_matches;
 
             assert_eq!(base_group, &create_matches(&[("hello", "world")]));
 
-            let another_group = &match_store.indexed_files
-                [file_map.get(&another_file).unwrap().idx]
+            let another_group = &match_store
+                .indexed_files
+                .get(*file_map.get(&another_file).unwrap())
                 .content
                 .trigger_matches;
             assert_eq!(
@@ -329,7 +293,9 @@ mod tests {
                 &create_matches(&[("hello", "world2"), ("foo", "bar")])
             );
 
-            let sub_group = &match_store.indexed_files[file_map.get(&sub_file).unwrap().idx]
+            let sub_group = &match_store
+                .indexed_files
+                .get(*file_map.get(&sub_file).unwrap())
                 .content
                 .trigger_matches;
             assert_eq!(sub_group, &create_matches(&[("hello", "world3")]));
