@@ -19,3 +19,4 @@ log = { version = "0.4", features = [
     "release_max_level_info",
 ] }
 env_logger = "0.11.5"
+wayland-protocols = "0.32.5"
